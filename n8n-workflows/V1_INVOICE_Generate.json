@@ -1,0 +1,231 @@
+{
+  "name": "V1_INVOICE_Generate",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "execute-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "reports",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "report_id",
+              "lookupValue": "={{ $json.report_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sheets-read-report",
+      "name": "Google Sheets - Read Report",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "interventions",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "event_id",
+              "lookupValue": "={{ $('Google Sheets - Read Report').first().json.event_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sheets-read-intervention",
+      "name": "Google Sheets - Read Intervention",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [680, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo-preview",
+        "options": {
+          "temperature": 0.1
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Genere des donnees de facture en JSON.\n\nTarifs :\n- Main d'oeuvre : CHF 95/h\n- Deplacement : CHF 50\n- TVA : 7.7%\n\nJSON UNIQUEMENT :\n{\n  \"customer_name\": \"Nom client\",\n  \"lines\": [\n    {\"label\": \"Main d'oeuvre\", \"qty\": 2, \"price\": 95.00}\n  ],\n  \"vat\": 7.7\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Client : {{ $json.regie_name || 'Client direct' }}\nRapport : {{ $('Google Sheets - Read Report').first().json.report_text }}"
+            }
+          ]
+        }
+      },
+      "id": "openai-generate-invoice",
+      "name": "OpenAI - Generate Invoice",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [900, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "OpenAI_ICS",
+          "name": "OpenAI_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire le JSON de la facture\nconst response = $input.first().json;\nconst content = response.message?.content || response.text || '';\n\nlet invoicePayload = '{}';\n\ntry {\n  // Nettoyer la reponse (enlever les blocs markdown)\n  let cleaned = content.replace(/```json/g, '').replace(/```/g, '').trim();\n  \n  // Verifier que c'est du JSON valide\n  const parsed = JSON.parse(cleaned);\n  invoicePayload = JSON.stringify(parsed);\n} catch (e) {\n  // En cas d'erreur, retourner le contenu brut\n  invoicePayload = content;\n}\n\nreturn [{\n  json: {\n    report_id: $('Google Sheets - Read Report').first().json.report_id,\n    invoice_payload: invoicePayload,\n    invoice_status: 'READY'\n  }\n}];"
+      },
+      "id": "code-extract-invoice",
+      "name": "Code - Extract Invoice JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "reports",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "report_id": "={{ $json.report_id }}",
+            "invoice_payload": "={{ $json.invoice_payload }}",
+            "invoice_status": "={{ $json.invoice_status }}"
+          }
+        },
+        "options": {
+          "matchingColumns": ["report_id"]
+        }
+      },
+      "id": "sheets-update-invoice",
+      "name": "Google Sheets - Update Invoice",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Report": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Intervention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Intervention": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Generate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Generate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Code - Extract Invoice JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extract Invoice JSON": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Update Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "pinData": {}
+}

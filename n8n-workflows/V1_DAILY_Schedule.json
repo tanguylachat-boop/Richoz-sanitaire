@@ -1,0 +1,241 @@
+{
+  "name": "V1_DAILY_Schedule",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tomorrow_start",
+              "name": "tomorrow_start",
+              "value": "={{ $now.plus({days: 1}).startOf('day').toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "tomorrow_end",
+              "name": "tomorrow_end",
+              "value": "={{ $now.plus({days: 1}).endOf('day').toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-calculate-tomorrow",
+      "name": "Set - Calculate Tomorrow",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "interventions",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "sheets-read-all",
+      "name": "Google Sheets - Read All Interventions",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [680, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filtrer les interventions de demain et grouper par technicien\nconst tomorrowStart = $('Set - Calculate Tomorrow').first().json.tomorrow_start;\nconst tomorrowEnd = $('Set - Calculate Tomorrow').first().json.tomorrow_end;\n\nconst interventions = $input.all();\nconst tomorrowStartDate = new Date(tomorrowStart);\nconst tomorrowEndDate = new Date(tomorrowEnd);\n\n// Filtrer pour demain\nconst tomorrowInterventions = interventions.filter(item => {\n  const startDate = new Date(item.json.start_datetime);\n  return startDate >= tomorrowStartDate && startDate <= tomorrowEndDate;\n});\n\n// Grouper par technicien\nconst byTechnician = {};\nfor (const item of tomorrowInterventions) {\n  const email = item.json.technician_email;\n  if (!email) continue;\n  \n  if (!byTechnician[email]) {\n    byTechnician[email] = {\n      technician_email: email,\n      technician_name: item.json.technician_name,\n      interventions: []\n    };\n  }\n  \n  byTechnician[email].interventions.push({\n    title: item.json.title,\n    start_datetime: item.json.start_datetime,\n    address: item.json.address\n  });\n}\n\n// Convertir en array pour output\nconst result = Object.values(byTechnician);\n\nif (result.length === 0) {\n  return [{ json: { no_interventions: true } }];\n}\n\nreturn result.map(r => ({ json: r }));"
+      },
+      "id": "code-filter-group",
+      "name": "Code - Filter & Group by Technician",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-has-interventions",
+              "leftValue": "={{ $json.no_interventions }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-interventions",
+      "name": "IF - Has Interventions?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formater l'email pour ce technicien\nconst data = $input.first().json;\n\nlet interventionsList = '';\ndata.interventions.forEach((intervention, idx) => {\n  const time = new Date(intervention.start_datetime).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });\n  interventionsList += `${idx + 1}. ${time} - ${intervention.title}\\n   Adresse: ${intervention.address}\\n\\n`;\n});\n\nconst body = `Bonjour ${data.technician_name},\n\nTon planning de demain :\n\n${interventionsList}\nBonne journee !\n\nICS Chauffage & Sanitaire`;\n\nreturn [{\n  json: {\n    to: data.technician_email,\n    subject: 'Planning de demain',\n    body: body\n  }\n}];"
+      },
+      "id": "code-format-email",
+      "name": "Code - Format Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "gmail-send",
+      "name": "Gmail - Send",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1560, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Gmail_ICS",
+          "name": "Gmail_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op-no-interventions",
+      "name": "No Interventions - Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set - Calculate Tomorrow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Calculate Tomorrow": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read All Interventions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read All Interventions": {
+      "main": [
+        [
+          {
+            "node": "Code - Filter & Group by Technician",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Filter & Group by Technician": {
+      "main": [
+        [
+          {
+            "node": "IF - Has Interventions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Has Interventions?": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Interventions - Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Zurich"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {}
+}

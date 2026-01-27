@@ -1,0 +1,285 @@
+{
+  "name": "V1_REPORT_Submit",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "submit-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "submit-report"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "report_id",
+              "name": "report_id",
+              "value": "=rpt_{{ $now.toMillis() }}",
+              "type": "string"
+            },
+            {
+              "id": "event_id",
+              "name": "event_id",
+              "value": "={{ $json.body.event_id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "created_at",
+              "name": "created_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "technician_name",
+              "name": "technician_name",
+              "value": "={{ $json.body.technician_name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "report_text",
+              "name": "report_text",
+              "value": "={{ $json.body.report_text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "photos_links",
+              "name": "photos_links",
+              "value": "={{ JSON.stringify($json.body.photos_links || []) }}",
+              "type": "string"
+            },
+            {
+              "id": "billable_status",
+              "name": "billable_status",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "invoice_payload",
+              "name": "invoice_payload",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "invoice_status",
+              "name": "invoice_status",
+              "value": "NOT_REQUESTED",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-create-report",
+      "name": "Set - Create Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-event-id",
+              "leftValue": "={{ $json.event_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "condition-report-text",
+              "leftValue": "={{ $json.report_text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-valid-payload",
+      "name": "IF - Valid Payload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "reports",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "report_id": "={{ $json.report_id }}",
+            "event_id": "={{ $json.event_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "technician_name": "={{ $json.technician_name }}",
+            "report_text": "={{ $json.report_text }}",
+            "photos_links": "={{ $json.photos_links }}",
+            "billable_status": "={{ $json.billable_status }}",
+            "invoice_payload": "={{ $json.invoice_payload }}",
+            "invoice_status": "={{ $json.invoice_status }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-append",
+      "name": "Google Sheets - Append Report",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [900, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "V1_REPORT_Classify",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "execute-classify",
+      "name": "Execute Workflow - Classify",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received', report_id: $('Set - Create Report').first().json.report_id }) }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond to Webhook - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', message: 'Invalid payload. Required: event_id, report_text' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond to Webhook - Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set - Create Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Create Report": {
+      "main": [
+        [
+          {
+            "node": "IF - Valid Payload?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Valid Payload?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook - Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append Report": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow - Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow - Classify": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {}
+}

@@ -1,0 +1,213 @@
+{
+  "name": "V1_EMAIL_Inbox",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "minute": 5
+            }
+          ]
+        },
+        "filters": {
+          "includeSpamTrash": false
+        },
+        "options": {
+          "labelIds": ["REGIES"]
+        }
+      },
+      "id": "gmail-trigger",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Gmail_ICS",
+          "name": "Gmail_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "received_at",
+              "name": "received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "from_email",
+              "name": "from_email",
+              "value": "={{ $json.from.value[0].address }}",
+              "type": "string"
+            },
+            {
+              "id": "subject",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "raw_text",
+              "name": "raw_text",
+              "value": "={{ $json.textPlain || $json.snippet || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "NEW",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-extract-data",
+      "name": "Set - Extract Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "regies",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "sheets-read-regies",
+      "name": "Google Sheets - Read Regies",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [680, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Chercher la regie correspondante a l'email\nconst fromEmail = $('Set - Extract Data').first().json.from_email.toLowerCase();\nconst regies = $input.all();\n\nlet regieName = 'UNKNOWN';\n\nfor (const regie of regies) {\n  const keyword = regie.json.keyword?.toLowerCase() || '';\n  if (fromEmail.includes(keyword)) {\n    regieName = regie.json.regie_name;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    received_at: $('Set - Extract Data').first().json.received_at,\n    from_email: $('Set - Extract Data').first().json.from_email,\n    subject: $('Set - Extract Data').first().json.subject,\n    raw_text: $('Set - Extract Data').first().json.raw_text,\n    regie_name: regieName,\n    status: 'NEW'\n  }\n}];"
+      },
+      "id": "code-match-regie",
+      "name": "Code - Match Regie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "regie_inbox",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "received_at": "={{ $json.received_at }}",
+            "from_email": "={{ $json.from_email }}",
+            "subject": "={{ $json.subject }}",
+            "raw_text": "={{ $json.raw_text }}",
+            "regie_name": "={{ $json.regie_name }}",
+            "status": "={{ $json.status }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-append",
+      "name": "Google Sheets - Append",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1120, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set - Extract Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extract Data": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Regies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Regies": {
+      "main": [
+        [
+          {
+            "node": "Code - Match Regie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Match Regie": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {}
+}

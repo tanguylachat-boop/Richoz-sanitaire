@@ -1,0 +1,256 @@
+{
+  "name": "V1_PLANNING_SendConfirmation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "execute-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "interventions",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "event_id",
+              "lookupValue": "={{ $json.event_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sheets-read-intervention",
+      "name": "Google Sheets - Read Intervention",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-not-sent",
+              "leftValue": "={{ $json.confirmation_sent }}",
+              "rightValue": "TRUE",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-already-sent",
+      "name": "IF - Already Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "to",
+              "name": "to",
+              "value": "={{ $json.regie_email }}",
+              "type": "string"
+            },
+            {
+              "id": "subject",
+              "name": "subject",
+              "value": "=Confirmation intervention - {{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "body",
+              "name": "body",
+              "value": "=Bonjour,\n\nNous confirmons l'intervention suivante :\n\nDate : {{ $json.start_datetime }}\nAdresse : {{ $json.address }}\nTechnicien : {{ $json.technician_name }}\n\nCordialement,\nICS Chauffage & Sanitaire",
+              "type": "string"
+            },
+            {
+              "id": "event_id",
+              "name": "event_id",
+              "value": "={{ $json.event_id }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-format-email",
+      "name": "Set - Format Email",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "gmail-send",
+      "name": "Gmail - Send",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1120, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Gmail_ICS",
+          "name": "Gmail_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "interventions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $('Set - Format Email').item.json.event_id }}",
+            "confirmation_sent": "TRUE"
+          }
+        },
+        "options": {
+          "matchingColumns": ["event_id"]
+        }
+      },
+      "id": "sheets-update-flag",
+      "name": "Google Sheets - Update Flag",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op-already-sent",
+      "name": "Already Sent - Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Intervention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Intervention": {
+      "main": [
+        [
+          {
+            "node": "IF - Already Sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Already Sent?": {
+      "main": [
+        [
+          {
+            "node": "Set - Format Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Already Sent - Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Format Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Send": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Update Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "pinData": {}
+}

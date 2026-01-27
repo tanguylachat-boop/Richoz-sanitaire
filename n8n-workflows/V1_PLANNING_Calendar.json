@@ -1,0 +1,377 @@
+{
+  "name": "V1_PLANNING_Calendar",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute",
+              "minute": 5
+            }
+          ]
+        },
+        "calendarId": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "calendar-trigger",
+      "name": "Google Calendar Trigger",
+      "type": "n8n-nodes-base.googleCalendarTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "Google_Calendar_ICS",
+          "name": "Google_Calendar_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "event_id",
+              "name": "event_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "created_at",
+              "name": "created_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "start_datetime",
+              "name": "start_datetime",
+              "value": "={{ $json.start.dateTime || $json.start.date }}",
+              "type": "string"
+            },
+            {
+              "id": "end_datetime",
+              "name": "end_datetime",
+              "value": "={{ $json.end.dateTime || $json.end.date }}",
+              "type": "string"
+            },
+            {
+              "id": "title",
+              "name": "title",
+              "value": "={{ $json.summary || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "address",
+              "name": "address",
+              "value": "={{ $json.location || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "attendees_raw",
+              "name": "attendees_raw",
+              "value": "={{ JSON.stringify($json.attendees || []) }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-extract-basic",
+      "name": "Set - Extract Basic Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire l'email technicien (premier @ics.ch dans attendees)\nconst item = $input.first().json;\nconst attendees = JSON.parse(item.attendees_raw || '[]');\n\nlet technicianEmail = '';\nfor (const attendee of attendees) {\n  if (attendee.email && attendee.email.includes('@ics.ch')) {\n    technicianEmail = attendee.email;\n    break;\n  }\n}\n\n// Extraire le keyword regie du titre [KEYWORD]\nconst title = item.title || '';\nconst keywordMatch = title.match(/\\[(.*?)\\]/);\nconst regieKeyword = keywordMatch ? keywordMatch[1].toUpperCase() : '';\n\nreturn [{\n  json: {\n    ...item,\n    technician_email: technicianEmail,\n    regie_keyword: regieKeyword\n  }\n}];"
+      },
+      "id": "code-extract-details",
+      "name": "Code - Extract Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "employees",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "sheets-read-employees",
+      "name": "Google Sheets - Read Employees",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [900, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "regies",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "sheets-read-regies",
+      "name": "Google Sheets - Read Regies",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [900, 400],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combiner les donnees\nconst extractedData = $('Code - Extract Details').first().json;\nconst employees = $('Google Sheets - Read Employees').all();\nconst regies = $('Google Sheets - Read Regies').all();\n\n// Trouver le nom du technicien\nlet technicianName = '';\nfor (const emp of employees) {\n  if (emp.json.email === extractedData.technician_email) {\n    technicianName = emp.json.name;\n    break;\n  }\n}\n\n// Trouver la regie\nlet regieName = '';\nlet regieEmail = '';\nfor (const regie of regies) {\n  if (regie.json.keyword?.toUpperCase() === extractedData.regie_keyword) {\n    regieName = regie.json.regie_name;\n    regieEmail = regie.json.regie_email;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    event_id: extractedData.event_id,\n    created_at: extractedData.created_at,\n    start_datetime: extractedData.start_datetime,\n    end_datetime: extractedData.end_datetime,\n    title: extractedData.title,\n    address: extractedData.address,\n    technician_name: technicianName,\n    technician_email: extractedData.technician_email,\n    regie_name: regieName,\n    regie_email: regieEmail,\n    confirmation_sent: 'FALSE'\n  }\n}];"
+      },
+      "id": "code-combine-data",
+      "name": "Code - Combine Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "interventions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $json.event_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "start_datetime": "={{ $json.start_datetime }}",
+            "end_datetime": "={{ $json.end_datetime }}",
+            "title": "={{ $json.title }}",
+            "address": "={{ $json.address }}",
+            "technician_name": "={{ $json.technician_name }}",
+            "technician_email": "={{ $json.technician_email }}",
+            "regie_name": "={{ $json.regie_name }}",
+            "regie_email": "={{ $json.regie_email }}",
+            "confirmation_sent": "={{ $json.confirmation_sent }}"
+          }
+        },
+        "options": {
+          "matchingColumns": ["event_id"]
+        }
+      },
+      "id": "sheets-append-update",
+      "name": "Google Sheets - Append or Update",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-regie-email",
+              "leftValue": "={{ $json.regie_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-regie",
+      "name": "IF - Has Regie Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "V1_PLANNING_SendConfirmation",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "execute-confirmation",
+      "name": "Execute Workflow - Confirmation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-stop",
+      "name": "No Regie - Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1780, 400]
+    }
+  ],
+  "connections": {
+    "Google Calendar Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set - Extract Basic Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extract Basic Info": {
+      "main": [
+        [
+          {
+            "node": "Code - Extract Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extract Details": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Employees",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Sheets - Read Regies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Employees": {
+      "main": [
+        [
+          {
+            "node": "Code - Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Regies": {
+      "main": [
+        [
+          {
+            "node": "Code - Combine Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Combine Data": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append or Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append or Update": {
+      "main": [
+        [
+          {
+            "node": "IF - Has Regie Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Has Regie Email?": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow - Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Regie - Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {}
+}

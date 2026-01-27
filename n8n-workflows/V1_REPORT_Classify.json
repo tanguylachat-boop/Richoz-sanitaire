@@ -1,0 +1,265 @@
+{
+  "name": "V1_REPORT_Classify",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "execute-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "reports",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "report_id",
+              "lookupValue": "={{ $json.report_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sheets-read-report",
+      "name": "Google Sheets - Read Report",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo-preview",
+        "options": {
+          "temperature": 0.2
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Tu analyses des rapports d'intervention plomberie/chauffage.\n\nReponds UNIQUEMENT en JSON :\n{\n  \"billable_status\": \"FACTURABLE\" ou \"NON_FACTURABLE\"\n}\n\nFACTURABLE = travaux reels, pieces changees\nNON_FACTURABLE = deplacement inutile, rien trouve\n\nAucun texte avant/apres le JSON."
+            },
+            {
+              "role": "user",
+              "content": "=Rapport :\n{{ $json.report_text }}"
+            }
+          ]
+        }
+      },
+      "id": "openai-classify",
+      "name": "OpenAI - Classify",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [680, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "OpenAI_ICS",
+          "name": "OpenAI_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraire le statut du JSON de la reponse OpenAI\nconst response = $input.first().json;\nconst content = response.message?.content || response.text || '';\n\nlet billableStatus = 'A_VALIDER';\n\ntry {\n  // Essayer d'extraire le JSON\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    const parsed = JSON.parse(jsonMatch[0]);\n    if (parsed.billable_status) {\n      billableStatus = parsed.billable_status;\n    }\n  }\n} catch (e) {\n  // En cas d'erreur de parsing, garder A_VALIDER\n  billableStatus = 'A_VALIDER';\n}\n\nreturn [{\n  json: {\n    report_id: $('Google Sheets - Read Report').first().json.report_id,\n    billable_status: billableStatus\n  }\n}];"
+      },
+      "id": "code-extract-status",
+      "name": "Code - Extract Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "[SHEET_ID]",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "reports",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "report_id": "={{ $json.report_id }}",
+            "billable_status": "={{ $json.billable_status }}"
+          }
+        },
+        "options": {
+          "matchingColumns": ["report_id"]
+        }
+      },
+      "id": "sheets-update-status",
+      "name": "Google Sheets - Update Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1120, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Google_Sheets_ICS",
+          "name": "Google_Sheets_ICS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-is-billable",
+              "leftValue": "={{ $json.billable_status }}",
+              "rightValue": "FACTURABLE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-is-billable",
+      "name": "IF - Is Billable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "V1_INVOICE_Generate",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "execute-invoice",
+      "name": "Execute Workflow - Invoice",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {},
+      "id": "no-op-not-billable",
+      "name": "Not Billable - Stop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1560, 400]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Read Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Read Report": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Classify": {
+      "main": [
+        [
+          {
+            "node": "Code - Extract Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extract Status": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Update Status": {
+      "main": [
+        [
+          {
+            "node": "IF - Is Billable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Is Billable?": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow - Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Billable - Stop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "V1",
+      "createdAt": "2025-01-27T00:00:00.000Z",
+      "updatedAt": "2025-01-27T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "pinData": {}
+}
