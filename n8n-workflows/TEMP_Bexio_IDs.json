@@ -1,0 +1,145 @@
+{
+  "name": "TEMP_Bexio_IDs",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.bexio.com/2.0/tax",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "bexioOAuth2Api",
+        "options": {}
+      },
+      "id": "get-tax",
+      "name": "GET Tax",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 0],
+      "credentials": {
+        "bexioOAuth2Api": {
+          "id": "",
+          "name": "Bexio OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.bexio.com/2.0/unit",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "bexioOAuth2Api",
+        "options": {}
+      },
+      "id": "get-unit",
+      "name": "GET Unit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 150],
+      "credentials": {
+        "bexioOAuth2Api": {
+          "id": "",
+          "name": "Bexio OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.bexio.com/2.0/payment_type",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "bexioOAuth2Api",
+        "options": {}
+      },
+      "id": "get-payment-type",
+      "name": "GET Payment Type",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 300],
+      "credentials": {
+        "bexioOAuth2Api": {
+          "id": "",
+          "name": "Bexio OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.bexio.com/2.0/currency",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "bexioOAuth2Api",
+        "options": {}
+      },
+      "id": "get-currency",
+      "name": "GET Currency",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 450],
+      "credentials": {
+        "bexioOAuth2Api": {
+          "id": "",
+          "name": "Bexio OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.bexio.com/2.0/language",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "bexioOAuth2Api",
+        "options": {}
+      },
+      "id": "get-language",
+      "name": "GET Language",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 600],
+      "credentials": {
+        "bexioOAuth2Api": {
+          "id": "",
+          "name": "Bexio OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.bexio.com/2.0/account",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "bexioOAuth2Api",
+        "options": {}
+      },
+      "id": "get-account",
+      "name": "GET Account",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 750],
+      "credentials": {
+        "bexioOAuth2Api": {
+          "id": "",
+          "name": "Bexio OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          { "node": "GET Tax", "type": "main", "index": 0 },
+          { "node": "GET Unit", "type": "main", "index": 0 },
+          { "node": "GET Payment Type", "type": "main", "index": 0 },
+          { "node": "GET Currency", "type": "main", "index": 0 },
+          { "node": "GET Language", "type": "main", "index": 0 },
+          { "node": "GET Account", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
