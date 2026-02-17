@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==============================================
+   CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   ============================================== */
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 220 25% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+    --primary: 213 94% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 220 15% 20%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 15% 45%;
+    --accent: 213 94% 95%;
+    --accent-foreground: 213 94% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 25% 90%;
+    --input: 214 25% 90%;
+    --ring: 213 94% 53%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 30% 8%;
+    --foreground: 210 20% 98%;
+    --card: 222 30% 10%;
+    --card-foreground: 210 20% 98%;
+    --popover: 222 30% 10%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 213 94% 58%;
+    --primary-foreground: 220 25% 10%;
+    --secondary: 222 25% 16%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 222 25% 16%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 213 50% 20%;
+    --accent-foreground: 213 94% 75%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 25% 20%;
+    --input: 222 25% 20%;
+    --ring: 213 94% 58%;
+  }
+}
+
+/* ==============================================
+   BASE STYLES
+   ============================================== */
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  h1 { @apply text-3xl md:text-4xl; }
+  h2 { @apply text-2xl md:text-3xl; }
+  h3 { @apply text-xl md:text-2xl; }
+  h4 { @apply text-lg md:text-xl; }
+}
+
+/* ==============================================
+   SCROLLBAR
+   ============================================== */
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+}
+
+/* ==============================================
+   SAFE AREA (Mobile)
+   ============================================== */
+
+@layer utilities {
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-left { padding-left: env(safe-area-inset-left); }
+  .safe-right { padding-right: env(safe-area-inset-right); }
+  .safe-area-pb { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
+}
+
+/* ==============================================
+   ANIMATIONS
+   ============================================== */
+
+@keyframes recordingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.recording-pulse {
+  animation: recordingPulse 1.5s ease-in-out infinite;
+}
+
+/* ==============================================
+   FULLCALENDAR
+   ============================================== */
+
+.fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-button-bg-color: hsl(var(--primary));
+  --fc-button-border-color: hsl(var(--primary));
+  --fc-event-bg-color: hsl(var(--primary));
+  --fc-event-border-color: hsl(var(--primary));
+  --fc-today-bg-color: hsl(var(--accent));
+}
+
+.fc .fc-toolbar-title {
+  @apply text-lg font-semibold;
+}
+
+.fc .fc-button {
+  @apply text-sm font-medium rounded-lg;
+}
+
+.fc .fc-event {
+  @apply rounded-md cursor-pointer;
+}
+
+.fc .fc-timegrid-slot {
+  height: 2.5rem;
+}
