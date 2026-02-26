@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Inbox,
   Mail,
@@ -15,20 +15,31 @@ import {
   Eye,
   Archive,
   XCircle,
-  Filter,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   User,
   Phone,
   MapPin,
   FileText,
-  X,
   MessageSquare,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
-import { format, formatDistanceToNow } from 'date-fns';
+import {
+  format,
+  formatDistanceToNow,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameDay,
+  isToday,
+  addWeeks,
+  subWeeks,
+  addMinutes,
+} from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,6 +82,16 @@ interface Technician {
   email: string;
 }
 
+interface CalendarIntervention {
+  id: string;
+  title: string;
+  date_planned: string;
+  estimated_duration_minutes: number;
+  status: string;
+  technician_id: string | null;
+  intervention_type?: string | null;
+}
+
 type StatusFilter = 'new' | 'processed' | 'ignored' | 'all';
 
 // ─── Helper: detect email type ────────────────────────────────────────────────
@@ -89,103 +110,49 @@ export default function InboxPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('new');
 
-  // Modals
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<EmailInbox | null>(null);
 
   const supabase = createClient();
 
-  // ─── Fetch Data ───────────────────────────────────────────────────────────
-
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-
-    // Fetch regies
-    const { data: regiesData } = await supabase
-      .from('regies')
-      .select('id, name, keyword, email_contact, email_domains')
-      .eq('is_active', true)
-      .order('name');
-
+    const { data: regiesData } = await supabase.from('regies').select('id, name, keyword, email_contact, email_domains').eq('is_active', true).order('name');
     if (regiesData) setRegies(regiesData);
 
-    // Fetch technicians
-    const { data: techData } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, email')
-      .eq('role', 'technician')
-      .order('last_name');
-
+    const { data: techData } = await supabase.from('users').select('id, first_name, last_name, email').eq('role', 'technician').order('last_name');
     if (techData) setTechnicians(techData);
 
-    // Fetch emails based on filter
-    let query = supabase
-      .from('email_inbox')
-      .select(`
-        id, received_at, from_email, from_name, subject, body_text,
-        extracted_data, regie_id, work_order_number, status, category, email_type
-      `)
-      .order('received_at', { ascending: false });
-
-    if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
-    }
+    let query = supabase.from('email_inbox').select('id, received_at, from_email, from_name, subject, body_text, extracted_data, regie_id, work_order_number, status, category, email_type').order('received_at', { ascending: false });
+    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
 
     const { data: emailsData, error: emailsError } = await query;
-
-    if (emailsError) {
-      console.error('Error fetching emails:', emailsError);
-      toast.error('Erreur lors du chargement des emails');
-    }
-    if (emailsData) {
-      setEmails(emailsData as EmailInbox[]);
-    }
-
+    if (emailsError) toast.error('Erreur lors du chargement des emails');
+    if (emailsData) setEmails(emailsData as EmailInbox[]);
     setIsLoading(false);
   }, [statusFilter]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // ─── Realtime subscription ────────────────────────────────────────────────
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel('email_inbox_changes')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'email_inbox' },
-        (payload) => {
-          if (statusFilter === 'new' || statusFilter === 'all') {
-            const newEmail = payload.new as EmailInbox;
-            setEmails((prev) => [newEmail, ...prev]);
-            toast.info(`Nouvel email de ${newEmail.from_name || newEmail.from_email}`);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const channel = supabase.channel('email_inbox_changes').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_inbox' }, (payload) => {
+      if (statusFilter === 'new' || statusFilter === 'all') {
+        const newEmail = payload.new as EmailInbox;
+        setEmails((prev) => [newEmail, ...prev]);
+        toast.info(`Nouvel email de ${newEmail.from_name || newEmail.from_email}`);
+      }
+    }).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [statusFilter]);
-
-  // ─── Computed ─────────────────────────────────────────────────────────────
 
   const findRegieByEmail = (fromEmail: string): string | null => {
     if (!fromEmail) return null;
     const emailDomain = fromEmail.split('@')[1]?.toLowerCase();
     if (!emailDomain) return null;
-
     for (const regie of regies) {
-      if (regie.email_domains?.some((d) => emailDomain === d.toLowerCase())) {
-        return regie.id;
-      }
-      if (regie.email_contact && fromEmail.toLowerCase() === regie.email_contact.toLowerCase()) {
-        return regie.id;
-      }
+      if (regie.email_domains?.some((d) => emailDomain === d.toLowerCase())) return regie.id;
+      if (regie.email_contact && fromEmail.toLowerCase() === regie.email_contact.toLowerCase()) return regie.id;
     }
     return null;
   };
@@ -193,10 +160,7 @@ export default function InboxPage() {
   const enrichedEmails = emails.map((email) => {
     if (email.regie_id) return email;
     const matchedRegieId = findRegieByEmail(email.from_email);
-    if (matchedRegieId) {
-      return { ...email, regie_id: matchedRegieId };
-    }
-    return email;
+    return matchedRegieId ? { ...email, regie_id: matchedRegieId } : email;
   });
 
   const emailsByRegie = regies.reduce((acc, regie) => {
@@ -208,147 +172,65 @@ export default function InboxPage() {
 
   const totalEmails = enrichedEmails.length;
   const regieEmails = enrichedEmails.filter((e) => e.regie_id).length;
-  const urgentEmails = enrichedEmails.filter(
-    (e) =>
-      e.subject?.toLowerCase().includes('urgent') ||
-      e.subject?.toLowerCase().includes('urgence') ||
-      e.extracted_data?.priority === 'urgent'
-  ).length;
+  const urgentEmails = enrichedEmails.filter((e) => e.subject?.toLowerCase().includes('urgent') || e.subject?.toLowerCase().includes('urgence') || e.extracted_data?.priority === 'urgent').length;
   const infoEmails = enrichedEmails.filter((e) => getEmailType(e) === 'info').length;
 
-  // ─── Actions ──────────────────────────────────────────────────────────────
-
-  const handlePlanIntervention = (email: EmailInbox) => {
-    setSelectedEmail(email);
-    setIsPlanModalOpen(true);
-  };
-
-  const handleViewDetail = (email: EmailInbox) => {
-    setSelectedEmail(email);
-    setIsDetailModalOpen(true);
-  };
+  const handlePlanIntervention = (email: EmailInbox) => { setSelectedEmail(email); setIsPlanModalOpen(true); };
+  const handleViewDetail = (email: EmailInbox) => { setSelectedEmail(email); setIsDetailModalOpen(true); };
 
   const updateEmailStatus = async (emailId: string, status: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('email_inbox')
-      .update({ status, processed_at: new Date().toISOString() })
-      .eq('id', emailId);
-
-    if (error) {
-      toast.error('Erreur lors de la mise à jour');
-      return;
-    }
-
+    const { error } = await (supabase as any).from('email_inbox').update({ status, processed_at: new Date().toISOString() }).eq('id', emailId);
+    if (error) { toast.error('Erreur lors de la mise à jour'); return; }
     setEmails((prev) => prev.filter((e) => e.id !== emailId));
-    toast.success(
-      status === 'processed' ? 'Email marqué comme traité' : 'Email ignoré'
-    );
+    toast.success(status === 'processed' ? 'Email marqué comme traité' : 'Email ignoré');
   };
 
   const handleInterventionSuccess = async () => {
-    if (selectedEmail) {
-      await updateEmailStatus(selectedEmail.id, 'processed');
-    }
+    if (selectedEmail) await updateEmailStatus(selectedEmail.id, 'processed');
     setIsPlanModalOpen(false);
     setSelectedEmail(null);
     fetchData();
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
     <div className="space-y-6">
-      {/* ═══ Stats Cards ═══ */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          icon={<Mail className="w-6 h-6 text-blue-600" />}
-          bgColor="bg-blue-50"
-          value={totalEmails}
-          label="Emails à traiter"
-        />
-        <StatCard
-          icon={<Building2 className="w-6 h-6 text-amber-600" />}
-          bgColor="bg-amber-50"
-          value={regieEmails}
-          label="Demandes de régies"
-        />
-        <StatCard
-          icon={<AlertCircle className="w-6 h-6 text-red-600" />}
-          bgColor="bg-red-50"
-          value={urgentEmails}
-          label="Urgents"
-        />
-        <StatCard
-          icon={<MessageSquare className="w-6 h-6 text-gray-600" />}
-          bgColor="bg-gray-50"
-          value={infoEmails}
-          label="Infos / Suivi"
-        />
+        <StatCard icon={<Mail className="w-6 h-6 text-blue-600" />} bgColor="bg-blue-50" value={totalEmails} label="Emails à traiter" />
+        <StatCard icon={<Building2 className="w-6 h-6 text-amber-600" />} bgColor="bg-amber-50" value={regieEmails} label="Demandes de régies" />
+        <StatCard icon={<AlertCircle className="w-6 h-6 text-red-600" />} bgColor="bg-red-50" value={urgentEmails} label="Urgents" />
+        <StatCard icon={<MessageSquare className="w-6 h-6 text-gray-600" />} bgColor="bg-gray-50" value={infoEmails} label="Infos / Suivi" />
       </div>
 
-      {/* ═══ Toolbar ═══ */}
+      {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Boîte de réception</h2>
-
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setStatusFilter(f.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  statusFilter === f.value
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {f.label}
-              </button>
+              <button key={f.value} onClick={() => setStatusFilter(f.value)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === f.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{f.label}</button>
             ))}
           </div>
-
-          <button
-            onClick={fetchData}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualiser
+          <button onClick={fetchData} disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors">
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />Actualiser
           </button>
         </div>
       </div>
 
-      {/* ═══ Content ═══ */}
-      {isLoading ? (
-        <LoadingState />
-      ) : (
+      {/* Content */}
+      {isLoading ? <LoadingState /> : (
         <div className="space-y-6">
           {statusFilter !== 'ignored' && (
             <>
-              {regies.some((r) => (emailsByRegie[r.id] || []).length > 0) && (
-                <h3 className="text-md font-medium text-gray-700">Demandes par régie</h3>
-              )}
-
+              {regies.some((r) => (emailsByRegie[r.id] || []).length > 0) && <h3 className="text-md font-medium text-gray-700">Demandes par régie</h3>}
               {regies.map((regie) => {
                 const regieEmailsList = emailsByRegie[regie.id] || [];
                 if (regieEmailsList.length === 0) return null;
-                return (
-                  <RegieSection
-                    key={regie.id}
-                    regie={regie}
-                    emails={regieEmailsList}
-                    onPlan={handlePlanIntervention}
-                    onView={handleViewDetail}
-                    onIgnore={(id) => updateEmailStatus(id, 'ignored')}
-                    onArchive={(id) => updateEmailStatus(id, 'processed')}
-                    showActions={statusFilter === 'new'}
-                  />
-                );
+                return <RegieSection key={regie.id} regie={regie} emails={regieEmailsList} onPlan={handlePlanIntervention} onView={handleViewDetail} onIgnore={(id) => updateEmailStatus(id, 'ignored')} onArchive={(id) => updateEmailStatus(id, 'processed')} showActions={statusFilter === 'new'} />;
               })}
             </>
           )}
-
           {otherEmails.length > 0 && (
             <div>
               <h3 className="text-md font-medium text-gray-700 mb-4">Autres emails</h3>
@@ -356,74 +238,30 @@ export default function InboxPage() {
                 <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                        <MailOpen className="w-5 h-5 text-gray-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">Autres emails</h3>
-                        <p className="text-xs text-gray-500">Clients, fournisseurs et autres contacts</p>
-                      </div>
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><MailOpen className="w-5 h-5 text-gray-600" /></div>
+                      <div><h3 className="font-semibold text-gray-900">Autres emails</h3><p className="text-xs text-gray-500">Clients, fournisseurs et autres contacts</p></div>
                     </div>
-                    <span className="px-2.5 py-1 text-xs font-medium bg-gray-50 text-gray-700 rounded-full">
-                      {otherEmails.length} email{otherEmails.length !== 1 ? 's' : ''}
-                    </span>
+                    <span className="px-2.5 py-1 text-xs font-medium bg-gray-50 text-gray-700 rounded-full">{otherEmails.length} email{otherEmails.length !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {otherEmails.map((email) => (
-                    <EmailCard
-                      key={email.id}
-                      email={email}
-                      onPlan={() => handlePlanIntervention(email)}
-                      onView={() => handleViewDetail(email)}
-                      onIgnore={() => updateEmailStatus(email.id, 'ignored')}
-                      onArchive={() => updateEmailStatus(email.id, 'processed')}
-                      isOther
-                      showActions={statusFilter === 'new'}
-                    />
-                  ))}
+                  {otherEmails.map((email) => <EmailCard key={email.id} email={email} onPlan={() => handlePlanIntervention(email)} onView={() => handleViewDetail(email)} onIgnore={() => updateEmailStatus(email.id, 'ignored')} onArchive={() => updateEmailStatus(email.id, 'processed')} isOther showActions={statusFilter === 'new'} />)}
                 </div>
               </div>
             </div>
           )}
-
           {emails.length === 0 && <EmptyState statusFilter={statusFilter} />}
         </div>
       )}
 
-      {/* ═══ Modal: Detail ═══ */}
-      <Modal
-        isOpen={isDetailModalOpen}
-        onClose={() => { setIsDetailModalOpen(false); setSelectedEmail(null); }}
-        title="Détail de l'email"
-        size="lg"
-      >
-        {selectedEmail && (
-          <EmailDetailView
-            email={selectedEmail}
-            regies={regies}
-            onPlan={() => { setIsDetailModalOpen(false); handlePlanIntervention(selectedEmail); }}
-            onIgnore={() => { updateEmailStatus(selectedEmail.id, 'ignored'); setIsDetailModalOpen(false); setSelectedEmail(null); }}
-            onArchive={() => { updateEmailStatus(selectedEmail.id, 'processed'); setIsDetailModalOpen(false); setSelectedEmail(null); }}
-            showActions={statusFilter === 'new'}
-          />
-        )}
+      {/* Modal: Detail */}
+      <Modal isOpen={isDetailModalOpen} onClose={() => { setIsDetailModalOpen(false); setSelectedEmail(null); }} title="Détail de l'email" size="lg">
+        {selectedEmail && <EmailDetailView email={selectedEmail} regies={regies} onPlan={() => { setIsDetailModalOpen(false); handlePlanIntervention(selectedEmail); }} onIgnore={() => { updateEmailStatus(selectedEmail.id, 'ignored'); setIsDetailModalOpen(false); setSelectedEmail(null); }} onArchive={() => { updateEmailStatus(selectedEmail.id, 'processed'); setIsDetailModalOpen(false); setSelectedEmail(null); }} showActions={statusFilter === 'new'} />}
       </Modal>
 
-      {/* ═══ Modal: Planification ═══ */}
-      <Modal
-        isOpen={isPlanModalOpen}
-        onClose={() => { setIsPlanModalOpen(false); setSelectedEmail(null); }}
-        title="Planifier l'intervention"
-        size="lg"
-      >
-        <PlanificationForm
-          email={selectedEmail}
-          technicians={technicians}
-          regies={regies}
-          onSuccess={handleInterventionSuccess}
-          onCancel={() => { setIsPlanModalOpen(false); setSelectedEmail(null); }}
-        />
+      {/* Modal: Planification SPLIT VIEW */}
+      <Modal isOpen={isPlanModalOpen} onClose={() => { setIsPlanModalOpen(false); setSelectedEmail(null); }} title="Planifier l'intervention" size="full">
+        <PlanificationSplitView email={selectedEmail} technicians={technicians} regies={regies} onSuccess={handleInterventionSuccess} onCancel={() => { setIsPlanModalOpen(false); setSelectedEmail(null); }} />
       </Modal>
     </div>
   );
@@ -438,29 +276,21 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'Tous' },
 ];
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
+// ─── Small Components ─────────────────────────────────────────────────────────
 
 function StatCard({ icon, bgColor, value, label }: { icon: React.ReactNode; bgColor: string; value: number; label: string }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
       <div className="flex items-center gap-4">
         <div className={`w-12 h-12 rounded-xl ${bgColor} flex items-center justify-center`}>{icon}</div>
-        <div>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          <p className="text-sm text-gray-500">{label}</p>
-        </div>
+        <div><p className="text-2xl font-bold text-gray-900">{value}</p><p className="text-sm text-gray-500">{label}</p></div>
       </div>
     </div>
   );
 }
 
 function LoadingState() {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-      <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-      <p className="text-gray-500">Chargement...</p>
-    </div>
-  );
+  return <div className="bg-white rounded-xl border border-gray-200 p-12 text-center"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" /><p className="text-gray-500">Chargement...</p></div>;
 }
 
 function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
@@ -473,9 +303,7 @@ function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
   const msg = messages[statusFilter];
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-      <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-        <Inbox className="w-8 h-8 text-gray-400" />
-      </div>
+      <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-4"><Inbox className="w-8 h-8 text-gray-400" /></div>
       <h3 className="text-lg font-semibold text-gray-900 mb-2">{msg.title}</h3>
       <p className="text-gray-500 max-w-sm mx-auto">{msg.desc}</p>
     </div>
@@ -484,72 +312,34 @@ function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
 
 // ─── Regie Section ────────────────────────────────────────────────────────────
 
-function RegieSection({
-  regie, emails, onPlan, onView, onIgnore, onArchive, showActions,
-}: {
-  regie: Regie; emails: EmailInbox[];
-  onPlan: (email: EmailInbox) => void; onView: (email: EmailInbox) => void;
-  onIgnore: (id: string) => void; onArchive: (id: string) => void; showActions: boolean;
-}) {
+function RegieSection({ regie, emails, onPlan, onView, onIgnore, onArchive, showActions }: { regie: Regie; emails: EmailInbox[]; onPlan: (email: EmailInbox) => void; onView: (email: EmailInbox) => void; onIgnore: (id: string) => void; onArchive: (id: string) => void; showActions: boolean; }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const interventionCount = emails.filter((e) => getEmailType(e) === 'intervention').length;
   const infoCount = emails.filter((e) => getEmailType(e) === 'info').length;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full px-5 py-4 border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition-colors"
-      >
+      <button onClick={() => setIsCollapsed(!isCollapsed)} className="w-full px-5 py-4 border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition-colors">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-gray-900">{regie.name}</h3>
-              <p className="text-xs text-gray-500">Mot-clé : {regie.keyword}</p>
-            </div>
+            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><Building2 className="w-5 h-5 text-blue-600" /></div>
+            <div className="text-left"><h3 className="font-semibold text-gray-900">{regie.name}</h3><p className="text-xs text-gray-500">Mot-clé : {regie.keyword}</p></div>
           </div>
           <div className="flex items-center gap-2">
-            {interventionCount > 0 && (
-              <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
-                {interventionCount} intervention{interventionCount !== 1 ? 's' : ''}
-              </span>
-            )}
-            {infoCount > 0 && (
-              <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
-                {infoCount} info{infoCount !== 1 ? 's' : ''}
-              </span>
-            )}
+            {interventionCount > 0 && <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">{interventionCount} intervention{interventionCount !== 1 ? 's' : ''}</span>}
+            {infoCount > 0 && <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">{infoCount} info{infoCount !== 1 ? 's' : ''}</span>}
             {isCollapsed ? <ChevronDown className="w-4 h-4 text-gray-400 ml-1" /> : <ChevronUp className="w-4 h-4 text-gray-400 ml-1" />}
           </div>
         </div>
       </button>
-
       {!isCollapsed && (
-        <>
-          {emails.length === 0 ? (
-            <div className="px-5 py-8 text-center">
-              <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">Rien à traiter</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {emails.map((email) => (
-                <EmailCard
-                  key={email.id}
-                  email={email}
-                  onPlan={() => onPlan(email)}
-                  onView={() => onView(email)}
-                  onIgnore={() => onIgnore(email.id)}
-                  onArchive={() => onArchive(email.id)}
-                  showActions={showActions}
-                />
-              ))}
-            </div>
-          )}
-        </>
+        emails.length === 0 ? (
+          <div className="px-5 py-8 text-center"><CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" /><p className="text-sm text-gray-500">Rien à traiter</p></div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {emails.map((email) => <EmailCard key={email.id} email={email} onPlan={() => onPlan(email)} onView={() => onView(email)} onIgnore={() => onIgnore(email.id)} onArchive={() => onArchive(email.id)} showActions={showActions} />)}
+          </div>
+        )
       )}
     </div>
   );
@@ -557,21 +347,10 @@ function RegieSection({
 
 // ─── Email Card ───────────────────────────────────────────────────────────────
 
-function EmailCard({
-  email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true,
-}: {
-  email: EmailInbox; onPlan: () => void; onView: () => void;
-  onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean;
-}) {
+function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true }: { email: EmailInbox; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean; }) {
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
-
-  const isUrgent = !isInfo && (
-    email.subject?.toLowerCase().includes('urgent') ||
-    email.subject?.toLowerCase().includes('urgence') ||
-    email.extracted_data?.priority === 'urgent'
-  );
-
+  const isUrgent = !isInfo && (email.subject?.toLowerCase().includes('urgent') || email.subject?.toLowerCase().includes('urgence') || email.extracted_data?.priority === 'urgent');
   const extractedTitle = email.extracted_data?.title || email.subject || 'Sans objet';
   const timeAgo = formatDistanceToNow(new Date(email.received_at), { addSuffix: true, locale: fr });
 
@@ -587,9 +366,7 @@ function EmailCard({
             {email.status === 'ignored' && <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded flex-shrink-0">IGNORÉ</span>}
             <h4 className={`font-medium truncate group-hover:text-blue-700 transition-colors ${isInfo ? 'text-gray-700' : 'text-gray-900'}`}>{extractedTitle}</h4>
           </div>
-
           <p className="text-sm text-gray-500 mb-1.5">De : {email.from_name || email.from_email}</p>
-
           {!isInfo && (
             <div className="flex items-center gap-4 flex-wrap">
               {email.extracted_data?.address && <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{email.extracted_data.address}</p>}
@@ -597,12 +374,9 @@ function EmailCard({
               {email.extracted_data?.tenant_name && <p className="text-sm text-gray-500 flex items-center gap-1"><User className="w-3.5 h-3.5" />{email.extracted_data.tenant_name}</p>}
             </div>
           )}
-
           {isInfo && email.body_text && <p className="text-sm text-gray-400 truncate max-w-lg">{email.body_text.substring(0, 120)}...</p>}
-
           <p className="text-xs text-gray-400 mt-2 flex items-center gap-1"><Clock className="w-3 h-3" />{timeAgo}</p>
         </div>
-
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {showActions && !isOther && (
             <>
@@ -626,9 +400,7 @@ function EmailCard({
               <span className="px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg">{email.from_email?.split('@')[1] || 'inconnu'}</span>
             </div>
           )}
-          {!showActions && (
-            <button onClick={onView} title="Voir détail" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye className="w-4 h-4" /></button>
-          )}
+          {!showActions && <button onClick={onView} title="Voir détail" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye className="w-4 h-4" /></button>}
         </div>
       </div>
     </div>
@@ -637,12 +409,7 @@ function EmailCard({
 
 // ─── Email Detail View ────────────────────────────────────────────────────────
 
-function EmailDetailView({
-  email, regies, onPlan, onIgnore, onArchive, showActions,
-}: {
-  email: EmailInbox; regies: Regie[];
-  onPlan: () => void; onIgnore: () => void; onArchive: () => void; showActions: boolean;
-}) {
+function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActions }: { email: EmailInbox; regies: Regie[]; onPlan: () => void; onIgnore: () => void; onArchive: () => void; showActions: boolean; }) {
   const regie = regies.find((r) => r.id === email.regie_id);
   const extracted = email.extracted_data;
   const emailType = getEmailType(email);
@@ -653,29 +420,17 @@ function EmailDetailView({
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            {isInfo ? (
-              <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full flex-shrink-0">INFO</span>
-            ) : (
-              <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-600 rounded-full flex-shrink-0">INTERVENTION</span>
-            )}
+            {isInfo ? <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full flex-shrink-0">INFO</span> : <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-600 rounded-full flex-shrink-0">INTERVENTION</span>}
             <h3 className="text-lg font-semibold text-gray-900">{extracted?.title || email.subject || 'Sans objet'}</h3>
           </div>
-          {extracted?.priority === 'urgent' && !isInfo && (
-            <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full flex-shrink-0">URGENT</span>
-          )}
+          {extracted?.priority === 'urgent' && !isInfo && <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full flex-shrink-0">URGENT</span>}
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span className="flex items-center gap-1.5"><Mail className="w-4 h-4" />{email.from_name || email.from_email}</span>
           <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />{format(new Date(email.received_at), "d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>
         </div>
       </div>
-
-      {isInfo && regie && (
-        <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-          <p className="text-sm text-amber-800"><strong>De :</strong> {regie.name} — Cet email n&apos;est pas un bon d&apos;intervention</p>
-        </div>
-      )}
-
+      {isInfo && regie && <div className="p-3 bg-amber-50 rounded-lg border border-amber-100"><p className="text-sm text-amber-800"><strong>De :</strong> {regie.name} — Cet email n&apos;est pas un bon d&apos;intervention</p></div>}
       {extracted && !isInfo && (
         <>
           <div className="grid grid-cols-2 gap-3">
@@ -685,24 +440,10 @@ function EmailDetailView({
             {email.work_order_number && <InfoPill icon={<FileText className="w-4 h-4" />} label="Bon de travail" value={email.work_order_number} />}
             {regie && <InfoPill icon={<Building2 className="w-4 h-4" />} label="Régie" value={regie.name} />}
           </div>
-          {extracted.description && (
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">Description pour le technicien</p>
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{extracted.description}</pre>
-              </div>
-            </div>
-          )}
+          {extracted.description && <div><p className="text-sm font-medium text-gray-700 mb-2">Description pour le technicien</p><div className="bg-blue-50 rounded-lg p-4 border border-blue-100"><pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{extracted.description}</pre></div></div>}
         </>
       )}
-
-      <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Contenu de l&apos;email</p>
-        <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{email.body_text || 'Aucun contenu texte disponible.'}</pre>
-        </div>
-      </div>
-
+      <div><p className="text-sm font-medium text-gray-700 mb-2">Contenu de l&apos;email</p><div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto"><pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{email.body_text || 'Aucun contenu texte disponible.'}</pre></div></div>
       {showActions && (
         <div className="flex items-center justify-between pt-4 border-t border-gray-100">
           <div className="flex items-center gap-2">
@@ -724,31 +465,38 @@ function InfoPill({ icon, label, value }: { icon: React.ReactNode; label: string
   return (
     <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-lg">
       <div className="text-gray-400 mt-0.5">{icon}</div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-400">{label}</p>
-        <p className="text-sm font-medium text-gray-900 truncate">{value}</p>
-      </div>
+      <div className="min-w-0"><p className="text-xs text-gray-400">{label}</p><p className="text-sm font-medium text-gray-900 truncate">{value}</p></div>
     </div>
   );
 }
 
-// ─── Planification Form ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// SPLIT VIEW: Formulaire à gauche + Mini calendrier à droite
+// ═══════════════════════════════════════════════════════════════════════════════
 
-function PlanificationForm({
-  email, technicians, regies, onSuccess, onCancel,
-}: {
-  email: EmailInbox | null; technicians: Technician[]; regies: Regie[];
-  onSuccess: () => void; onCancel: () => void;
-}) {
+const HOUR_HEIGHT = 48;
+const START_HOUR = 7;
+const END_HOUR = 18;
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+const LUNCH_START = 12;
+const LUNCH_END_HOUR = 13;
+const LUNCH_END_MIN = 30;
+
+function PlanificationSplitView({ email, technicians, regies, onSuccess, onCancel }: { email: EmailInbox | null; technicians: Technician[]; regies: Regie[]; onSuccess: () => void; onCancel: () => void; }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [calendarWeek, setCalendarWeek] = useState(new Date());
+  const [calendarInterventions, setCalendarInterventions] = useState<CalendarIntervention[]>([]);
+
   const [formData, setFormData] = useState({
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '',
+    intervention_type: 'depannage',
   });
 
   const supabase = createClient();
 
+  // Pre-fill from email
   useEffect(() => {
     if (email) {
       const extracted = email.extracted_data;
@@ -766,6 +514,29 @@ function PlanificationForm({
     }
   }, [email]);
 
+  // Fetch calendar interventions for the selected week & technician
+  const weekStart = useMemo(() => startOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
+  const weekEnd = useMemo(() => endOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
+  const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
+
+  const fetchCalendarData = useCallback(async () => {
+    let query = supabase
+      .from('interventions')
+      .select('id, title, date_planned, estimated_duration_minutes, status, technician_id, intervention_type')
+      .gte('date_planned', weekStart.toISOString())
+      .lte('date_planned', weekEnd.toISOString())
+      .not('status', 'eq', 'annule');
+
+    if (formData.technician_id) {
+      query = query.eq('technician_id', formData.technician_id);
+    }
+
+    const { data } = await query;
+    if (data) setCalendarInterventions(data as CalendarIntervention[]);
+  }, [weekStart, weekEnd, formData.technician_id]);
+
+  useEffect(() => { fetchCalendarData(); }, [fetchCalendarData]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -774,6 +545,18 @@ function PlanificationForm({
     }));
   };
 
+  const handleSlotClick = (day: Date, hour: number) => {
+    if (hour >= LUNCH_START && hour < 13.5) return;
+    setFormData((prev) => ({
+      ...prev,
+      date_planned: format(day, 'yyyy-MM-dd'),
+      time_planned: `${String(Math.floor(hour)).padStart(2, '0')}:${hour % 1 === 0.5 ? '30' : '00'}`,
+    }));
+  };
+
+  // ════════════════════════════════════════════════════════════
+  // SUBMIT — crée l'intervention + envoie email confirmation
+  // ════════════════════════════════════════════════════════════
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -787,18 +570,38 @@ function PlanificationForm({
       if (formData.client_name) clientInfo.name = formData.client_name;
       if (formData.client_phone) clientInfo.phone = formData.client_phone;
 
+      // Créer l'intervention et récupérer l'ID
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).from('interventions').insert({
+      const { data, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null,
         address: formData.address, date_planned: datePlanned,
         estimated_duration_minutes: formData.estimated_duration_minutes,
-        status: formData.status as 'nouveau' | 'planifie' | 'en_cours' | 'termine' | 'ready_to_bill' | 'billed' | 'annule',
-        priority: formData.priority, technician_id: formData.technician_id || null,
-        regie_id: formData.regie_id || null, work_order_number: formData.work_order_number || null,
+        status: formData.status, priority: formData.priority,
+        technician_id: formData.technician_id || null,
+        regie_id: formData.regie_id || null,
+        work_order_number: formData.work_order_number || null,
         client_info: Object.keys(clientInfo).length > 0 ? clientInfo : null,
         source_type: 'email', source_email_id: email?.id || null,
-      });
+        intervention_type: formData.intervention_type,
+      }).select('id');
+
       if (error) throw new Error(error.message);
+
+      // ══ Envoyer email de confirmation à la régie ══
+      if (formData.regie_id && data?.[0]?.id) {
+        try {
+          await fetch('https://primary-production-66b7.up.railway.app/webhook/confirmation-regie', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ intervention_id: data[0].id }),
+          });
+          toast.success('📧 Email de confirmation envoyé');
+        } catch (emailError) {
+          console.error('Erreur envoi email confirmation:', emailError);
+          toast.warning('Intervention créée mais email non envoyé');
+        }
+      }
+
       toast.success('Intervention planifiée avec succès');
       onSuccess();
     } catch (error) {
@@ -809,103 +612,284 @@ function PlanificationForm({
     }
   };
 
-  const STATUS_OPTIONS = [{ value: 'nouveau', label: 'Nouveau' }, { value: 'planifie', label: 'Planifié' }, { value: 'en_cours', label: 'En cours' }];
-  const PRIORITY_OPTIONS = [{ value: 0, label: 'Normal' }, { value: 1, label: 'Urgent' }, { value: 2, label: 'Urgence absolue' }];
-
-  const getTechnicianDisplayName = (tech: Technician) => {
+  const getTechName = (tech: Technician) => {
     if (tech.first_name && tech.last_name) return `${tech.first_name} ${tech.last_name}`;
-    if (tech.first_name) return tech.first_name;
-    if (tech.last_name) return tech.last_name;
-    return tech.email;
+    return tech.first_name || tech.last_name || tech.email;
   };
+
+  const selectedTechName = formData.technician_id
+    ? getTechName(technicians.find(t => t.id === formData.technician_id)!)
+    : 'Tous les techniciens';
 
   const inputClass = 'w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
   const selectClass = `${inputClass} bg-white`;
 
+  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+
+  const getInterventionsForDayCol = (day: Date) => {
+    return calendarInterventions.filter(iv => iv.date_planned && isSameDay(new Date(iv.date_planned), day));
+  };
+
+  const getBlockStyle = (iv: CalendarIntervention) => {
+    const d = new Date(iv.date_planned);
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const startMin = Math.max((h - START_HOUR) * 60 + m, 0);
+    const dur = Math.max(iv.estimated_duration_minutes || 30, 15);
+    const endMin = Math.min(startMin + dur, TOTAL_HOURS * 60);
+    return {
+      top: (startMin / 60) * HOUR_HEIGHT,
+      height: Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 16),
+    };
+  };
+
+  const lunchTop = (LUNCH_START - START_HOUR) * HOUR_HEIGHT;
+  const lunchHeight = ((LUNCH_END_HOUR - LUNCH_START) * 60 + LUNCH_END_MIN) / 60 * HOUR_HEIGHT;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {email && (
-        <div className="p-3 bg-blue-50 rounded-lg text-sm">
-          <p className="text-blue-700"><strong>Source :</strong> Email de {email.from_name || email.from_email}</p>
+    <div className="flex gap-6 max-h-[80vh]">
+      {/* ═══ LEFT: Formulaire ═══ */}
+      <div className="w-[420px] flex-shrink-0 overflow-y-auto pr-4 border-r border-gray-200">
+        <form onSubmit={handleSubmit} className="space-y-4 pb-4">
+          {email && (
+            <div className="p-3 bg-blue-50 rounded-lg text-sm">
+              <p className="text-blue-700"><strong>Source :</strong> Email de {email.from_name || email.from_email}</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
+            <input type="text" name="title" required value={formData.title} onChange={handleChange} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea name="description" rows={2} value={formData.description} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Adresse *</label>
+            <input type="text" name="address" required value={formData.address} onChange={handleChange} className={inputClass} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Technicien</label>
+              <select name="technician_id" value={formData.technician_id} onChange={handleChange} className={selectClass}>
+                <option value="">-- Non assigné --</option>
+                {technicians.map((tech) => <option key={tech.id} value={tech.id}>{getTechName(tech)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <select name="intervention_type" value={formData.intervention_type} onChange={handleChange} className={selectClass}>
+                <option value="depannage">🔧 Dépannage</option>
+                <option value="chantier">🏗️ Chantier</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Régie</label>
+            <select name="regie_id" value={formData.regie_id} onChange={handleChange} className={selectClass}>
+              <option value="">-- Aucune --</option>
+              {regies.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">N° Bon de travail</label>
+            <input type="text" name="work_order_number" value={formData.work_order_number} onChange={handleChange} className={inputClass} />
+          </div>
+
+          <div className={`p-3 rounded-lg border ${formData.date_planned ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+            {formData.date_planned ? (
+              <p className="text-sm text-green-800">
+                📅 <strong>{format(new Date(formData.date_planned), 'EEEE d MMMM', { locale: fr })}</strong> à <strong>{formData.time_planned || '09:00'}</strong>
+              </p>
+            ) : (
+              <p className="text-sm text-amber-800">👆 Cliquez sur un créneau libre dans le calendrier →</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Heure</label>
+              <input type="time" name="time_planned" value={formData.time_planned} onChange={handleChange} className={inputClass} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label>
+              <input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+              <select name="status" value={formData.status} onChange={handleChange} className={selectClass}>
+                <option value="nouveau">Nouveau</option>
+                <option value="planifie">Planifié</option>
+                <option value="en_cours">En cours</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>
+              <select name="priority" value={formData.priority} onChange={handleChange} className={selectClass}>
+                <option value={0}>Normal</option>
+                <option value={1}>Urgent</option>
+                <option value={2}>Urgence absolue</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom client</label>
+              <input type="text" name="client_name" value={formData.client_name} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+              <input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={inputClass} />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+            <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Annuler</button>
+            <button type="submit" disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm">
+              {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isLoading ? 'Planification...' : "Planifier"}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* ═══ RIGHT: Mini calendrier semaine ═══ */}
+      <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+        <div className="flex items-center justify-between mb-3 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setCalendarWeek(subWeeks(calendarWeek, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
+            <span className="text-sm font-medium text-gray-700">
+              {format(weekStart, 'd MMM', { locale: fr })} – {format(weekEnd, 'd MMM yyyy', { locale: fr })}
+            </span>
+            <button onClick={() => setCalendarWeek(addWeeks(calendarWeek, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setCalendarWeek(new Date())} className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded-lg font-medium">Auj.</button>
+          </div>
+          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+            {selectedTechName}
+          </span>
         </div>
-      )}
-      <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1.5">Titre <span className="text-red-500">*</span></label>
-        <input type="text" id="title" name="title" required value={formData.title} onChange={handleChange} className={inputClass} />
-      </div>
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
-        <textarea id="description" name="description" rows={3} value={formData.description} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
-      </div>
-      <div>
-        <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1.5">Adresse <span className="text-red-500">*</span></label>
-        <input type="text" id="address" name="address" required value={formData.address} onChange={handleChange} className={inputClass} />
-      </div>
-      <div>
-        <label htmlFor="technician_id" className="block text-sm font-medium text-gray-700 mb-1.5">Technicien assigné</label>
-        <select id="technician_id" name="technician_id" value={formData.technician_id} onChange={handleChange} className={selectClass}>
-          <option value="">-- Non assigné --</option>
-          {technicians.map((tech) => <option key={tech.id} value={tech.id}>{getTechnicianDisplayName(tech)}</option>)}
-        </select>
-        {technicians.length === 0 && <p className="mt-1 text-xs text-gray-500">Aucun technicien disponible</p>}
-      </div>
-      <div>
-        <label htmlFor="regie_id" className="block text-sm font-medium text-gray-700 mb-1.5">Régie</label>
-        <select id="regie_id" name="regie_id" value={formData.regie_id} onChange={handleChange} className={selectClass}>
-          <option value="">-- Aucune régie --</option>
-          {regies.map((regie) => <option key={regie.id} value={regie.id}>{regie.name}</option>)}
-        </select>
-      </div>
-      <div>
-        <label htmlFor="work_order_number" className="block text-sm font-medium text-gray-700 mb-1.5">N° Bon de travail / Référence</label>
-        <input type="text" id="work_order_number" name="work_order_number" value={formData.work_order_number} onChange={handleChange} placeholder="Ex: BT-2024-001234" className={inputClass} />
-        <p className="mt-1 text-xs text-gray-500">Référence de la régie pour ce bon de travail</p>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="date_planned" className="block text-sm font-medium text-gray-700 mb-1.5">Date prévue</label>
-          <input type="date" id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+
+        <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
+          <div className="flex min-w-[500px]">
+            <div className="flex-shrink-0 w-12 border-r border-gray-200">
+              <div className="h-8 border-b border-gray-200" />
+              <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
+                {hours.map((hour) => (
+                  <div key={hour} className="absolute w-full text-right pr-1.5 text-[10px] text-gray-400 -translate-y-1/2" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}>
+                    {`${String(hour).padStart(2, '0')}:00`}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
+              {weekDays.map((day, colIdx) => {
+                const dayIvs = getInterventionsForDayCol(day);
+                const today = isToday(day);
+                const isSelected = formData.date_planned && isSameDay(new Date(formData.date_planned + 'T00:00:00'), day);
+
+                return (
+                  <div key={colIdx} className="border-r border-gray-100 last:border-r-0">
+                    <div className={`h-8 flex items-center justify-center border-b border-gray-200 text-xs font-medium ${today ? 'bg-blue-50 text-blue-600' : isSelected ? 'bg-green-50 text-green-700' : 'text-gray-500'}`}>
+                      {format(day, 'EEE d', { locale: fr })}
+                    </div>
+
+                    <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
+                      {hours.map((hour) => (
+                        <div key={hour} className="absolute w-full border-t border-gray-50" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }} />
+                      ))}
+
+                      {hours.map((hour) => [0, 0.5].map((half) => {
+                        const slotHour = hour + half;
+                        const isLunch = slotHour >= LUNCH_START && slotHour < 13.5;
+                        if (isLunch) return null;
+                        return (
+                          <div
+                            key={`${hour}-${half}`}
+                            className="absolute left-0 right-0 cursor-pointer hover:bg-blue-50 transition-colors z-[1]"
+                            style={{ top: (slotHour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT / 2 }}
+                            onClick={() => handleSlotClick(day, slotHour)}
+                            title={`${String(Math.floor(slotHour)).padStart(2, '0')}:${half ? '30' : '00'}`}
+                          />
+                        );
+                      }))}
+
+                      <div className="absolute left-0 right-0 z-[2] pointer-events-none" style={{ top: lunchTop, height: lunchHeight }}>
+                        <div className="w-full h-full bg-gray-100 border-y border-dashed border-gray-300 flex items-center justify-center">
+                          <span className="text-[10px] text-gray-400">🍽️</span>
+                        </div>
+                      </div>
+
+                      {today && (() => {
+                        const now = new Date();
+                        const nowMin = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+                        if (nowMin < 0 || nowMin > TOTAL_HOURS * 60) return null;
+                        return <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: (nowMin / 60) * HOUR_HEIGHT }}><div className="h-px bg-red-500 w-full" /><div className="w-1.5 h-1.5 rounded-full bg-red-500 -mt-[3px] -ml-0.5" /></div>;
+                      })()}
+
+                      {isSelected && formData.time_planned && (() => {
+                        const [h, m] = formData.time_planned.split(':').map(Number);
+                        const slotMin = (h - START_HOUR) * 60 + m;
+                        const durMin = formData.estimated_duration_minutes || 60;
+                        const top = (slotMin / 60) * HOUR_HEIGHT;
+                        const height = (durMin / 60) * HOUR_HEIGHT;
+                        return (
+                          <div
+                            className="absolute left-0.5 right-0.5 rounded border-2 border-dashed border-green-500 bg-green-100/50 z-[8] pointer-events-none"
+                            style={{ top, height: Math.max(height, 16) }}
+                          >
+                            <div className="px-1 py-0.5 text-[10px] font-medium text-green-700 truncate">
+                              📌 {formData.title || 'Nouvelle'}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {dayIvs.map((iv) => {
+                        const { top, height } = getBlockStyle(iv);
+                        const isDepannage = iv.intervention_type !== 'chantier';
+                        const color = isDepannage ? 'bg-red-400 border-red-600' : 'bg-blue-400 border-blue-600';
+                        const startTime = format(new Date(iv.date_planned), 'HH:mm');
+                        const endTime = format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm');
+
+                        return (
+                          <div
+                            key={iv.id}
+                            className={`absolute left-0.5 right-0.5 rounded border-l-2 text-white text-[10px] overflow-hidden z-[5] ${color}`}
+                            style={{ top, height: Math.max(height, 16) }}
+                            title={`${iv.title} (${startTime}-${endTime})`}
+                          >
+                            <div className="px-1 py-0.5 truncate font-medium">{iv.title}</div>
+                            {height >= 28 && <div className="px-1 text-white/70">{startTime}-{endTime}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <div>
-          <label htmlFor="time_planned" className="block text-sm font-medium text-gray-700 mb-1.5">Heure</label>
-          <input type="time" id="time_planned" name="time_planned" value={formData.time_planned} onChange={handleChange} className={inputClass} />
+
+        <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-500 flex-shrink-0">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-400" />Dépannage</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400" />Chantier</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-100 border border-dashed border-green-500" />Nouveau RDV</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-gray-100" />Pause midi</span>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label htmlFor="estimated_duration_minutes" className="block text-sm font-medium text-gray-700 mb-1.5">Durée (min)</label>
-          <input type="number" id="estimated_duration_minutes" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={inputClass} />
-        </div>
-        <div>
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1.5">Statut</label>
-          <select id="status" name="status" value={formData.status} onChange={handleChange} className={selectClass}>
-            {STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1.5">Priorité</label>
-          <select id="priority" name="priority" value={formData.priority} onChange={handleChange} className={selectClass}>
-            {PRIORITY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="client_name" className="block text-sm font-medium text-gray-700 mb-1.5">Nom du client</label>
-          <input type="text" id="client_name" name="client_name" value={formData.client_name} onChange={handleChange} className={inputClass} />
-        </div>
-        <div>
-          <label htmlFor="client_phone" className="block text-sm font-medium text-gray-700 mb-1.5">Téléphone</label>
-          <input type="tel" id="client_phone" name="client_phone" value={formData.client_phone} onChange={handleChange} className={inputClass} />
-        </div>
-      </div>
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-        <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors">Annuler</button>
-        <button type="submit" disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-          {isLoading ? 'Planification...' : "Planifier l'intervention"}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }

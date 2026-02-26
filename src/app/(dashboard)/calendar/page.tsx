@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
 import { TimeGridView } from '@/components/calendar/TimeGridView';
+import type { LeaveEntry } from '@/components/calendar/TimeGridView';
 import { createClient } from '@/lib/supabase/client';
 import {
   format,
@@ -23,6 +24,7 @@ import {
   subWeeks,
   addDays,
   subDays,
+  isWithinInterval,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -45,6 +47,7 @@ interface Intervention {
   regie_id: string | null;
   client_info: { name?: string; phone?: string } | null;
   work_order_number: string | null;
+  intervention_type?: 'depannage' | 'chantier' | null;
   technician?: {
     id: string;
     first_name: string | null;
@@ -52,6 +55,13 @@ interface Intervention {
   } | null;
 }
 
+// Couleurs par TYPE d'intervention pour la vue mois
+const TYPE_COLORS: Record<string, string> = {
+  depannage: 'bg-red-500 hover:bg-red-600',
+  chantier: 'bg-blue-500 hover:bg-blue-600',
+};
+
+// Fallback : couleurs par statut
 const STATUS_COLORS: Record<string, string> = {
   nouveau: 'bg-blue-500 hover:bg-blue-600',
   planifie: 'bg-amber-500 hover:bg-amber-600',
@@ -60,6 +70,13 @@ const STATUS_COLORS: Record<string, string> = {
   ready_to_bill: 'bg-amber-400 hover:bg-amber-500',
   billed: 'bg-violet-500 hover:bg-violet-600',
   annule: 'bg-gray-400 hover:bg-gray-500',
+};
+
+const getInterventionColor = (iv: Intervention) => {
+  if (iv.intervention_type && TYPE_COLORS[iv.intervention_type]) {
+    return TYPE_COLORS[iv.intervention_type];
+  }
+  return STATUS_COLORS[iv.status] || 'bg-gray-500 hover:bg-gray-600';
 };
 
 const VIEW_TABS: { value: CalendarView; label: string; icon: typeof CalendarDays }[] = [
@@ -73,9 +90,10 @@ const VIEW_TABS: { value: CalendarView; label: string; icon: typeof CalendarDays
 // =============================================
 
 export default function CalendarPage() {
-  const [view, setView] = useState<CalendarView>('month');
+  const [view, setView] = useState<CalendarView>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [interventions, setInterventions] = useState<Intervention[]>([]);
+  const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modals
@@ -114,12 +132,14 @@ export default function CalendarPage() {
     setIsLoading(true);
     const { start, end } = getDateRange();
 
+    // Fetch interventions
     const { data, error } = await supabase
       .from('interventions')
       .select(`
         id, title, description, address, date_planned,
         estimated_duration_minutes, status, priority,
         technician_id, regie_id, client_info, work_order_number,
+        intervention_type,
         technician:users!interventions_technician_id_fkey(id, first_name, last_name)
       `)
       .gte('date_planned', start.toISOString())
@@ -129,6 +149,25 @@ export default function CalendarPage() {
     if (!error && data) {
       setInterventions(data as Intervention[]);
     }
+
+    // Fetch approved leaves for the same period
+    const startDate = format(start, 'yyyy-MM-dd');
+    const endDate = format(end, 'yyyy-MM-dd');
+
+    const { data: leavesData } = await supabase
+      .from('leave_requests')
+      .select(`
+        technician_id, start_date, end_date,
+        technician:users!leave_requests_technician_id_fkey(first_name, last_name)
+      `)
+      .eq('status', 'approved')
+      .lte('start_date', endDate)
+      .gte('end_date', startDate);
+
+    if (leavesData) {
+      setLeaves(leavesData as LeaveEntry[]);
+    }
+
     setIsLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, currentDate]);
@@ -234,9 +273,28 @@ export default function CalendarPage() {
     });
   };
 
+  const getLeavesForDay = (day: Date): LeaveEntry[] => {
+    return leaves.filter((leave) => {
+      const start = new Date(leave.start_date + 'T00:00:00');
+      const end = new Date(leave.end_date + 'T23:59:59');
+      return isWithinInterval(day, { start, end });
+    });
+  };
+
   const getTechnicianInitials = (tech: Intervention['technician']) => {
     if (!tech) return null;
     return ((tech.first_name?.[0] || '') + (tech.last_name?.[0] || '')).toUpperCase() || '?';
+  };
+
+  const getTypeEmoji = (iv: Intervention) => {
+    if (iv.intervention_type === 'chantier') return '🏗️';
+    return '🔧';
+  };
+
+  const getTechName = (tech: LeaveEntry['technician']) => {
+    if (!tech) return '?';
+    if (tech.first_name && tech.last_name) return `${tech.first_name} ${tech.last_name}`;
+    return tech.first_name || tech.last_name || '?';
   };
 
   // =============================================
@@ -269,9 +327,8 @@ export default function CalendarPage() {
 
       {/* Calendar container */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Toolbar: View Tabs + Navigation */}
+        {/* Toolbar */}
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          {/* View Tabs */}
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
             {VIEW_TABS.map((tab) => {
               const Icon = tab.icon;
@@ -281,9 +338,7 @@ export default function CalendarPage() {
                   key={tab.value}
                   onClick={() => setView(tab.value)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    isActive
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                    isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -293,24 +348,14 @@ export default function CalendarPage() {
             })}
           </div>
 
-          {/* Navigation */}
           <div className="flex items-center gap-1">
-            <button
-              onClick={navigatePrevious}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button onClick={navigatePrevious} className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <button
-              onClick={goToToday}
-              className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
+            <button onClick={goToToday} className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
               Aujourd&apos;hui
             </button>
-            <button
-              onClick={navigateNext}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button onClick={navigateNext} className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
               <ChevronRight className="w-5 h-5" />
             </button>
             <h2 className="text-lg font-semibold text-gray-900 capitalize ml-2">
@@ -330,54 +375,46 @@ export default function CalendarPage() {
               {/* ========== MONTH VIEW ========== */}
               {view === 'month' && (
                 <>
-                  {/* Day labels */}
                   <div className="grid grid-cols-7 mb-2">
                     {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => (
-                      <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase">
-                        {d}
-                      </div>
+                      <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase">{d}</div>
                     ))}
                   </div>
 
-                  {/* Calendar grid */}
                   <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
                     {calendarDays.map((day, idx) => {
                       const dayInterventions = getInterventionsForDay(day);
+                      const dayLeaves = getLeavesForDay(day);
                       const isCurrentMonth = isSameMonth(day, currentDate);
                       const isTodayDate = isToday(day);
                       const MAX_VISIBLE = 2;
                       const overflow = dayInterventions.length - MAX_VISIBLE;
 
                       return (
-                        <div
-                          key={idx}
-                          className={`bg-white min-h-[100px] p-2 ${!isCurrentMonth ? 'bg-gray-50' : ''}`}
-                        >
-                          {/* Day number */}
-                          <div
-                            className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${
-                              isTodayDate
-                                ? 'bg-blue-600 text-white'
-                                : isCurrentMonth
-                                ? 'text-gray-900'
-                                : 'text-gray-400'
-                            }`}
-                          >
+                        <div key={idx} className={`bg-white min-h-[100px] p-2 ${!isCurrentMonth ? 'bg-gray-50' : ''}`}>
+                          <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${
+                            isTodayDate ? 'bg-blue-600 text-white' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                          }`}>
                             {format(day, 'd')}
                           </div>
 
-                          {/* Interventions (max 2) */}
+                          {/* Congés en vue mois */}
+                          {dayLeaves.map((leave, i) => (
+                            <div key={`leave-${leave.technician_id}-${i}`} className="w-full text-left text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 mb-0.5 truncate">
+                              🌴 {getTechName(leave.technician)}
+                            </div>
+                          ))}
+
                           <div className="space-y-1">
                             {dayInterventions.slice(0, MAX_VISIBLE).map((iv) => (
                               <button
                                 key={iv.id}
                                 onClick={() => handleInterventionClick(iv)}
-                                className={`w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer ${
-                                  STATUS_COLORS[iv.status] || 'bg-gray-500 hover:bg-gray-600'
-                                }`}
-                                title={`${iv.title}${iv.technician ? ` - ${iv.technician.first_name || ''} ${iv.technician.last_name || ''}`.trim() : ''}`}
+                                className={`w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer ${getInterventionColor(iv)}`}
+                                title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.title}`}
                               >
                                 <div className="flex items-center gap-1">
+                                  <span className="text-[10px]">{getTypeEmoji(iv)}</span>
                                   {iv.technician && (
                                     <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">
                                       {getTechnicianInitials(iv.technician)}
@@ -388,10 +425,7 @@ export default function CalendarPage() {
                               </button>
                             ))}
                             {overflow > 0 && (
-                              <button
-                                onClick={() => switchToDay(day)}
-                                className="w-full text-left text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-0.5 hover:bg-blue-50 rounded transition-colors"
-                              >
+                              <button onClick={() => switchToDay(day)} className="w-full text-left text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-0.5 hover:bg-blue-50 rounded transition-colors">
                                 + {overflow} autre{overflow > 1 ? 's' : ''}
                               </button>
                             )}
@@ -409,6 +443,7 @@ export default function CalendarPage() {
                   mode="week"
                   currentDate={currentDate}
                   interventions={interventions}
+                  leaves={leaves}
                   onInterventionClick={handleInterventionClick}
                 />
               )}
@@ -419,6 +454,7 @@ export default function CalendarPage() {
                   mode="day"
                   currentDate={currentDate}
                   interventions={interventions}
+                  leaves={leaves}
                   onInterventionClick={handleInterventionClick}
                 />
               )}
@@ -430,24 +466,21 @@ export default function CalendarPage() {
         <div className="px-4 pb-4">
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-red-500" />
+              <span className="text-gray-600">🔧 Dépannage</span>
+            </div>
+            <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-blue-500" />
-              <span className="text-gray-600">Nouveau</span>
+              <span className="text-gray-600">🏗️ Chantier</span>
+            </div>
+            <div className="border-l border-gray-300 h-4" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" />
+              <span className="text-gray-600">🌴 Congé</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-amber-500" />
-              <span className="text-gray-600">Planifié</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-orange-500" />
-              <span className="text-gray-600">En cours</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-emerald-500" />
-              <span className="text-gray-600">Terminé</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-violet-500" />
-              <span className="text-gray-600">Facturé</span>
+              <span className="w-8 h-3 rounded bg-gray-100 border border-dashed border-gray-300" />
+              <span className="text-gray-600">🍽️ Pause midi</span>
             </div>
             <div className="flex items-center gap-1.5">
               <User className="w-3 h-3 text-gray-500" />
@@ -457,50 +490,22 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* =============================================
-          MODALS & PANELS
-          ============================================= */}
-
-      {/* Modal Nouvelle Intervention */}
-      <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Nouvelle intervention"
-        size="lg"
-      >
-        <InterventionForm
-          onSuccess={handleCreateSuccess}
-          onCancel={() => setIsCreateModalOpen(false)}
-        />
+      {/* Modals */}
+      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Nouvelle intervention" size="lg">
+        <InterventionForm onSuccess={handleCreateSuccess} onCancel={() => setIsCreateModalOpen(false)} />
       </Modal>
 
-      {/* Modal Modifier Intervention */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setSelectedIntervention(null);
-        }}
-        title="Modifier l'intervention"
-        size="lg"
-      >
+      <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedIntervention(null); }} title="Modifier l'intervention" size="lg">
         {selectedIntervention && (
           <InterventionForm
             intervention={selectedIntervention}
             onSuccess={handleEditSuccess}
-            onCancel={() => {
-              setIsEditModalOpen(false);
-              setSelectedIntervention(null);
-            }}
-            onDelete={() => {
-              setIsEditModalOpen(false);
-              setSelectedIntervention(null);
-            }}
+            onCancel={() => { setIsEditModalOpen(false); setSelectedIntervention(null); }}
+            onDelete={() => { setIsEditModalOpen(false); setSelectedIntervention(null); }}
           />
         )}
       </Modal>
 
-      {/* Detail Sheet */}
       <InterventionDetailSheet
         intervention={detailIntervention}
         onClose={() => setDetailIntervention(null)}

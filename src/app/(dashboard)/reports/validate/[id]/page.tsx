@@ -10,7 +10,7 @@ import { fr } from 'date-fns/locale';
 import {
   ChevronLeft, User, MapPin, Building2, Clock, CheckCircle, XCircle,
   Phone, FileText, Mic, Play, Pause, Image as ImageIcon, Package,
-  CreditCard, Loader2, AlertTriangle, CheckCircle2, MessageSquare,
+  CreditCard, Loader2, AlertTriangle, MessageSquare,
   X, ZoomIn, Archive, PenTool, Download,
 } from 'lucide-react';
 
@@ -22,11 +22,11 @@ interface Report {
   vocal_url: string | null;
   vocal_transcription: string | null;
   photos: (string | { url: string; caption?: string; category?: string })[];
-  checklist: { item: string; done: boolean }[];
   is_billable: boolean;
   billable_reason: string | null;
   work_duration_minutes: number | null;
-  materials_used: { product_id?: string; name: string; quantity: number; unit_price: number }[];
+  supplies_text: string | null;
+  is_completed: boolean;
   status: string;
   created_at: string;
   client_signature: string | null;
@@ -247,13 +247,8 @@ export default function ValidateReportDetailPage() {
   const allPhotosBefore = hasCategories ? photosBefore : photosUncategorized;
   const allPhotosAfter = hasCategories ? photosAfter : [];
 
-  const checklist = report.checklist || [];
-  const materials = report.materials_used || [];
-  const completedChecks = checklist.filter(c => c.done).length;
-  const totalMaterialsCost = materials.reduce((sum, m) => sum + m.quantity * m.unit_price, 0);
   const hourlyRate = 110;
   const laborCost = report.work_duration_minutes ? (report.work_duration_minutes / 60) * hourlyRate : 0;
-  const totalEstimate = laborCost + totalMaterialsCost;
 
   const PhotoGallery = ({ photos, title, emptyText }: { photos: { url: string; caption?: string }[]; title: string; emptyText: string }) => (
     <div>
@@ -295,14 +290,31 @@ export default function ValidateReportDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!report.is_billable && (<span className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-200 text-gray-600">NON FACTURABLE</span>)}
+          {/* Statut Terminée */}
+          {report.is_completed === false && (
+            <span className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200">⚠️ NON TERMINÉE</span>
+          )}
+          {!report.is_billable && (
+            <span className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-200 text-gray-600">NON FACTURABLE</span>
+          )}
           <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${report.status === 'submitted' ? 'bg-blue-100 text-blue-700' : report.status === 'validated' ? 'bg-emerald-100 text-emerald-700' : report.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
             {report.status === 'submitted' ? 'À valider' : report.status === 'validated' ? '✓ Validé' : report.status === 'rejected' ? '⚠️ Rejeté' : report.status === 'draft' ? 'Brouillon' : report.status}
           </span>
         </div>
       </div>
 
-      {/* PDF Banner - visible en haut si PDF dispo */}
+      {/* Warning si non terminée */}
+      {report.is_completed === false && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-amber-800">Intervention non terminée</p>
+            <p className="text-sm text-amber-600">Le technicien a indiqué que l&apos;intervention n&apos;est pas terminée. Un retour sur place sera probablement nécessaire.</p>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Banner */}
       {report.pdf_url && (
         <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -342,22 +354,6 @@ export default function ValidateReportDetailPage() {
             </div>
           </div>
 
-          {/* Checklist */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-4 flex items-center justify-between">
-              <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-600" />Points de contrôle</span>
-              <span className="text-sm font-normal text-gray-500">{completedChecks}/{checklist.length} validés</span>
-            </h2>
-            <div className="space-y-2">
-              {checklist.map((item, index) => (
-                <div key={index} className={`flex items-center gap-3 p-3 rounded-lg ${item.done ? 'bg-emerald-50' : 'bg-gray-50'}`}>
-                  {item.done ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <XCircle className="w-5 h-5 text-gray-300" />}
-                  <span className={item.done ? 'text-emerald-800' : 'text-gray-500'}>{item.item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Description */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-600" />Description du travail</h2>
@@ -383,23 +379,17 @@ export default function ValidateReportDetailPage() {
             ) : !report.vocal_url && (<p className="text-gray-400 italic">Aucune description fournie</p>)}
           </div>
 
-          {/* Materials */}
+          {/* Fournitures (texte libre) */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package className="w-5 h-5 text-amber-600" />Matériaux utilisés</h2>
-            {materials.length > 0 ? (
-              <div className="space-y-2">
-                {materials.map((material, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div><p className="font-medium text-gray-900">{material.name}</p><p className="text-sm text-gray-500">{material.unit_price.toFixed(2)} CHF × {material.quantity}</p></div>
-                    <p className="font-semibold text-gray-900">{(material.unit_price * material.quantity).toFixed(2)} CHF</p>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg mt-3">
-                  <p className="font-medium text-amber-800">Total matériaux</p>
-                  <p className="font-bold text-amber-800">{totalMaterialsCost.toFixed(2)} CHF</p>
-                </div>
+            <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package className="w-5 h-5 text-amber-600" />Fournitures utilisées</h2>
+            {report.supplies_text ? (
+              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                <p className="text-gray-700 whitespace-pre-wrap">{report.supplies_text}</p>
               </div>
-            ) : (<p className="text-gray-400 italic">Aucun matériau utilisé</p>)}
+            ) : (
+              <p className="text-gray-400 italic">Aucune fourniture notée</p>
+            )}
+            <p className="text-xs text-gray-400 mt-3">💡 Les prix des fournitures seront ajoutés lors de la facturation dans Bexio</p>
           </div>
         </div>
 
@@ -439,14 +429,36 @@ export default function ValidateReportDetailPage() {
             )}
           </div>
 
-          {/* Billing Summary */}
+          {/* Récapitulatif */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-600" />Récapitulatif facturation</h2>
+            <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-600" />Récapitulatif</h2>
             <div className="space-y-4">
+              {/* Durée */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center gap-3"><Clock className="w-5 h-5 text-gray-400" /><div><p className="font-medium text-gray-900">Temps de travail</p><p className="text-sm text-gray-500">{hourlyRate} CHF/heure</p></div></div>
-                <div className="text-right"><p className="text-2xl font-bold text-gray-900">{report.work_duration_minutes || 0} min</p><p className="text-sm text-gray-500">≈ {laborCost.toFixed(2)} CHF</p></div>
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-gray-400" />
+                  <div>
+                    <p className="font-medium text-gray-900">Temps de travail</p>
+                    <p className="text-sm text-gray-500">{hourlyRate} CHF/heure</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-gray-900">{report.work_duration_minutes || 0} min</p>
+                  <p className="text-sm text-gray-500">≈ {laborCost.toFixed(2)} CHF</p>
+                </div>
               </div>
+
+              {/* Terminée */}
+              <div className={`p-4 rounded-xl ${report.is_completed !== false ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                <div className="flex items-center gap-3">
+                  {report.is_completed !== false ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <XCircle className="w-5 h-5 text-amber-500" />}
+                  <p className={`font-medium ${report.is_completed !== false ? 'text-emerald-800' : 'text-amber-800'}`}>
+                    {report.is_completed !== false ? 'Intervention terminée' : 'Intervention non terminée'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Facturable */}
               <div className={`p-4 rounded-xl ${report.is_billable ? 'bg-emerald-50' : 'bg-amber-50'}`}>
                 <div className="flex items-start gap-3">
                   {report.is_billable ? <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5" /> : <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />}
@@ -455,13 +467,6 @@ export default function ValidateReportDetailPage() {
                     {!report.is_billable && report.billable_reason && (<p className="text-sm text-amber-600 mt-1">Raison : {report.billable_reason}</p>)}
                   </div>
                 </div>
-              </div>
-              <div className="p-4 bg-blue-50 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-blue-800">Estimation totale</p>
-                  <p className="text-2xl font-bold text-blue-800">{totalEstimate.toFixed(2)} CHF</p>
-                </div>
-                <p className="text-xs text-blue-600 mt-1">Main d&apos;œuvre ({laborCost.toFixed(2)}) + Matériaux ({totalMaterialsCost.toFixed(2)})</p>
               </div>
             </div>
           </div>

@@ -57,6 +57,7 @@ export const ADMIN_ROUTES = [
   { href: '/invoices', label: 'Factures', icon: 'file-text' },
   { href: '/quotes', label: 'Devis', icon: 'file-plus' },
   { href: '/products', label: 'Catalogue', icon: 'package' },
+  { href: '/leave', label: 'Congés', icon: 'calendar-check' },
 ];
 
 export const ADMIN_ONLY_ROUTES = [
@@ -69,6 +70,7 @@ export const TECHNICIAN_ROUTES = [
   { href: '/technician/today', label: "Aujourd'hui", icon: 'calendar-check' },
   { href: '/technician/week', label: 'Ma semaine', icon: 'calendar' },
   { href: '/interventions', label: 'Historique', icon: 'history' },
+  { href: '/technician/leave', label: 'Mes congés', icon: 'calendar-check' },
 ];
 
 // ==============================================

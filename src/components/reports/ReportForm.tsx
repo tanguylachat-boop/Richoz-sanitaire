@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -12,11 +12,9 @@ import type { Intervention, Report, Product } from '@/types/database';
 import {
   Save,
   Send,
-  CheckCircle,
   XCircle,
   Loader2,
   AlertTriangle,
-  Wrench,
   Package,
 } from 'lucide-react';
 
@@ -26,30 +24,6 @@ interface ReportFormProps {
   products: Product[];
   technicianId: string;
 }
-
-interface ChecklistItem {
-  item: string;
-  done: boolean;
-}
-
-interface MaterialItem {
-  product_id?: string;
-  name: string;
-  quantity: number;
-  unit_price: number;
-  code?: string;
-  catalog_code?: string;
-}
-
-// Default checklist items
-const DEFAULT_CHECKLIST: ChecklistItem[] = [
-  { item: 'Coupure eau/gaz effectuée', done: false },
-  { item: 'Zone de travail protégée', done: false },
-  { item: 'Diagnostic effectué', done: false },
-  { item: 'Réparation/intervention réalisée', done: false },
-  { item: 'Test de fonctionnement', done: false },
-  { item: 'Nettoyage zone de travail', done: false },
-];
 
 export function ReportForm({
   intervention,
@@ -88,7 +62,10 @@ export function ReportForm({
 
   const parsedPhotos = parseExistingPhotos();
 
-  // Form state
+  // =============================================
+  // FORM STATE
+  // =============================================
+
   const [textContent, setTextContent] = useState(existingReport?.text_content || '');
   const [vocalUrl, setVocalUrl] = useState(existingReport?.vocal_url || '');
   const [vocalTranscription, setVocalTranscription] = useState(
@@ -96,36 +73,29 @@ export function ReportForm({
   );
   const [photosBefore, setPhotosBefore] = useState<{ url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]>(parsedPhotos.before);
   const [photosAfter, setPhotosAfter] = useState<{ url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]>(parsedPhotos.after);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(
-    (existingReport?.checklist as unknown as ChecklistItem[]) || DEFAULT_CHECKLIST
-  );
   const [isBillable, setIsBillable] = useState(existingReport?.is_billable ?? true);
   const [billableReason, setBillableReason] = useState(existingReport?.billable_reason || '');
   const [workDuration, setWorkDuration] = useState(existingReport?.work_duration_minutes || 60);
-  const [materials, setMaterials] = useState<MaterialItem[]>(
-    (existingReport?.materials_used as unknown as MaterialItem[]) || []
-  );
-  // NEW: Free-text supplies field
+  const [isCompleted, setIsCompleted] = useState(true);
+
+  // Fournitures texte libre (sans prix)
   const [suppliesText, setSuppliesText] = useState(
     (existingReport as unknown as { supplies_text?: string })?.supplies_text || ''
   );
+
+  // Signature client
   const [clientSignature, setClientSignature] = useState<string | null>(
     (existingReport as unknown as { client_signature?: string })?.client_signature || null
   );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
 
-  // Handle checklist toggle
-  const toggleChecklistItem = (index: number) => {
-    setChecklist((prev) =>
-      prev.map((item, i) =>
-        i === index ? { ...item, done: !item.done } : item
-      )
-    );
-  };
+  // =============================================
+  // HANDLERS
+  // =============================================
 
-  // Handle voice recording complete
   const handleRecordingComplete = (url: string, transcription?: string) => {
     setVocalUrl(url);
     if (transcription) {
@@ -133,7 +103,6 @@ export function ReportForm({
     }
   };
 
-  // Handle photo changes
   const handlePhotosBeforeChange = (newPhotos: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]) => {
     setPhotosBefore(newPhotos);
   };
@@ -142,56 +111,17 @@ export function ReportForm({
     setPhotosAfter(newPhotos);
   };
 
-  // Handle signature change
   const handleSignatureChange = (dataUrl: string | null) => {
     setClientSignature(dataUrl);
   };
 
-  // Add material from catalog
-  const addMaterial = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-    setMaterials((prev) => [
-      ...prev,
-      {
-        product_id: product.id,
-        name: product.name,
-        quantity: 1,
-        unit_price: product.price,
-        code: (product as unknown as { code?: string }).code || '',
-        catalog_code: (product as unknown as { catalog_code?: string }).catalog_code || '',
-      },
-    ]);
-  };
-
-  // Remove material
-  const removeMaterial = (index: number) => {
-    setMaterials((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Update material quantity
-  const updateMaterialQuantity = (index: number, quantity: number) => {
-    setMaterials((prev) =>
-      prev.map((item, i) =>
-        i === index ? { ...item, quantity: Math.max(1, quantity) } : item
-      )
-    );
-  };
-
-  // Calculate total materials cost
-  const totalMaterialsCost = materials.reduce(
-    (sum, m) => sum + m.quantity * m.unit_price,
-    0
-  );
-
-  // Calculate checklist completion
-  const checklistCompleted = checklist.filter((c) => c.done).length;
-  const checklistTotal = checklist.length;
-
   // Total photos count
   const totalPhotos = photosBefore.length + photosAfter.length;
 
-  // Upload photos helper
+  // =============================================
+  // UPLOAD HELPERS
+  // =============================================
+
   const uploadPhotos = async (
     photos: { url: string; file?: File; isLocal?: boolean }[],
     category: string
@@ -203,7 +133,7 @@ export function ReportForm({
 
       if (photo.isLocal && photo.file) {
         const fileName = `intervention-${intervention.id}-${category}-${Date.now()}-${i}.jpg`;
-        
+
         const { error: uploadError } = await supabase.storage
           .from('photos')
           .upload(fileName, photo.file, { cacheControl: '3600', upsert: false });
@@ -226,17 +156,16 @@ export function ReportForm({
     return results;
   };
 
-  // Upload signature to Supabase Storage
   const uploadSignature = async (dataUrl: string): Promise<string> => {
     const response = await fetch(dataUrl);
     const blob = await response.blob();
-    
+
     const fileName = `signatures/intervention-${intervention.id}-${Date.now()}.png`;
-    
+
     const { error: uploadError } = await supabase.storage
       .from('photos')
-      .upload(fileName, blob, { 
-        cacheControl: '3600', 
+      .upload(fileName, blob, {
+        cacheControl: '3600',
         upsert: false,
         contentType: 'image/png',
       });
@@ -253,7 +182,10 @@ export function ReportForm({
     return publicUrl;
   };
 
-  // Build report data (shared between save draft and submit)
+  // =============================================
+  // BUILD REPORT DATA
+  // =============================================
+
   const buildReportData = (allPhotos: { url: string; category: string }[], signatureUrl: string | null, status: 'draft' | 'submitted') => ({
     intervention_id: intervention.id,
     technician_id: technicianId,
@@ -261,17 +193,21 @@ export function ReportForm({
     vocal_url: vocalUrl || null,
     vocal_transcription: vocalTranscription || null,
     photos: allPhotos.length > 0 ? allPhotos : [],
-    checklist,
+    checklist: [],
     is_billable: isBillable,
     billable_reason: !isBillable ? billableReason : null,
     work_duration_minutes: workDuration,
-    materials_used: materials,
+    materials_used: [],
     supplies_text: suppliesText || null,
     client_signature: signatureUrl,
+    is_completed: isCompleted,
     status,
   });
 
-  // Save as draft
+  // =============================================
+  // SAVE DRAFT
+  // =============================================
+
   const handleSaveDraft = async () => {
     setIsSaving(true);
     try {
@@ -310,7 +246,10 @@ export function ReportForm({
     }
   };
 
-  // Submit report
+  // =============================================
+  // SUBMIT
+  // =============================================
+
   const handleSubmit = async () => {
     if (!textContent && !vocalTranscription) {
       toast.error('Veuillez ajouter une description ou un enregistrement vocal');
@@ -321,7 +260,7 @@ export function ReportForm({
     setSubmitProgress('Préparation du rapport...');
 
     try {
-      // ÉTAPE 1: UPLOAD DES PHOTOS
+      // Upload photos
       const allLocalPhotos = [
         ...photosBefore.filter(p => p.isLocal && p.file),
         ...photosAfter.filter(p => p.isLocal && p.file),
@@ -336,10 +275,10 @@ export function ReportForm({
       const allPhotos = [...beforeUrls, ...afterUrls];
 
       if (allLocalPhotos.length > 0) {
-        toast.success(`${allLocalPhotos.length} photo(s) uploadée(s) avec succès`);
+        toast.success(`${allLocalPhotos.length} photo(s) uploadée(s)`);
       }
 
-      // ÉTAPE 2: UPLOAD SIGNATURE
+      // Upload signature
       let signatureUrl = null;
       if (clientSignature) {
         setSubmitProgress('Upload de la signature...');
@@ -350,9 +289,8 @@ export function ReportForm({
         }
       }
 
-      // ÉTAPE 3: SAUVEGARDE EN BASE DE DONNÉES
+      // Save report
       setSubmitProgress('Sauvegarde du rapport...');
-
       const reportData = buildReportData(allPhotos, signatureUrl, 'submitted');
 
       if (existingReport) {
@@ -368,14 +306,14 @@ export function ReportForm({
         if (error) throw error;
       }
 
-      // Mise à jour du statut de l'intervention
-      setSubmitProgress('Mise à jour de l\'intervention...');
+      // Update intervention status
+      setSubmitProgress("Mise à jour de l'intervention...");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: interventionError } = await (supabase as any)
         .from('interventions')
         .update({
-          status: 'termine',
-          date_completed: new Date().toISOString(),
+          status: isCompleted ? 'termine' : 'en_cours',
+          date_completed: isCompleted ? new Date().toISOString() : null,
         })
         .eq('id', intervention.id);
 
@@ -384,7 +322,6 @@ export function ReportForm({
         toast.warning('Rapport sauvegardé mais statut non mis à jour');
       }
 
-      // ÉTAPE 4: REDIRECTION
       setSubmitProgress('Terminé!');
       toast.success('Rapport soumis avec succès ! 🎉');
 
@@ -401,36 +338,95 @@ export function ReportForm({
     }
   };
 
+  // =============================================
+  // RENDER
+  // =============================================
+
   return (
     <div className="space-y-6 pb-32">
       {/* Progress summary */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Progression</h2>
-          <span className="text-sm text-gray-500">
-            {checklistCompleted}/{checklistTotal} points validés
-          </span>
-        </div>
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-emerald-500 transition-all duration-300"
-            style={{ width: `${(checklistCompleted / checklistTotal) * 100}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between mt-3 text-sm text-gray-500">
-          <span>{totalPhotos} photo{totalPhotos > 1 ? 's' : ''}</span>
-          <span>{workDuration} min de travail</span>
-          <span>{materials.length} prestation{materials.length > 1 ? 's' : ''}</span>
+        <h2 className="font-semibold text-gray-900 mb-3">Résumé</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center p-2 bg-blue-50 rounded-lg">
+            <p className="text-lg font-bold text-blue-700">{totalPhotos}</p>
+            <p className="text-xs text-blue-600">Photo{totalPhotos > 1 ? 's' : ''}</p>
+          </div>
+          <div className="text-center p-2 bg-amber-50 rounded-lg">
+            <p className="text-lg font-bold text-amber-700">{workDuration}</p>
+            <p className="text-xs text-amber-600">Minutes</p>
+          </div>
+          <div className="text-center p-2 bg-emerald-50 rounded-lg">
+            <p className="text-lg font-bold text-emerald-700">{isCompleted ? 'Oui' : 'Non'}</p>
+            <p className="text-xs text-emerald-600">Terminée</p>
+          </div>
         </div>
       </div>
 
-      {/* Voice recording section */}
+      {/* ===== TERMINÉE OUI / NON ===== */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">✅ Intervention terminée ?</h2>
+            <p className="text-sm text-gray-500">L&apos;intervention est-elle complètement terminée ?</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCompleted(true)}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                isCompleted
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              Oui
+            </button>
+            <button
+              onClick={() => setIsCompleted(false)}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                !isCompleted
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              Non
+            </button>
+          </div>
+        </div>
+        {!isCompleted && (
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-sm text-amber-700">
+              ⚠️ L&apos;intervention restera &quot;en cours&quot;. Vous pourrez revenir compléter le rapport plus tard.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ===== DESCRIPTION DE L'INTERVENTION ===== */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold text-gray-900 mb-3">
-          🎙️ Enregistrement vocal
+          ✏️ Description de l&apos;intervention
         </h2>
         <p className="text-sm text-gray-500 mb-3">
-          Dictez votre rapport - plus simple que de taper sur le téléphone !
+          Décrivez le travail réalisé, les problèmes rencontrés, les solutions apportées...
+        </p>
+        <textarea
+          value={textContent}
+          onChange={(e) => setTextContent(e.target.value)}
+          placeholder="Ex: Remplacement du robinet mural mélangeur par un mitigeur 120x220. Coupure d'eau effectuée, test fonctionnement OK..."
+          className="w-full h-32 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+      </div>
+
+      {/* ===== ENREGISTREMENT VOCAL ===== */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h2 className="font-semibold text-gray-900 mb-3">
+          🎙️ Ou dictez votre rapport
+        </h2>
+        <p className="text-sm text-gray-500 mb-3">
+          Plus simple que de taper sur le téléphone !
         </p>
         <VoiceRecorder
           interventionId={intervention.id}
@@ -445,20 +441,21 @@ export function ReportForm({
         )}
       </div>
 
-      {/* Text description */}
+      {/* ===== FOURNITURES / PIÈCES (texte libre, SANS PRIX) ===== */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">
-          ✏️ Description écrite
-        </h2>
-        <textarea
-          value={textContent}
-          onChange={(e) => setTextContent(e.target.value)}
-          placeholder="Décrivez l'intervention réalisée, les problèmes rencontrés, les solutions apportées..."
-          className="w-full h-32 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-        <p className="text-xs text-gray-400 mt-2">
-          {textContent.length} caractères
+        <div className="flex items-center gap-2 mb-3">
+          <Package className="w-5 h-5 text-gray-700" />
+          <h2 className="font-semibold text-gray-900">Fournitures</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-3">
+          Listez les pièces et fournitures utilisées. Pas besoin de mettre les prix.
         </p>
+        <textarea
+          value={suppliesText}
+          onChange={(e) => setSuppliesText(e.target.value)}
+          placeholder="Ex: 1 robinet mural mitigeur 120x220, 2 raccords laiton 1/2, ruban teflon, joints fibre..."
+          className="w-full h-24 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
       </div>
 
       {/* ===== PHOTOS AVANT ===== */}
@@ -489,47 +486,7 @@ export function ReportForm({
         />
       </div>
 
-      {/* Checklist */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">
-          ✅ Points de contrôle
-        </h2>
-        <div className="space-y-2">
-          {checklist.map((item, index) => (
-            <button
-              key={index}
-              onClick={() => toggleChecklistItem(index)}
-              className={cn(
-                'w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left active:scale-[0.98]',
-                item.done
-                  ? 'bg-emerald-50 border-emerald-300'
-                  : 'bg-white border-gray-200 hover:bg-gray-50'
-              )}
-            >
-              <div
-                className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0',
-                  item.done ? 'bg-emerald-500' : 'border-2 border-gray-300'
-                )}
-              >
-                {item.done && (
-                  <CheckCircle className="w-5 h-5 text-white" />
-                )}
-              </div>
-              <span
-                className={cn(
-                  'text-base',
-                  item.done ? 'text-emerald-800 font-medium' : 'text-gray-700'
-                )}
-              >
-                {item.item}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Work duration */}
+      {/* ===== DURÉE DU TRAVAIL ===== */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold text-gray-900 mb-3">
           ⏱️ Durée du travail
@@ -578,125 +535,12 @@ export function ReportForm({
         </div>
       </div>
 
-      {/* ===== PRESTATIONS CATALOGUE (renamed from "Matériaux utilisés") ===== */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Wrench className="w-5 h-5 text-gray-700" />
-          <h2 className="font-semibold text-gray-900">Prestations catalogue</h2>
-        </div>
-        <p className="text-sm text-gray-500 mb-3">
-          Sélectionnez les prestations de la liste de prix Richoz (poses, raccordements, déplacement, etc.)
-        </p>
-
-        {/* Material list */}
-        {materials.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {materials.map((material, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {material.name}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {material.unit_price.toFixed(2)} CHF × {material.quantity} = {(material.unit_price * material.quantity).toFixed(2)} CHF
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() =>
-                      updateMaterialQuantity(index, material.quantity - 1)
-                    }
-                    className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-lg hover:bg-gray-100 active:scale-95"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-bold">
-                    {material.quantity}
-                  </span>
-                  <button
-                    onClick={() =>
-                      updateMaterialQuantity(index, material.quantity + 1)
-                    }
-                    className="w-8 h-8 flex items-center justify-center bg-white border border-gray-300 rounded-lg hover:bg-gray-100 active:scale-95"
-                  >
-                    +
-                  </button>
-                </div>
-                <button
-                  onClick={() => removeMaterial(index)}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg active:scale-95"
-                >
-                  <XCircle className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
-
-            {/* Total */}
-            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-xl">
-              <span className="font-medium text-blue-800">Total prestations</span>
-              <span className="font-bold text-blue-800">{totalMaterialsCost.toFixed(2)} CHF</span>
-            </div>
-          </div>
-        )}
-
-        {/* Add material from catalog */}
-        {products.length > 0 ? (
-          <select
-            onChange={(e) => {
-              if (e.target.value) {
-                addMaterial(e.target.value);
-                e.target.value = '';
-              }
-            }}
-            className="w-full px-3 py-3 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="">+ Ajouter une prestation</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name} - {product.price.toFixed(2)} CHF
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="text-sm text-gray-500 text-center py-4">
-            Aucune prestation disponible
-          </p>
-        )}
-      </div>
-
-      {/* ===== NEW: FOURNITURES / PIÈCES (texte libre) ===== */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Package className="w-5 h-5 text-gray-700" />
-          <h2 className="font-semibold text-gray-900">Fournitures / Pièces utilisées</h2>
-        </div>
-        <p className="text-sm text-gray-500 mb-3">
-          Décrivez les pièces et fournitures utilisées (robinets, joints, flexibles, etc.). Le prix sera ajouté lors de la facturation.
-        </p>
-        <textarea
-          value={suppliesText}
-          onChange={(e) => setSuppliesText(e.target.value)}
-          placeholder="Ex: 1 cloche WC Geberit, 1 flotteur universel, 1 flexible 3/8-3/8, 2 joints fibre..."
-          className="w-full h-24 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-        {suppliesText && (
-          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-            <p className="text-xs text-amber-700">
-              💡 Les prix des fournitures seront ajoutés lors de la validation de la facture
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Billable toggle */}
+      {/* ===== FACTURABLE ===== */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="font-semibold text-gray-900">💰 Facturable</h2>
-            <p className="text-sm text-gray-500">Cette intervention sera facturée au client</p>
+            <p className="text-sm text-gray-500">Cette intervention sera facturée</p>
           </div>
           <button
             onClick={() => setIsBillable(!isBillable)}
@@ -719,7 +563,7 @@ export function ReportForm({
             <div className="flex items-start gap-2 mb-2">
               <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-amber-800 font-medium">
-                Raison de la non-facturation (obligatoire)
+                Raison de la non-facturation
               </p>
             </div>
             <textarea
@@ -732,7 +576,7 @@ export function ReportForm({
         )}
       </div>
 
-      {/* ===== CLIENT SIGNATURE ===== */}
+      {/* ===== SIGNATURE CLIENT ===== */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold text-gray-900 mb-1">✍️ Signature du client</h2>
         <p className="text-sm text-gray-500 mb-3">
@@ -744,7 +588,7 @@ export function ReportForm({
         />
       </div>
 
-      {/* Fixed bottom actions */}
+      {/* ===== ACTIONS FIXES EN BAS ===== */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-area-pb z-50">
         <div className="flex gap-3 max-w-2xl mx-auto">
           <button
@@ -767,7 +611,7 @@ export function ReportForm({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                {submitProgress || 'Envoi...'}
+                <span className="text-sm">{submitProgress || 'Envoi...'}</span>
               </>
             ) : (
               <>
