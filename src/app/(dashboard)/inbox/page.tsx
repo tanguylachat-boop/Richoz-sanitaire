@@ -24,6 +24,7 @@ import {
   MapPin,
   FileText,
   MessageSquare,
+  Paperclip,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -51,6 +52,7 @@ interface EmailInbox {
   from_name: string | null;
   subject: string | null;
   body_text: string | null;
+  body_html: string | null;
   extracted_data: {
     title?: string;
     address?: string;
@@ -62,6 +64,7 @@ interface EmailInbox {
   } | null;
   regie_id: string | null;
   work_order_number: string | null;
+  attachment_urls: string[] | null;
   status: string;
   category: string | null;
   email_type: string | null;
@@ -124,7 +127,7 @@ export default function InboxPage() {
     const { data: techData } = await supabase.from('users').select('id, first_name, last_name, email').eq('role', 'technician').order('last_name');
     if (techData) setTechnicians(techData);
 
-    let query = supabase.from('email_inbox').select('id, received_at, from_email, from_name, subject, body_text, extracted_data, regie_id, work_order_number, status, category, email_type').order('received_at', { ascending: false });
+    let query = supabase.from('email_inbox').select('id, received_at, from_email, from_name, subject, body_text, body_html, extracted_data, regie_id, work_order_number, status, category, email_type, attachment_urls').order('received_at', { ascending: false });
     if (statusFilter !== 'all') query = query.eq('status', statusFilter);
 
     const { data: emailsData, error: emailsError } = await query;
@@ -259,7 +262,7 @@ export default function InboxPage() {
         {selectedEmail && <EmailDetailView email={selectedEmail} regies={regies} onPlan={() => { setIsDetailModalOpen(false); handlePlanIntervention(selectedEmail); }} onIgnore={() => { updateEmailStatus(selectedEmail.id, 'ignored'); setIsDetailModalOpen(false); setSelectedEmail(null); }} onArchive={() => { updateEmailStatus(selectedEmail.id, 'processed'); setIsDetailModalOpen(false); setSelectedEmail(null); }} showActions={statusFilter === 'new'} />}
       </Modal>
 
-      {/* Modal: Planification SPLIT VIEW */}
+      {/* Modal: Planification SPLIT VIEW — email à gauche, formulaire + calendrier à droite */}
       <Modal isOpen={isPlanModalOpen} onClose={() => { setIsPlanModalOpen(false); setSelectedEmail(null); }} title="Planifier l'intervention" size="full">
         <PlanificationSplitView email={selectedEmail} technicians={technicians} regies={regies} onSuccess={handleInterventionSuccess} onCancel={() => { setIsPlanModalOpen(false); setSelectedEmail(null); }} />
       </Modal>
@@ -345,13 +348,12 @@ function RegieSection({ regie, emails, onPlan, onView, onIgnore, onArchive, show
   );
 }
 
-// ─── Email Card ───────────────────────────────────────────────────────────────
+// ─── Email Card (simplifié — juste sujet + expéditeur + type) ─────────────────
 
 function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true }: { email: EmailInbox; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean; }) {
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
   const isUrgent = !isInfo && (email.subject?.toLowerCase().includes('urgent') || email.subject?.toLowerCase().includes('urgence') || email.extracted_data?.priority === 'urgent');
-  const extractedTitle = email.extracted_data?.title || email.subject || 'Sans objet';
   const timeAgo = formatDistanceToNow(new Date(email.received_at), { addSuffix: true, locale: fr });
 
   return (
@@ -364,27 +366,25 @@ function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false
             {!isInfo && !isUrgent && email.regie_id && <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600 rounded flex-shrink-0">INTERVENTION</span>}
             {email.status === 'processed' && <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded flex-shrink-0">TRAITÉ</span>}
             {email.status === 'ignored' && <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded flex-shrink-0">IGNORÉ</span>}
-            <h4 className={`font-medium truncate group-hover:text-blue-700 transition-colors ${isInfo ? 'text-gray-700' : 'text-gray-900'}`}>{extractedTitle}</h4>
+            <h4 className={`font-medium truncate group-hover:text-blue-700 transition-colors ${isInfo ? 'text-gray-700' : 'text-gray-900'}`}>
+              {email.subject || 'Sans objet'}
+            </h4>
           </div>
           <p className="text-sm text-gray-500 mb-1.5">De : {email.from_name || email.from_email}</p>
-          {!isInfo && (
-            <div className="flex items-center gap-4 flex-wrap">
-              {email.extracted_data?.address && <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{email.extracted_data.address}</p>}
-              {email.work_order_number && <p className="text-sm text-gray-500 flex items-center gap-1"><FileText className="w-3.5 h-3.5" />{email.work_order_number}</p>}
-              {email.extracted_data?.tenant_name && <p className="text-sm text-gray-500 flex items-center gap-1"><User className="w-3.5 h-3.5" />{email.extracted_data.tenant_name}</p>}
-            </div>
-          )}
-          {isInfo && email.body_text && <p className="text-sm text-gray-400 truncate max-w-lg">{email.body_text.substring(0, 120)}...</p>}
-          <p className="text-xs text-gray-400 mt-2 flex items-center gap-1"><Clock className="w-3 h-3" />{timeAgo}</p>
+          {email.body_text && <p className="text-sm text-gray-400 truncate max-w-lg">{email.body_text.substring(0, 120)}...</p>}
+          <div className="flex items-center gap-3 mt-2">
+            <p className="text-xs text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeAgo}</p>
+            {email.attachment_urls && email.attachment_urls.length > 0 && (
+              <span className="text-xs text-amber-600 flex items-center gap-1"><Paperclip className="w-3 h-3" />{email.attachment_urls.length} PDF</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {showActions && !isOther && (
             <>
               <button onClick={onIgnore} title="Ignorer" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><XCircle className="w-4 h-4" /></button>
               <button onClick={onArchive} title="Archiver" className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Archive className="w-4 h-4" /></button>
-              {isInfo ? (
-                <button onClick={onView} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"><Eye className="w-4 h-4" />Voir</button>
-              ) : (
+              {!isInfo && (
                 <button onClick={onPlan} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"><CalendarPlus className="w-4 h-4" />Planifier</button>
               )}
             </>
@@ -407,52 +407,82 @@ function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false
   );
 }
 
-// ─── Email Detail View ────────────────────────────────────────────────────────
+// ─── Email Detail View (simplifié — montre le mail complet) ───────────────────
 
 function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActions }: { email: EmailInbox; regies: Regie[]; onPlan: () => void; onIgnore: () => void; onArchive: () => void; showActions: boolean; }) {
   const regie = regies.find((r) => r.id === email.regie_id);
-  const extracted = email.extracted_data;
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
 
   return (
     <div className="space-y-5">
+      {/* En-tête */}
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             {isInfo ? <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full flex-shrink-0">INFO</span> : <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-600 rounded-full flex-shrink-0">INTERVENTION</span>}
-            <h3 className="text-lg font-semibold text-gray-900">{extracted?.title || email.subject || 'Sans objet'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{email.subject || 'Sans objet'}</h3>
           </div>
-          {extracted?.priority === 'urgent' && !isInfo && <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full flex-shrink-0">URGENT</span>}
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span className="flex items-center gap-1.5"><Mail className="w-4 h-4" />{email.from_name || email.from_email}</span>
           <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" />{format(new Date(email.received_at), "d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>
+          {regie && <span className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />{regie.name}</span>}
         </div>
       </div>
-      {isInfo && regie && <div className="p-3 bg-amber-50 rounded-lg border border-amber-100"><p className="text-sm text-amber-800"><strong>De :</strong> {regie.name} — Cet email n&apos;est pas un bon d&apos;intervention</p></div>}
-      {extracted && !isInfo && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            {extracted.address && <InfoPill icon={<MapPin className="w-4 h-4" />} label="Adresse" value={extracted.address} />}
-            {extracted.tenant_name && <InfoPill icon={<User className="w-4 h-4" />} label="Locataire" value={extracted.tenant_name} />}
-            {extracted.tenant_phone && <InfoPill icon={<Phone className="w-4 h-4" />} label="Téléphone" value={extracted.tenant_phone} />}
-            {email.work_order_number && <InfoPill icon={<FileText className="w-4 h-4" />} label="Bon de travail" value={email.work_order_number} />}
-            {regie && <InfoPill icon={<Building2 className="w-4 h-4" />} label="Régie" value={regie.name} />}
+
+      {/* Pièces jointes PDF */}
+      {email.attachment_urls && email.attachment_urls.length > 0 && (
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">📎 Pièces jointes</p>
+          <div className="space-y-2">
+            {email.attachment_urls.map((url, idx) => (
+              <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-red-500" />
+                    Document PDF {idx + 1}
+                  </span>
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                    Ouvrir dans un nouvel onglet ↗
+                  </a>
+                </div>
+                <iframe
+                  src={url}
+                  className="w-full h-[500px] border-0"
+                  title={`PDF ${idx + 1}`}
+                />
+              </div>
+            ))}
           </div>
-          {extracted.description && <div><p className="text-sm font-medium text-gray-700 mb-2">Description pour le technicien</p><div className="bg-blue-50 rounded-lg p-4 border border-blue-100"><pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{extracted.description}</pre></div></div>}
-        </>
+        </div>
       )}
-      <div><p className="text-sm font-medium text-gray-700 mb-2">Contenu de l&apos;email</p><div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto"><pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{email.body_text || 'Aucun contenu texte disponible.'}</pre></div></div>
+
+      {/* Contenu complet de l'email */}
+      <div>
+        <p className="text-sm font-medium text-gray-700 mb-2">Contenu de l&apos;email</p>
+        <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border border-gray-200">
+          {email.body_html ? (
+            <div
+              className="text-sm text-gray-700 prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: email.body_html }}
+            />
+          ) : (
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+              {email.body_text || 'Aucun contenu disponible.'}
+            </pre>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
       {showActions && (
         <div className="flex items-center justify-between pt-4 border-t border-gray-100">
           <div className="flex items-center gap-2">
             <button onClick={onIgnore} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-white border border-gray-200 hover:bg-red-50 rounded-lg transition-colors"><XCircle className="w-4 h-4" />Ignorer</button>
             <button onClick={onArchive} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"><Archive className="w-4 h-4" />Archiver</button>
           </div>
-          {isInfo ? (
-            <button onClick={onArchive} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors shadow-sm"><CheckCircle className="w-4 h-4" />Marquer comme lu</button>
-          ) : (
+          {!isInfo && (
             <button onClick={onPlan} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"><CalendarPlus className="w-4 h-4" />Planifier l&apos;intervention</button>
           )}
         </div>
@@ -471,7 +501,7 @@ function InfoPill({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SPLIT VIEW: Formulaire à gauche + Mini calendrier à droite
+// SPLIT VIEW: Email à gauche + Formulaire vide + Calendrier à droite
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const HOUR_HEIGHT = 48;
@@ -487,6 +517,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
   const [calendarWeek, setCalendarWeek] = useState(new Date());
   const [calendarInterventions, setCalendarInterventions] = useState<CalendarIntervention[]>([]);
 
+  // Formulaire VIDE — seuls régie et sujet sont pré-remplis
   const [formData, setFormData] = useState({
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
@@ -496,25 +527,18 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
 
   const supabase = createClient();
 
-  // Pre-fill from email
+  // Pré-remplir UNIQUEMENT la régie et le sujet
   useEffect(() => {
     if (email) {
-      const extracted = email.extracted_data;
       setFormData((prev) => ({
         ...prev,
-        title: extracted?.title || email.subject || '',
-        description: extracted?.description || extracted?.title || email.subject || '',
-        address: extracted?.address || '',
-        client_name: extracted?.tenant_name || '',
-        client_phone: extracted?.tenant_phone || '',
-        priority: email.subject?.toLowerCase().includes('urgent') || extracted?.priority === 'urgent' ? 1 : 0,
+        title: email.subject || '',
         regie_id: email.regie_id || '',
-        work_order_number: email.work_order_number || '',
       }));
     }
   }, [email]);
 
-  // Fetch calendar interventions for the selected week & technician
+  // Fetch calendar interventions
   const weekStart = useMemo(() => startOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
   const weekEnd = useMemo(() => endOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
   const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
@@ -554,9 +578,6 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
     }));
   };
 
-  // ════════════════════════════════════════════════════════════
-  // SUBMIT — crée l'intervention + envoie email confirmation
-  // ════════════════════════════════════════════════════════════
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -570,7 +591,6 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
       if (formData.client_name) clientInfo.name = formData.client_name;
       if (formData.client_phone) clientInfo.phone = formData.client_phone;
 
-      // Créer l'intervention et récupérer l'ID
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null,
@@ -587,7 +607,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
 
       if (error) throw new Error(error.message);
 
-      // ══ Envoyer email de confirmation à la régie ══
+      // Envoyer email de confirmation à la régie
       if (formData.regie_id && data?.[0]?.id) {
         try {
           await fetch('https://primary-production-66b7.up.railway.app/webhook/confirmation-regie', {
@@ -647,27 +667,75 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
   const lunchHeight = ((LUNCH_END_HOUR - LUNCH_START) * 60 + LUNCH_END_MIN) / 60 * HOUR_HEIGHT;
 
   return (
-    <div className="flex gap-6 max-h-[80vh]">
-      {/* ═══ LEFT: Formulaire ═══ */}
-      <div className="w-[420px] flex-shrink-0 overflow-y-auto pr-4 border-r border-gray-200">
-        <form onSubmit={handleSubmit} className="space-y-4 pb-4">
-          {email && (
-            <div className="p-3 bg-blue-50 rounded-lg text-sm">
-              <p className="text-blue-700"><strong>Source :</strong> Email de {email.from_name || email.from_email}</p>
-            </div>
-          )}
+    <div className="flex gap-0 max-h-[85vh]">
 
+      {/* ═══ LEFT: Contenu de l'email (lecture) ═══ */}
+      <div className="w-[380px] flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50">
+        {email && (
+          <div className="p-4 space-y-3">
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <p className="text-xs text-gray-400 mb-1">De</p>
+              <p className="text-sm font-medium text-gray-900">{email.from_name || email.from_email}</p>
+              <p className="text-xs text-gray-500">{email.from_email}</p>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <p className="text-xs text-gray-400 mb-1">Sujet</p>
+              <p className="text-sm font-medium text-gray-900">{email.subject || 'Sans objet'}</p>
+              <p className="text-xs text-gray-400 mt-1">{format(new Date(email.received_at), "d MMM yyyy 'à' HH:mm", { locale: fr })}</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <p className="text-xs text-gray-400 px-3 pt-3 mb-2">Contenu de l&apos;email</p>
+              <div className="px-3 pb-3 max-h-[40vh] overflow-y-auto">
+                {email.body_html ? (
+                  <div
+                    className="text-sm text-gray-700 prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: email.body_html }}
+                  />
+                ) : (
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+                    {email.body_text || 'Aucun contenu disponible.'}
+                  </pre>
+                )}
+              </div>
+            </div>
+            {/* PDF joints */}
+            {email.attachment_urls && email.attachment_urls.length > 0 && (
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border-b border-amber-200">
+                  <span className="text-xs font-medium text-amber-800 flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    {email.attachment_urls.length} pièce{email.attachment_urls.length > 1 ? 's' : ''} jointe{email.attachment_urls.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {email.attachment_urls.map((url, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+                      <span className="text-xs text-gray-600 flex items-center gap-1"><FileText className="w-3 h-3 text-red-500" />PDF {idx + 1}</span>
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700">Ouvrir ↗</a>
+                    </div>
+                    <iframe src={url} className="w-full h-[400px] border-0" title={`PDF ${idx + 1}`} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ CENTER: Formulaire vide ═══ */}
+      <div className="w-[380px] flex-shrink-0 overflow-y-auto px-4 border-r border-gray-200">
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
-            <input type="text" name="title" required value={formData.title} onChange={handleChange} className={inputClass} />
+            <input type="text" name="title" required value={formData.title} onChange={handleChange} className={inputClass} placeholder="Ex: Fuite robinet cuisine" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea name="description" rows={2} value={formData.description} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            <textarea name="description" rows={3} value={formData.description} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Détails de l'intervention..." />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Adresse *</label>
-            <input type="text" name="address" required value={formData.address} onChange={handleChange} className={inputClass} />
+            <input type="text" name="address" required value={formData.address} onChange={handleChange} className={inputClass} placeholder="Adresse complète du lieu d'intervention" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -696,7 +764,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">N° Bon de travail</label>
-            <input type="text" name="work_order_number" value={formData.work_order_number} onChange={handleChange} className={inputClass} />
+            <input type="text" name="work_order_number" value={formData.work_order_number} onChange={handleChange} className={inputClass} placeholder="Ex: #1723245" />
           </div>
 
           <div className={`p-3 rounded-lg border ${formData.date_planned ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
@@ -746,11 +814,11 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom client</label>
-              <input type="text" name="client_name" value={formData.client_name} onChange={handleChange} className={inputClass} />
+              <input type="text" name="client_name" value={formData.client_name} onChange={handleChange} className={inputClass} placeholder="Nom du locataire" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-              <input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={inputClass} />
+              <input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={inputClass} placeholder="+41 XX XXX XX XX" />
             </div>
           </div>
 
@@ -758,7 +826,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
             <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Annuler</button>
             <button type="submit" disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm">
               {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isLoading ? 'Planification...' : "Planifier"}
+              {isLoading ? 'Planification...' : 'Planifier'}
             </button>
           </div>
         </form>
@@ -766,7 +834,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
 
       {/* ═══ RIGHT: Mini calendrier semaine ═══ */}
       <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-        <div className="flex items-center justify-between mb-3 flex-shrink-0">
+        <div className="flex items-center justify-between mb-3 px-3 pt-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <button onClick={() => setCalendarWeek(subWeeks(calendarWeek, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-medium text-gray-700">
@@ -780,7 +848,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
           </span>
         </div>
 
-        <div className="flex-1 overflow-auto border border-gray-200 rounded-lg">
+        <div className="flex-1 overflow-auto border border-gray-200 rounded-lg mx-3 mb-3">
           <div className="flex min-w-[500px]">
             <div className="flex-shrink-0 w-12 border-r border-gray-200">
               <div className="h-8 border-b border-gray-200" />
@@ -883,7 +951,7 @@ function PlanificationSplitView({ email, technicians, regies, onSuccess, onCance
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-500 flex-shrink-0">
+        <div className="flex items-center gap-4 px-3 pb-2 text-[10px] text-gray-500 flex-shrink-0">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-400" />Dépannage</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400" />Chantier</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-100 border border-dashed border-green-500" />Nouveau RDV</span>

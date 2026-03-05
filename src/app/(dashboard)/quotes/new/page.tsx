@@ -1,275 +1,699 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import {
-  ChevronLeft,
-  Loader2,
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Search,
   FileText,
-  CheckCircle,
-  Sparkles,
-  Send,
-  RotateCcw,
+  Save,
+  Package,
+  Wrench,
+  Calculator,
+  Building2,
+  User,
+  MapPin,
+  X,
+  Loader2,
 } from 'lucide-react';
+import Link from 'next/link';
 
-const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || 'https://primary-production-66b7.up.railway.app';
-
-type Status = 'idle' | 'generating' | 'done' | 'error';
-
-interface QuoteResult {
-  message: string;
-  quote_id?: string;
+// Types
+interface CatalogService {
+  id: number;
+  name: string;
+  description: string;
+  default_price: number;
+  unit: string;
 }
 
-const EXAMPLES = [
-  "Devis pour Régie Naef, installation WC suspendu Geberit avec bâti-support, salle de bain 3ème étage",
-  "Remplacement chauffe-eau 200L et pose groupe de sécurité pour M. Dupont, ch. des Acacias 5",
-  "Réparation fuite tuyau cuivre + remplacement vanne d'arrêt, cuisine, Régie Comptoir Immobilier",
-  "Pose lavabo double vasque avec robinetterie Grohe, salle de bain, Mme Martin",
-];
+interface Regie {
+  id: string;
+  name: string;
+}
+
+interface QuoteLine {
+  id: string;
+  type: 'service' | 'supply';
+  catalog_service_id: number | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  unit: string;
+  total: number;
+}
+
+const TVA_RATE = 0.081; // 8.1% Swiss TVA
+const N8N_WEBHOOK_URL = 'https://primary-production-66b7.up.railway.app/webhook/quote-pdf';
+
+function generateTempId() {
+  return Math.random().toString(36).substring(2, 9);
+}
 
 export default function NewQuotePage() {
   const router = useRouter();
-  const [status, setStatus] = useState<Status>('idle');
-  const [input, setInput] = useState('');
-  const [sentText, setSentText] = useState('');
-  const [result, setResult] = useState<QuoteResult | null>(null);
-  const [error, setError] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const supabase = createClient();
 
-  const sendQuote = async (text: string) => {
-    if (!text.trim()) return;
+  // Form state
+  const [clientName, setClientName] = useState('');
+  const [clientAddress, setClientAddress] = useState('');
+  const [regieId, setRegieId] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+  const [validDays] = useState(30);
 
-    setSentText(text.trim());
-    setStatus('generating');
-    setError('');
-    setResult(null);
+  // Lines
+  const [lines, setLines] = useState<QuoteLine[]>([]);
+
+  // Data
+  const [catalog, setCatalog] = useState<CatalogService[]>([]);
+  const [regies, setRegies] = useState<Regie[]>([]);
+
+  // UI state
+  const [saving, setSaving] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+
+  // Load catalog & regies
+  useEffect(() => {
+    async function loadData() {
+      const [catalogRes, regiesRes] = await Promise.all([
+        supabase.from('services_catalog').select('*').order('id'),
+        supabase.from('regies').select('id, name').order('name'),
+      ]);
+      if (catalogRes.data) setCatalog(catalogRes.data as any);
+      if (regiesRes.data) setRegies(regiesRes.data as any);
+    }
+    loadData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Calculations
+  const totalHT = lines.reduce((sum, line) => sum + line.total, 0);
+  const taxAmount = Math.round(totalHT * TVA_RATE * 100) / 100;
+  const totalTTC = Math.round((totalHT + taxAmount) * 100) / 100;
+
+  // Add service from catalog
+  const addServiceLine = (service: CatalogService) => {
+    const newLine: QuoteLine = {
+      id: generateTempId(),
+      type: 'service',
+      catalog_service_id: service.id,
+      description: service.description || service.name,
+      quantity: 1,
+      unit_price: service.default_price,
+      unit: service.unit || 'forfait',
+      total: service.default_price,
+    };
+    setLines(prev => [...prev, newLine]);
+    setShowCatalog(false);
+    setCatalogSearch('');
+  };
+
+  // Add empty supply line
+  const addSupplyLine = () => {
+    const newLine: QuoteLine = {
+      id: generateTempId(),
+      type: 'supply',
+      catalog_service_id: null,
+      description: '',
+      quantity: 1,
+      unit_price: 0,
+      unit: 'pièce',
+      total: 0,
+    };
+    setLines(prev => [...prev, newLine]);
+  };
+
+  // Update line
+  const updateLine = (id: string, updates: Partial<QuoteLine>) => {
+    setLines(prev =>
+      prev.map(line => {
+        if (line.id !== id) return line;
+        const updated = { ...line, ...updates };
+        updated.total = Math.round(updated.quantity * updated.unit_price * 100) / 100;
+        return updated;
+      })
+    );
+  };
+
+  // Remove line
+  const removeLine = (id: string) => {
+    setLines(prev => prev.filter(line => line.id !== id));
+  };
+
+  // Save quote
+  const saveQuote = async (asDraft: boolean) => {
+    if (!clientName.trim()) {
+      alert('Veuillez renseigner le nom du client');
+      return;
+    }
+    if (lines.length === 0) {
+      alert('Ajoutez au moins une ligne au devis');
+      return;
+    }
+
+    setSaving(true);
 
     try {
-      const response = await fetch(`${N8N_WEBHOOK_URL}/webhook/quote-agent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim() }),
-      });
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non connecté');
 
-      if (!response.ok) {
-        throw new Error(`Erreur serveur: ${response.status}`);
+      const validUntil = new Date();
+      validUntil.setDate(validUntil.getDate() + validDays);
+      const validUntilStr = validUntil.toISOString().split('T')[0];
+
+      // Find regie name if selected
+      const selectedRegie = regies.find(r => r.id === regieId);
+
+      // Insert quote (quote_number auto-generated by trigger)
+      const { data: quote, error: quoteError } = await (supabase
+        .from('quotes') as any)
+        .insert({
+          user_id: user.id,
+          client_name: clientName.trim(),
+          client_address: clientAddress.trim() || null,
+          regie_id: regieId || null,
+          description: description.trim() || null,
+          status: asDraft ? 'draft' : 'sent',
+          total_ht: totalHT,
+          tax_rate: TVA_RATE * 100,
+          tax_amount: taxAmount,
+          total_ttc: totalTTC,
+          valid_until: validUntilStr,
+          sent_at: asDraft ? null : new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (quoteError) throw quoteError;
+
+      // Insert quote items
+      const items = lines.map((line) => ({
+        quote_id: (quote as any).id,
+        item_type: line.type === 'supply' ? 'material' : 'service',
+        catalog_service_id: line.catalog_service_id,
+        description: line.description,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+        section_name: line.type === 'service' ? 'Prestations' : 'Fournitures',
+      }));
+
+      const { error: itemsError } = await (supabase
+        .from('quote_items') as any)
+        .insert(items);
+
+      if (itemsError) throw itemsError;
+
+      // If not draft, generate PDF via n8n webhook directly
+      if (!asDraft) {
+        try {
+          const pdfRes = await fetch(N8N_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              quote_id: (quote as any).id,
+              quote_number: (quote as any).quote_number,
+              client_name: clientName.trim(),
+              client_address: clientAddress.trim() || null,
+              regie_name: selectedRegie?.name || null,
+              description: description.trim() || null,
+              items: lines.map((line) => ({
+                description: line.description,
+                quantity: line.quantity,
+                unit_price: line.unit_price,
+                total: line.total,
+                type: line.type,
+                unit: line.unit,
+                section_name: line.type === 'service' ? 'Prestations' : 'Fournitures',
+              })),
+              total_ht: totalHT,
+              tax_rate: TVA_RATE * 100,
+              tax_amount: taxAmount,
+              total_ttc: totalTTC,
+              valid_until: validUntilStr,
+              created_at: (quote as any).created_at,
+              company: {
+                name: 'RICHOZ Sanitaire',
+                address: 'Route de Chancy 50 - 1213 Petit-Lancy',
+                phone: '+41 22 313 00 27',
+              },
+            }),
+          });
+
+          if (pdfRes.ok) {
+            const pdfData = await pdfRes.json();
+            if (pdfData.pdf_url) {
+              // Save PDF URL to quote
+              await (supabase.from('quotes') as any)
+                .update({ pdf_url: pdfData.pdf_url })
+                .eq('id', (quote as any).id);
+            }
+          } else {
+            console.error('PDF webhook error:', pdfRes.status);
+          }
+        } catch (e) {
+          console.error('PDF generation failed:', e);
+          // Don't block — quote is already saved
+        }
       }
 
-      const data = await response.json();
-
-      setResult({
-        message: data.message || data.output || 'Devis généré avec succès.',
-        quote_id: data.quote_id,
-      });
-      setStatus('done');
-    } catch (err) {
-      console.error('[QUOTE ERROR]', err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de contacter l'agent. Vérifiez que le workflow est actif dans n8n."
-      );
-      setStatus('error');
+      router.push('/quotes');
+      router.refresh();
+    } catch (error: any) {
+      console.error('Erreur sauvegarde:', error);
+      alert('Erreur: ' + (error.message || 'Impossible de sauvegarder'));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendQuote(input);
-  };
+  // Filtered catalog
+  const filteredCatalog = catalog.filter(s =>
+    s.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+    s.description?.toLowerCase().includes(catalogSearch.toLowerCase())
+  );
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendQuote(input);
-    }
-  };
-
-  const reset = () => {
-    setStatus('idle');
-    setInput('');
-    setSentText('');
-    setResult(null);
-    setError('');
-    setTimeout(() => textareaRef.current?.focus(), 100);
-  };
+  // Group services and supplies
+  const serviceLines = lines.filter(l => l.type === 'service');
+  const supplyLines = lines.filter(l => l.type === 'supply');
+  const servicesTotalHT = serviceLines.reduce((sum, l) => sum + l.total, 0);
+  const suppliesTotalHT = supplyLines.reduce((sum, l) => sum + l.total, 0);
 
   return (
-    <div className="min-h-[80vh] flex flex-col">
+    <div className="max-w-4xl mx-auto space-y-6 pb-32">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/quotes')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          <Link
+            href="/quotes"
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
-          </button>
-          <h1 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-blue-600" />
-            Nouveau devis
-          </h1>
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Nouveau devis</h1>
+            <p className="text-sm text-gray-500">Le numéro sera attribué automatiquement</p>
+          </div>
         </div>
-        {(status === 'done' || status === 'error') && (
+      </div>
+
+      {/* Company Header Preview */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6">
+        <div className="flex justify-between items-start border-b border-gray-100 pb-4 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">RICHOZ Sanitaire</h2>
+            <p className="text-sm text-gray-500">Route de Chancy 50 - 1213 Petit-Lancy</p>
+            <p className="text-sm text-gray-500">Tél: +41 22 313 00 27</p>
+          </div>
+          <div className="text-right">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
+              <FileText className="w-4 h-4" />
+              DEVIS
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Validité: {validDays} jours
+            </p>
+          </div>
+        </div>
+
+        {/* Client Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+              <User className="w-4 h-4 text-gray-400" />
+              Client / Destinataire *
+            </label>
+            <input
+              type="text"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              placeholder="Nom du client ou de la régie"
+              className="w-full h-11 px-4 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            />
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+              <MapPin className="w-4 h-4 text-gray-400" />
+              Adresse
+            </label>
+            <input
+              type="text"
+              value={clientAddress}
+              onChange={(e) => setClientAddress(e.target.value)}
+              placeholder="Adresse du client"
+              className="w-full h-11 px-4 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            />
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+              <Building2 className="w-4 h-4 text-gray-400" />
+              Régie (optionnel)
+            </label>
+            <select
+              value={regieId || ''}
+              onChange={(e) => setRegieId(e.target.value || null)}
+              className="w-full h-11 px-4 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all appearance-none"
+            >
+              <option value="">— Aucune régie —</option>
+              {regies.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
+              <FileText className="w-4 h-4 text-gray-400" />
+              Objet / Description
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Ex: Rénovation salle de bain apt 3.2"
+              className="w-full h-11 px-4 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* === PRESTATIONS === */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-blue-600" />
+            <h3 className="font-semibold text-gray-900">Prestations</h3>
+            {serviceLines.length > 0 && (
+              <span className="text-xs text-gray-400 ml-1">({serviceLines.length})</span>
+            )}
+          </div>
           <button
-            onClick={reset}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+            onClick={() => setShowCatalog(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
           >
-            <RotateCcw className="w-4 h-4" />
-            Nouveau
+            <Plus className="w-4 h-4" />
+            Ajouter depuis catalogue
           </button>
+        </div>
+
+        {serviceLines.length === 0 ? (
+          <div className="p-8 text-center">
+            <Wrench className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Aucune prestation ajoutée</p>
+            <button
+              onClick={() => setShowCatalog(true)}
+              className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Parcourir le catalogue →
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="grid grid-cols-12 gap-2 px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50/30">
+              <div className="col-span-5">Description</div>
+              <div className="col-span-2 text-center">Quantité</div>
+              <div className="col-span-2 text-right">Prix unit.</div>
+              <div className="col-span-2 text-right">Total</div>
+              <div className="col-span-1"></div>
+            </div>
+
+            {serviceLines.map((line) => (
+              <div key={line.id} className="grid grid-cols-12 gap-2 px-6 py-3 items-center border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <div className="col-span-5">
+                  <input
+                    type="text"
+                    value={line.description}
+                    onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                    className="w-full text-sm text-gray-900 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded px-1 py-0.5"
+                  />
+                </div>
+                <div className="col-span-2 flex items-center justify-center gap-1">
+                  <input
+                    type="number"
+                    value={line.quantity}
+                    onChange={(e) => updateLine(line.id, { quantity: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.5"
+                    className="w-16 text-sm text-center text-gray-900 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-400">{line.unit}</span>
+                </div>
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    value={line.unit_price}
+                    onChange={(e) => updateLine(line.id, { unit_price: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="5"
+                    className="w-full text-sm text-right text-gray-900 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className="text-sm font-semibold text-gray-900">
+                    {line.total.toFixed(2)}
+                  </span>
+                </div>
+                <div className="col-span-1 text-right">
+                  <button
+                    onClick={() => removeLine(line.id)}
+                    className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex justify-between items-center px-6 py-3 bg-gray-50/50">
+              <span className="text-sm font-medium text-gray-500">Sous-total prestations</span>
+              <span className="text-sm font-bold text-gray-900">{servicesTotalHT.toFixed(2)} CHF</span>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Main */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-xl">
+      {/* === FOURNITURES === */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+          <div className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-amber-600" />
+            <h3 className="font-semibold text-gray-900">Fournitures</h3>
+            {supplyLines.length > 0 && (
+              <span className="text-xs text-gray-400 ml-1">({supplyLines.length})</span>
+            )}
+          </div>
+          <button
+            onClick={addSupplyLine}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Ajouter fourniture
+          </button>
+        </div>
 
-          {/* === IDLE === */}
-          {status === 'idle' && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="w-7 h-7 text-blue-600" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Créer un devis
-                </h2>
-                <p className="text-gray-500">
-                  Décrivez les travaux, le client et le matériel — l&apos;IA génère le devis
-                </p>
-              </div>
+        {supplyLines.length === 0 ? (
+          <div className="p-8 text-center">
+            <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Aucune fourniture ajoutée</p>
+            <button
+              onClick={addSupplyLine}
+              className="mt-2 text-sm text-amber-600 hover:text-amber-700 font-medium"
+            >
+              Ajouter une ligne →
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="grid grid-cols-12 gap-2 px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 bg-gray-50/30">
+              <div className="col-span-5">Description</div>
+              <div className="col-span-2 text-center">Quantité</div>
+              <div className="col-span-2 text-right">Prix unit.</div>
+              <div className="col-span-2 text-right">Total</div>
+              <div className="col-span-1"></div>
+            </div>
 
-              {/* Input */}
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <div className="relative">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Ex: Devis pour Régie Naef, pose WC suspendu Geberit avec bâti-support, remplacement lavabo, salle de bain 3ème..."
-                    rows={4}
-                    className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                    autoFocus
+            {supplyLines.map((line) => (
+              <div key={line.id} className="grid grid-cols-12 gap-2 px-6 py-3 items-center border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <div className="col-span-5">
+                  <input
+                    type="text"
+                    value={line.description}
+                    onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                    placeholder="Ex: Robinet Grohe mitigeur cuisine"
+                    className="w-full text-sm text-gray-900 bg-transparent border-0 focus:outline-none focus:bg-gray-50 rounded px-1 py-0.5 placeholder:text-gray-300"
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={!input.trim()}
-                  className="w-full py-3 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  <Send className="w-5 h-5" />
-                  Générer le devis
-                </button>
-              </form>
-
-              {/* Quick examples */}
-              <div className="pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-400 font-medium mb-3">Exemples — cliquez pour utiliser</p>
-                <div className="grid grid-cols-1 gap-2">
-                  {EXAMPLES.map((example, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setInput(example)}
-                      className="text-left p-3 text-sm text-gray-600 bg-gray-50 hover:bg-blue-50 hover:text-blue-700 border border-gray-100 hover:border-blue-200 rounded-xl transition-all"
-                    >
-                      {example}
-                    </button>
-                  ))}
+                <div className="col-span-2 flex items-center justify-center gap-1">
+                  <input
+                    type="number"
+                    value={line.quantity}
+                    onChange={(e) => updateLine(line.id, { quantity: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="1"
+                    className="w-16 text-sm text-center text-gray-900 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-gray-400">pce</span>
+                </div>
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    value={line.unit_price}
+                    onChange={(e) => updateLine(line.id, { unit_price: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="1"
+                    placeholder="0.00"
+                    className="w-full text-sm text-right text-gray-900 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className="text-sm font-semibold text-gray-900">
+                    {line.total.toFixed(2)}
+                  </span>
+                </div>
+                <div className="col-span-1 text-right">
+                  <button
+                    onClick={() => removeLine(line.id)}
+                    className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
+            ))}
+
+            <div className="flex justify-between items-center px-6 py-3 bg-gray-50/50">
+              <span className="text-sm font-medium text-gray-500">Sous-total fournitures</span>
+              <span className="text-sm font-bold text-gray-900">{suppliesTotalHT.toFixed(2)} CHF</span>
             </div>
-          )}
+          </div>
+        )}
+      </div>
 
-          {/* === GENERATING === */}
-          {status === 'generating' && (
-            <div className="text-center space-y-6">
-              <div className="relative mx-auto w-20 h-20">
-                <Loader2 className="w-20 h-20 animate-spin text-blue-500" />
-                <Sparkles className="w-8 h-8 text-blue-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Génération du devis...
-                </h2>
-                <p className="text-gray-500">
-                  Analyse des travaux, recherche des prix, création du devis
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-4 text-left">
-                <p className="text-xs font-medium text-gray-400 mb-1">Votre demande</p>
-                <p className="text-sm text-gray-700">{sentText}</p>
-              </div>
+      {/* === RÉCAPITULATIF === */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Calculator className="w-5 h-5 text-gray-600" />
+          <h3 className="font-semibold text-gray-900">Récapitulatif</h3>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between items-center py-2">
+            <span className="text-sm text-gray-500">Total HT</span>
+            <span className="text-sm font-medium text-gray-900">{totalHT.toFixed(2)} CHF</span>
+          </div>
+          <div className="flex justify-between items-center py-2">
+            <span className="text-sm text-gray-500">TVA 8.1%</span>
+            <span className="text-sm font-medium text-gray-900">{taxAmount.toFixed(2)} CHF</span>
+          </div>
+          <div className="border-t-2 border-gray-900 pt-3 mt-2">
+            <div className="flex justify-between items-center">
+              <span className="text-base font-bold text-gray-900">Total TTC</span>
+              <span className="text-2xl font-bold text-gray-900">{totalTTC.toFixed(2)} CHF</span>
             </div>
-          )}
+          </div>
+        </div>
+      </div>
 
-          {/* === DONE === */}
-          {status === 'done' && result && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Devis créé !
-                </h2>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs font-medium text-gray-400 mb-1">Votre demande</p>
-                <p className="text-sm text-gray-600">{sentText}</p>
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="text-xs font-semibold text-blue-600">Résultat</span>
-                </div>
-                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {result.message}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 pt-2">
-                <button
-                  onClick={() => router.push('/quotes')}
-                  className="w-full py-3.5 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <FileText className="w-5 h-5" />
-                  Voir les devis
-                </button>
-                <button
-                  onClick={reset}
-                  className="w-full py-3 px-4 bg-white text-gray-600 font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Créer un autre devis
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* === ERROR === */}
-          {status === 'error' && (
-            <div className="text-center space-y-6">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-                <FileText className="w-8 h-8 text-red-500" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">Erreur</h2>
-                <p className="text-sm text-red-500">{error}</p>
-              </div>
+      {/* === CATALOG MODAL === */}
+      {showCatalog && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Catalogue de prestations</h3>
               <button
-                onClick={reset}
-                className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+                onClick={() => { setShowCatalog(false); setCatalogSearch(''); }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
               >
-                Réessayer
+                <X className="w-5 h-5" />
               </button>
             </div>
-          )}
 
+            <div className="px-6 py-3 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Rechercher une prestation..."
+                  autoFocus
+                  className="w-full h-10 pl-10 pr-4 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2">
+              {filteredCatalog.length === 0 ? (
+                <div className="p-8 text-center text-sm text-gray-400">
+                  Aucune prestation trouvée
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredCatalog.map((service) => {
+                    const alreadyAdded = lines.some(l => l.catalog_service_id === service.id);
+                    return (
+                      <button
+                        key={service.id}
+                        onClick={() => !alreadyAdded && addServiceLine(service)}
+                        disabled={alreadyAdded}
+                        className={`w-full text-left px-4 py-3 rounded-xl transition-colors ${
+                          alreadyAdded
+                            ? 'bg-green-50 text-green-600 cursor-not-allowed opacity-60'
+                            : 'hover:bg-blue-50 hover:text-blue-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{service.name}</p>
+                            <p className="text-xs text-gray-400 truncate">{service.description}</p>
+                          </div>
+                          <div className="ml-4 flex-shrink-0 text-right">
+                            <span className="text-sm font-semibold">
+                              {service.default_price.toFixed(2)} CHF
+                            </span>
+                            <p className="text-xs text-gray-400">/{service.unit}</p>
+                          </div>
+                        </div>
+                        {alreadyAdded && (
+                          <p className="text-xs text-green-600 mt-1">✓ Déjà ajouté</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === STICKY FOOTER === */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 px-6 py-4 z-40">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500">{lines.length} ligne(s)</p>
+            <p className="text-lg font-bold text-gray-900">{totalTTC.toFixed(2)} CHF TTC</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => saveQuote(true)}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-xl transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              Brouillon
+            </button>
+            <button
+              onClick={() => saveQuote(false)}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {saving ? 'Création...' : 'Créer le devis'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
