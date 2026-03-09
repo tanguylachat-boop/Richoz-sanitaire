@@ -10,7 +10,10 @@
       "Bash(git commit:*)",
       "Bash(npm run dev:*)",
       "Bash(python3:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(npm install:*)",
+      "Bash(node scripts/generate-icons.mjs:*)",
+      "Bash(npm uninstall:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
