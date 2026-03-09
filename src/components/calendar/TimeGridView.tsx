@@ -44,6 +44,13 @@ export interface LeaveEntry {
   technician?: { first_name: string | null; last_name: string | null } | null;
 }
 
+export interface BirthdayEntry {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  date: string; // 'YYYY-MM-DD' in current year
+}
+
 // Couleurs par TYPE d'intervention (dépannage vs chantier)
 const typeColors: Record<string, { bg: string; border: string; label: string }> = {
   depannage: { bg: 'bg-red-500', border: 'border-red-700', label: 'Dépannage' },
@@ -66,10 +73,11 @@ interface TimeGridViewProps {
   currentDate: Date;
   interventions: Intervention[];
   leaves?: LeaveEntry[];
+  birthdays?: BirthdayEntry[];
   onInterventionClick: (intervention: Intervention) => void;
 }
 
-export function TimeGridView({ mode, currentDate, interventions, leaves = [], onInterventionClick }: TimeGridViewProps) {
+export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick }: TimeGridViewProps) {
   const days = useMemo(() => {
     if (mode === 'day') return [currentDate];
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -91,6 +99,11 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], on
       const end = new Date(leave.end_date + 'T23:59:59');
       return isWithinInterval(day, { start, end });
     });
+  };
+
+  // Anniversaires pour un jour donné
+  const getBirthdaysForDay = (day: Date): BirthdayEntry[] => {
+    return birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
   };
 
   const getBlockStyle = (iv: Intervention) => {
@@ -135,33 +148,32 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], on
 
   const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
+  // Check if any day has all-day items
+  const hasAnyAllDay = days.some((day) => getLeavesForDay(day).length > 0 || getBirthdaysForDay(day).length > 0);
+  const ALL_DAY_HEIGHT = 26;
+
   return (
-    <div className="overflow-auto max-h-[calc(100vh-320px)]">
-      <div className="flex min-w-[600px]">
-        {/* Hour labels column */}
+    <div className="flex flex-col max-h-[calc(100vh-320px)]">
+      {/* ====== FIXED HEADER: Day names + All-day section ====== */}
+      <div className="flex min-w-[600px] flex-shrink-0">
+        {/* Hour labels spacer */}
         <div className="flex-shrink-0 w-16 border-r border-gray-200">
           <div className="h-10 border-b border-gray-200" />
-          <div className="relative" style={{ height: GRID_HEIGHT }}>
-            {hours.map((hour) => (
-              <div
-                key={hour}
-                className="absolute w-full text-right pr-2 text-xs text-gray-400 font-medium -translate-y-1/2"
-                style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}
-              >
-                {format(new Date(2000, 0, 1, hour), 'HH:mm')}
-              </div>
-            ))}
-          </div>
+          {hasAnyAllDay && (
+            <div className="border-b border-gray-200 flex items-center justify-end pr-2" style={{ height: ALL_DAY_HEIGHT }}>
+              <span className="text-[9px] text-gray-400 uppercase">Journée</span>
+            </div>
+          )}
         </div>
 
-        {/* Day columns */}
+        {/* Day headers + all-day row */}
         <div
           className="flex-1 grid"
           style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
         >
           {days.map((day, colIdx) => {
-            const dayInterventions = getInterventionsForDay(day);
             const dayLeaves = getLeavesForDay(day);
+            const dayBirthdays = getBirthdaysForDay(day);
             const today = isToday(day);
 
             return (
@@ -182,106 +194,150 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], on
                   )}
                 </div>
 
-                {/* ====== CONGÉS BANDEAUX VERTS ====== */}
-                {dayLeaves.length > 0 && (
-                  <div className="border-b border-emerald-200">
-                    {dayLeaves.map((leave, i) => (
-                      <div
-                        key={`${leave.technician_id}-${i}`}
-                        className="px-2 py-1 bg-emerald-50 border-b border-emerald-100 last:border-b-0"
+                {/* All-day row (fixed height) */}
+                {hasAnyAllDay && (
+                  <div
+                    className="border-b border-gray-200 flex items-center gap-1 px-1 overflow-hidden"
+                    style={{ height: ALL_DAY_HEIGHT }}
+                  >
+                    {dayBirthdays.map((b) => (
+                      <span
+                        key={`b-${b.user_id}`}
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-medium whitespace-nowrap"
                       >
-                        <span className="text-[10px] font-medium text-emerald-700">
-                          🌴 {getTechName(leave.technician)} — Congé
-                        </span>
-                      </div>
+                        🎂 {b.first_name}
+                      </span>
+                    ))}
+                    {dayLeaves.map((leave, i) => (
+                      <span
+                        key={`l-${leave.technician_id}-${i}`}
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] font-medium whitespace-nowrap"
+                      >
+                        🌴 {getTechName(leave.technician)}
+                      </span>
                     ))}
                   </div>
                 )}
-
-                {/* Time grid for this day */}
-                <div className="relative" style={{ height: GRID_HEIGHT }}>
-                  {/* Hour lines */}
-                  {hours.map((hour) => (
-                    <div
-                      key={hour}
-                      className="absolute w-full border-t border-gray-100"
-                      style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}
-                    />
-                  ))}
-
-                  {/* ====== PAUSE MIDI 12h-13h30 ====== */}
-                  <div
-                    className="absolute left-0 right-0 z-[1] pointer-events-none"
-                    style={{ top: lunchTop, height: lunchHeight }}
-                  >
-                    <div className="w-full h-full bg-gray-100 border-y border-gray-200 border-dashed flex items-center justify-center">
-                      <span className="text-xs font-medium text-gray-400 select-none">
-                        🍽️ Pause midi
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Now indicator */}
-                  {today && (() => {
-                    const now = new Date();
-                    const nowMin = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
-                    if (nowMin < 0 || nowMin > TOTAL_HOURS * 60) return null;
-                    const top = (nowMin / 60) * HOUR_HEIGHT;
-                    return (
-                      <div
-                        className="absolute left-0 right-0 z-20 pointer-events-none"
-                        style={{ top }}
-                      >
-                        <div className="flex items-center">
-                          <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1" />
-                          <div className="flex-1 h-px bg-red-500" />
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Intervention blocks */}
-                  {dayInterventions.map((iv) => {
-                    const { top, height } = getBlockStyle(iv);
-                    const color = getBlockColor(iv);
-                    const startTime = iv.date_planned ? format(new Date(iv.date_planned), 'HH:mm') : '';
-                    const endTime = iv.date_planned
-                      ? format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm')
-                      : '';
-                    const initials = getTechInitials(iv.technician);
-                    const typeLabel = iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
-
-                    return (
-                      <button
-                        key={iv.id}
-                        onClick={() => onInterventionClick(iv)}
-                        className={`absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5] ${color}`}
-                        style={{ top, height: Math.max(height, 24) }}
-                        title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.title}`}
-                      >
-                        <div className="px-2 py-1 h-full flex flex-col">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px]">{typeLabel}</span>
-                            <span className="font-semibold truncate">{iv.title}</span>
-                          </div>
-                          {height >= 40 && (
-                            <span className="text-white/80 text-[10px]">
-                              {startTime} – {endTime}
-                            </span>
-                          )}
-                          {height >= 56 && initials && (
-                            <span className="text-white/70 text-[10px] mt-auto">
-                              👤 {initials}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ====== SCROLLABLE TIME GRID ====== */}
+      <div className="overflow-auto flex-1 min-h-0">
+        <div className="flex min-w-[600px]">
+          {/* Hour labels column */}
+          <div className="flex-shrink-0 w-16 border-r border-gray-200">
+            <div className="relative" style={{ height: GRID_HEIGHT }}>
+              {hours.map((hour) => (
+                <div
+                  key={hour}
+                  className="absolute w-full text-right pr-2 text-xs text-gray-400 font-medium -translate-y-1/2"
+                  style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}
+                >
+                  {format(new Date(2000, 0, 1, hour), 'HH:mm')}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Day columns - time grid only */}
+          <div
+            className="flex-1 grid"
+            style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
+          >
+            {days.map((day, colIdx) => {
+              const dayInterventions = getInterventionsForDay(day);
+              const today = isToday(day);
+
+              return (
+                <div key={colIdx} className="border-r border-gray-100 last:border-r-0">
+                  {/* Time grid for this day */}
+                  <div className="relative" style={{ height: GRID_HEIGHT }}>
+                    {/* Hour lines */}
+                    {hours.map((hour) => (
+                      <div
+                        key={hour}
+                        className="absolute w-full border-t border-gray-100"
+                        style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}
+                      />
+                    ))}
+
+                    {/* ====== PAUSE MIDI 12h-13h30 ====== */}
+                    <div
+                      className="absolute left-0 right-0 z-[1] pointer-events-none"
+                      style={{ top: lunchTop, height: lunchHeight }}
+                    >
+                      <div className="w-full h-full bg-gray-100 border-y border-gray-200 border-dashed flex items-center justify-center">
+                        <span className="text-xs font-medium text-gray-400 select-none">
+                          🍽️ Pause midi
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Now indicator */}
+                    {today && (() => {
+                      const now = new Date();
+                      const nowMin = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+                      if (nowMin < 0 || nowMin > TOTAL_HOURS * 60) return null;
+                      const top = (nowMin / 60) * HOUR_HEIGHT;
+                      return (
+                        <div
+                          className="absolute left-0 right-0 z-20 pointer-events-none"
+                          style={{ top }}
+                        >
+                          <div className="flex items-center">
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1" />
+                            <div className="flex-1 h-px bg-red-500" />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Intervention blocks */}
+                    {dayInterventions.map((iv) => {
+                      const { top, height } = getBlockStyle(iv);
+                      const color = getBlockColor(iv);
+                      const startTime = iv.date_planned ? format(new Date(iv.date_planned), 'HH:mm') : '';
+                      const endTime = iv.date_planned
+                        ? format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm')
+                        : '';
+                      const initials = getTechInitials(iv.technician);
+                      const typeLabel = iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
+
+                      return (
+                        <button
+                          key={iv.id}
+                          onClick={() => onInterventionClick(iv)}
+                          className={`absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5] ${color}`}
+                          style={{ top, height: Math.max(height, 24) }}
+                          title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.title}`}
+                        >
+                          <div className="px-2 py-1 h-full flex flex-col">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px]">{typeLabel}</span>
+                              <span className="font-semibold truncate">{iv.title}</span>
+                            </div>
+                            {height >= 40 && (
+                              <span className="text-white/80 text-[10px]">
+                                {startTime} – {endTime}
+                              </span>
+                            )}
+                            {height >= 56 && initials && (
+                              <span className="text-white/70 text-[10px] mt-auto">
+                                👤 {initials}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

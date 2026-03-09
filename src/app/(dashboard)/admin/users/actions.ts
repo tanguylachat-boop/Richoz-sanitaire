@@ -12,11 +12,12 @@ interface UpdateUserPayload {
   lastName: string;
   email: string;
   phone: string;
+  birthDate: string;
   role: UserRole;
 }
 
 export async function updateUser(payload: UpdateUserPayload) {
-  const { id, firstName, lastName, email, phone, role } = payload;
+  const { id, firstName, lastName, email, phone, birthDate, role } = payload;
 
   if (!firstName?.trim() || !lastName?.trim()) {
     return { success: false, error: 'Le nom et le prénom sont requis.' };
@@ -40,6 +41,7 @@ export async function updateUser(payload: UpdateUserPayload) {
         last_name: lastName.trim(),
         email: email.trim().toLowerCase(),
         phone: phone?.trim() || null,
+        birth_date: birthDate?.trim() || null,
         role,
       })
       .eq('id', id);
@@ -76,11 +78,12 @@ interface CreateUserPayload {
   lastName: string;
   email: string;
   password: string;
+  birthDate: string;
   role: UserRole;
 }
 
 export async function createUser(payload: CreateUserPayload) {
-  const { firstName, lastName, email, password, role } = payload;
+  const { firstName, lastName, email, password, birthDate, role } = payload;
 
   // Validation
   if (!firstName?.trim() || !lastName?.trim()) {
@@ -132,6 +135,7 @@ export async function createUser(payload: CreateUserPayload) {
         email: email.trim().toLowerCase(),
         first_name: firstName.trim(),
         last_name: lastName.trim(),
+        birth_date: birthDate?.trim() || null,
         role,
         is_active: true,
       });

@@ -30,6 +30,7 @@ export interface Database {
           last_name: string;
           phone: string | null;
           avatar_url: string | null;
+          birth_date: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;

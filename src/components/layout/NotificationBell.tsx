@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, FileText, Wrench } from 'lucide-react';
+import { Bell, FileText, Wrench, Mail, ClipboardCheck, Palmtree } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/utils';
 
@@ -25,18 +25,24 @@ function addDismissedId(id: string) {
   localStorage.setItem(DISMISSED_KEY, JSON.stringify(arr));
 }
 
-const NOTIFICATION_ROUTES: Record<string, string> = {
-  invoice_paid: '/invoices',
-  intervention_created: '/interventions',
-};
+type NotificationType = 'invoice_paid' | 'intervention_created' | 'new_email' | 'report_submitted' | 'leave_pending';
 
 interface NotificationItem {
   id: string;
-  type: 'invoice_paid' | 'intervention_created';
+  type: NotificationType;
   title: string;
   description: string;
   date: string;
+  route: string;
 }
+
+const NOTIFICATION_STYLE: Record<NotificationType, { bgClass: string; icon: typeof Bell; iconClass: string }> = {
+  new_email: { bgClass: 'bg-indigo-50', icon: Mail, iconClass: 'text-indigo-600' },
+  report_submitted: { bgClass: 'bg-amber-50', icon: ClipboardCheck, iconClass: 'text-amber-600' },
+  leave_pending: { bgClass: 'bg-emerald-50', icon: Palmtree, iconClass: 'text-emerald-600' },
+  intervention_created: { bgClass: 'bg-blue-50', icon: Wrench, iconClass: 'text-blue-600' },
+  invoice_paid: { bgClass: 'bg-green-50', icon: FileText, iconClass: 'text-green-600' },
+};
 
 const RECENT_THRESHOLD_DAYS = 7;
 
@@ -64,22 +70,99 @@ export function NotificationBell() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
 
-    const [invoicesRes, interventionsRes] = await Promise.all([
+    const [emailsRes, reportsRes, leaveRes, interventionsRes, invoicesRes] = await Promise.all([
       sb
-        .from('invoices')
-        .select('id, invoice_number, client_name, date')
-        .eq('status', 'paid')
-        .order('date', { ascending: false })
+        .from('email_inbox')
+        .select('id, subject, from_name, received_at')
+        .eq('status', 'new')
+        .order('received_at', { ascending: false })
+        .limit(5),
+      sb
+        .from('reports')
+        .select('id, created_at, technician:users!reports_technician_id_fkey(first_name, last_name), intervention:interventions(title)')
+        .eq('status', 'submitted')
+        .order('created_at', { ascending: false })
+        .limit(5),
+      sb
+        .from('leave_requests')
+        .select('id, start_date, end_date, created_at, technician:users!leave_requests_technician_id_fkey(first_name, last_name)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
         .limit(5),
       sb
         .from('interventions')
         .select('id, title, created_at')
         .order('created_at', { ascending: false })
         .limit(5),
+      sb
+        .from('invoices')
+        .select('id, invoice_number, client_name, date')
+        .eq('status', 'paid')
+        .order('date', { ascending: false })
+        .limit(5),
     ]);
 
     const items: NotificationItem[] = [];
 
+    // Emails
+    if (emailsRes.data) {
+      for (const e of emailsRes.data as { id: string; subject: string; from_name: string; received_at: string }[]) {
+        items.push({
+          id: `email-${e.id}`,
+          type: 'new_email',
+          title: e.subject || 'Nouvel email',
+          description: e.from_name || 'Expéditeur inconnu',
+          date: e.received_at,
+          route: '/inbox',
+        });
+      }
+    }
+
+    // Reports
+    if (reportsRes.data) {
+      for (const r of reportsRes.data as { id: string; created_at: string; technician?: { first_name: string; last_name: string } | null; intervention?: { title: string } | null }[]) {
+        const techName = r.technician ? `${r.technician.first_name} ${r.technician.last_name}` : 'Technicien';
+        items.push({
+          id: `report-${r.id}`,
+          type: 'report_submitted',
+          title: 'Rapport à valider',
+          description: r.intervention?.title ? `${techName} - ${r.intervention.title}` : techName,
+          date: r.created_at,
+          route: `/reports/validate/${r.id}`,
+        });
+      }
+    }
+
+    // Leave requests
+    if (leaveRes.data) {
+      for (const l of leaveRes.data as { id: string; start_date: string; end_date: string; created_at: string; technician?: { first_name: string; last_name: string } | null }[]) {
+        const techName = l.technician ? `${l.technician.first_name} ${l.technician.last_name}` : 'Technicien';
+        items.push({
+          id: `leave-${l.id}`,
+          type: 'leave_pending',
+          title: 'Demande de congé',
+          description: `${techName} (${l.start_date} - ${l.end_date})`,
+          date: l.created_at,
+          route: '/leave',
+        });
+      }
+    }
+
+    // Interventions
+    if (interventionsRes.data) {
+      for (const i of interventionsRes.data as { id: string; title: string; created_at: string }[]) {
+        items.push({
+          id: `int-${i.id}`,
+          type: 'intervention_created',
+          title: 'Nouvelle intervention',
+          description: i.title,
+          date: i.created_at,
+          route: `/interventions/${i.id}`,
+        });
+      }
+    }
+
+    // Invoices
     if (invoicesRes.data) {
       for (const inv of invoicesRes.data as { id: string; invoice_number: string; client_name: string; date: string }[]) {
         items.push({
@@ -88,34 +171,23 @@ export function NotificationBell() {
           title: `Facture ${inv.invoice_number} payée`,
           description: inv.client_name,
           date: inv.date,
+          route: `/invoices/${inv.id}`,
         });
       }
     }
 
-    if (interventionsRes.data) {
-      for (const int of interventionsRes.data as { id: string; title: string; created_at: string }[]) {
-        items.push({
-          id: `int-${int.id}`,
-          type: 'intervention_created',
-          title: 'Nouvelle intervention',
-          description: int.title,
-          date: int.created_at,
-        });
-      }
-    }
-
-    // Sort by date descending, filter dismissed, take 5
+    // Sort by date descending, filter dismissed, take 10
     items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const dismissed = getDismissedIds();
     const visible = items.filter((n) => !dismissed.has(n.id));
-    const top5 = visible.slice(0, 5);
+    const top = visible.slice(0, 10);
 
     // Check if any are within the recent threshold
     const threshold = new Date();
     threshold.setDate(threshold.getDate() - RECENT_THRESHOLD_DAYS);
-    const recent = top5.some((n) => new Date(n.date) > threshold);
+    const recent = top.some((n) => new Date(n.date) > threshold);
 
-    setNotifications(top5);
+    setNotifications(top);
     setHasRecent(recent);
     setLoaded(true);
   }, []);
@@ -128,8 +200,7 @@ export function NotificationBell() {
     addDismissedId(n.id);
     setNotifications((prev) => prev.filter((item) => item.id !== n.id));
     setIsOpen(false);
-    const route = NOTIFICATION_ROUTES[n.type] || '/';
-    router.push(route);
+    router.push(n.route);
   };
 
   return (
@@ -158,34 +229,32 @@ export function NotificationBell() {
                 <p className="text-sm text-gray-500">Aucune nouvelle notification</p>
               </div>
             ) : (
-              notifications.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => handleNotificationClick(n)}
-                  className="w-full text-left px-4 py-3 hover:bg-blue-50/60 transition-colors border-b border-gray-50 last:border-0 cursor-pointer"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        n.type === 'invoice_paid' ? 'bg-green-50' : 'bg-blue-50'
-                      }`}
-                    >
-                      {n.type === 'invoice_paid' ? (
-                        <FileText className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <Wrench className="w-4 h-4 text-blue-600" />
-                      )}
+              notifications.map((n) => {
+                const style = NOTIFICATION_STYLE[n.type];
+                const Icon = style.icon;
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className="w-full text-left px-4 py-3 hover:bg-blue-50/60 transition-colors border-b border-gray-50 last:border-0 cursor-pointer"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${style.bgClass}`}
+                      >
+                        <Icon className={`w-4 h-4 ${style.iconClass}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{n.title}</p>
+                        <p className="text-xs text-gray-500 truncate">{n.description}</p>
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        {formatRelativeTime(n.date)}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{n.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{n.description}</p>
-                    </div>
-                    <span className="text-xs text-gray-400 flex-shrink-0">
-                      {formatRelativeTime(n.date)}
-                    </span>
-                  </div>
-                </button>
-              ))
+                  </button>
+                );
+              })
             )}
           </div>
         </div>

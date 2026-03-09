@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { createUser } from '@/app/(dashboard)/admin/users/actions';
 import type { UserRole } from '@/types/database';
-import { Plus, Loader2, User, Mail, Lock, Shield } from 'lucide-react';
+import { Plus, Loader2, User, Mail, Lock, Shield, Cake } from 'lucide-react';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
   { value: 'technician', label: 'Technicien', description: 'Accès mobile, rapports terrain' },
@@ -24,13 +24,14 @@ export function CreateUserDialog() {
     lastName: '',
     email: '',
     password: '',
+    birthDate: '',
     role: 'technician' as UserRole,
   });
 
   const [fieldError, setFieldError] = useState('');
 
   const resetForm = () => {
-    setForm({ firstName: '', lastName: '', email: '', password: '', role: 'technician' });
+    setForm({ firstName: '', lastName: '', email: '', password: '', birthDate: '', role: 'technician' });
     setFieldError('');
   };
 
@@ -175,6 +176,23 @@ export function CreateUserDialog() {
             <p className="text-xs text-gray-400 mt-1">
               L&apos;utilisateur pourra changer son mot de passe à la première connexion.
             </p>
+          </div>
+
+          {/* Date de naissance */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Cake className="w-3.5 h-3.5" />
+                Date de naissance
+              </span>
+            </label>
+            <input
+              type="date"
+              value={form.birthDate}
+              onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+              disabled={isPending}
+              className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+            />
           </div>
 
           {/* Role */}

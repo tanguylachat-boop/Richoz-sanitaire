@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Wrench, Plus, Search, Filter, MapPin, Clock, User, Edit2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
@@ -67,6 +68,7 @@ export default function InterventionsPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [regies, setRegies] = useState<Regie[]>([]);
 
+  const router = useRouter();
   const supabase = createClient();
 
   const fetchInterventions = async () => {
@@ -217,7 +219,7 @@ export default function InterventionsPage() {
                 <div
                   key={intervention.id}
                   className="p-4 hover:bg-gray-50/50 transition-colors cursor-pointer group"
-                  onClick={() => handleInterventionClick(intervention)}
+                  onClick={() => router.push(`/interventions/${intervention.id}`)}
                 >
                   <div className="flex items-start gap-4">
                     {/* Icon */}

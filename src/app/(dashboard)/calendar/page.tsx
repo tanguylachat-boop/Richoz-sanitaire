@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
 import { TimeGridView } from '@/components/calendar/TimeGridView';
-import type { LeaveEntry } from '@/components/calendar/TimeGridView';
+import type { LeaveEntry, BirthdayEntry } from '@/components/calendar/TimeGridView';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -46,6 +46,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
+  const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -69,6 +70,26 @@ export default function CalendarPage() {
     const sd = format(start, 'yyyy-MM-dd'); const ed = format(end, 'yyyy-MM-dd');
     const { data: leavesData } = await supabase.from('leave_requests').select(`technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
     if (leavesData) setLeaves(leavesData as LeaveEntry[]);
+
+    // Fetch birthdays
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: usersData } = await (supabase as any)
+      .from('users')
+      .select('id, first_name, last_name, birth_date')
+      .not('birth_date', 'is', null)
+      .eq('is_active', true);
+
+    if (usersData) {
+      const currentYear = start.getFullYear();
+      const entries: BirthdayEntry[] = [];
+      for (const u of usersData as { id: string; first_name: string; last_name: string; birth_date: string }[]) {
+        const [, month, day] = u.birth_date.split('-');
+        const bdThisYear = `${currentYear}-${month}-${day}`;
+        entries.push({ user_id: u.id, first_name: u.first_name, last_name: u.last_name, date: bdThisYear });
+      }
+      setBirthdays(entries);
+    }
+
     setIsLoading(false);
   }, [view, currentDate]);
 
@@ -99,6 +120,7 @@ export default function CalendarPage() {
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   const getIvsForDay = (date: Date) => interventions.filter((iv) => iv.date_planned && isSameDay(new Date(iv.date_planned), date));
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
+  const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
   const getTechInitials = (t: Intervention['technician']) => t ? ((t.first_name?.[0] || '') + (t.last_name?.[0] || '')).toUpperCase() || '?' : null;
   const getTypeEmoji = (iv: Intervention) => iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
   const getTechName = (t: LeaveEntry['technician']) => { if (!t) return '?'; if (t.first_name && t.last_name) return `${t.first_name} ${t.last_name}`; return t.first_name || t.last_name || '?'; };
@@ -132,11 +154,12 @@ export default function CalendarPage() {
               <div className="grid grid-cols-7 mb-2">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((d) => (<div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase">{d}</div>))}</div>
               <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
                 {calendarDays.map((day, idx) => {
-                  const dayIvs = getIvsForDay(day); const dayLeaves = getLeavesForDay(day);
+                  const dayIvs = getIvsForDay(day); const dayLeaves = getLeavesForDay(day); const dayBirthdays = getBirthdaysForDay(day);
                   const isCur = isSameMonth(day, currentDate); const isT = isToday(day);
                   const MAX = 2; const overflow = dayIvs.length - MAX;
                   return (<div key={idx} className={`bg-white min-h-[100px] p-2 ${!isCur ? 'bg-gray-50' : ''}`}>
                     <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${isT ? 'bg-blue-600 text-white' : isCur ? 'text-gray-900' : 'text-gray-400'}`}>{format(day, 'd')}</div>
+                    {dayBirthdays.map((b) => (<div key={`b-${b.user_id}`} className="w-full text-left text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 mb-0.5 truncate">🎂 {b.first_name}</div>))}
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 mb-0.5 truncate">🌴 {getTechName(l.technician)}</div>))}
                     <div className="space-y-1">
                       {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className={`w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer ${getInterventionColor(iv)}`} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.title}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{iv.title}</span></div></button>))}
@@ -146,8 +169,8 @@ export default function CalendarPage() {
                 })}
               </div>
             </>)}
-            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={interventions} leaves={leaves} onInterventionClick={handleInterventionClick} />}
-            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={interventions} leaves={leaves} onInterventionClick={handleInterventionClick} />}
+            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={interventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
+            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={interventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
           </>)}
         </div>
 
@@ -157,6 +180,7 @@ export default function CalendarPage() {
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500" /><span className="text-gray-600">🏗️ Chantier</span></div>
             <div className="border-l border-gray-300 h-4" />
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /><span className="text-gray-600">🌴 Congé</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /><span className="text-gray-600">🎂 Anniversaire</span></div>
             <div className="flex items-center gap-1.5"><span className="w-8 h-3 rounded bg-gray-100 border border-dashed border-gray-300" /><span className="text-gray-600">🍽️ Pause midi</span></div>
             <div className="flex items-center gap-1.5"><User className="w-3 h-3 text-gray-500" /><span className="text-gray-600">= Technicien assigné</span></div>
           </div>

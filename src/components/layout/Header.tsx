@@ -121,7 +121,7 @@ export function Header({ user }: HeaderProps) {
         id: i.id,
         label: i.title,
         sub: i.work_order_number ? `#${i.work_order_number} — ${i.address}` : i.address,
-        href: '/interventions',
+        href: `/interventions/${i.id}`,
       })),
       emails: (emailsRes.data ?? []).map((e) => ({
         id: e.id,
@@ -133,13 +133,13 @@ export function Header({ user }: HeaderProps) {
         id: q.id,
         label: q.quote_number ? `Devis ${q.quote_number}` : 'Devis',
         sub: q.description ? `${q.client_name} — ${q.description}` : q.client_name,
-        href: '/quotes',
+        href: `/quotes/${q.id}`,
       })),
       invoices: (invoicesRes.data ?? []).map((i) => ({
         id: i.id,
         label: `Facture ${i.invoice_number}`,
         sub: `${i.client_name} — CHF ${i.amount_total.toFixed(2)}`,
-        href: '/invoices',
+        href: `/invoices/${i.id}`,
       })),
       products: (productsRes.data ?? []).map((p) => ({
         id: p.id,

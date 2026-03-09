@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { FilePlus, Plus, Search, Download, FileOutput, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -50,6 +51,7 @@ export default function QuotesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
 
+  const router = useRouter();
   const supabase = createClient();
 
   const fetchQuotes = async () => {
@@ -221,7 +223,7 @@ export default function QuotesPage() {
                 const statusConf = STATUS_CONFIG[quote.status] || STATUS_CONFIG.draft;
                 const isGenerating = generatingPdfId === quote.id;
                 return (
-                  <div key={quote.id} className="grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr_120px_100px_120px_180px] gap-3 px-4 py-3 items-center hover:bg-gray-50/50 transition-colors">
+                  <div key={quote.id} className="grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr_120px_100px_120px_180px] gap-3 px-4 py-3 items-center hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => router.push(`/quotes/${quote.id}`)}>
                     {/* Quote number */}
                     <div className="font-mono text-sm font-medium text-gray-900">
                       {quote.quote_number || '—'}
@@ -249,6 +251,7 @@ export default function QuotesPage() {
                     <div className="text-center">
                       <select
                         value={quote.status}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => handleStatusChange(quote.id, e.target.value)}
                         className={`text-xs font-medium rounded-lg px-2 py-1 border ${statusConf.className} bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
                       >
@@ -264,7 +267,7 @@ export default function QuotesPage() {
                     </div>
 
                     {/* Actions - PDF */}
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                       {!quote.pdf_url ? (
                         <button
                           onClick={() => handleGeneratePdf(quote)}

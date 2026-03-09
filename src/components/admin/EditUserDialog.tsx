@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { updateUser } from '@/app/(dashboard)/admin/users/actions';
 import type { User, UserRole } from '@/types/database';
-import { Loader2, User as UserIcon, Mail, Phone, Shield } from 'lucide-react';
+import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake } from 'lucide-react';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
   { value: 'technician', label: 'Technicien', description: 'Accès mobile, rapports terrain' },
@@ -29,6 +29,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
     lastName: user.last_name,
     email: user.email,
     phone: user.phone || '',
+    birthDate: user.birth_date || '',
     role: user.role as UserRole,
   });
 
@@ -40,6 +41,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
       lastName: user.last_name,
       email: user.email,
       phone: user.phone || '',
+      birthDate: user.birth_date || '',
       role: user.role,
     });
     setFieldError('');
@@ -77,6 +79,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
         lastName: form.lastName,
         email: form.email,
         phone: form.phone,
+        birthDate: form.birthDate,
         role: form.role,
       });
 
@@ -172,6 +175,22 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="+41 79 123 45 67"
+              disabled={isPending}
+              className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Cake className="w-3.5 h-3.5" />
+                Date de naissance
+              </span>
+            </label>
+            <input
+              type="date"
+              value={form.birthDate}
+              onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
               disabled={isPending}
               className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
             />

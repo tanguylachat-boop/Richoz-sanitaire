@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { formatCHF, formatDate } from '@/lib/utils';
 import type { Invoice, InvoiceStatus } from '@/types/database';
+import Link from 'next/link';
 import { InvoiceStatusSelect } from '@/components/invoices/InvoiceStatusSelect';
 import { InvoiceFilterButton } from '@/components/invoices/InvoiceFilterButton';
 import { FileText, Search, ExternalLink, Send, CheckCircle, Clock } from 'lucide-react';
@@ -211,9 +212,9 @@ export default async function InvoicesPage({
                   <tr key={invoice.id} className="hover:bg-gray-50/50 transition-colors">
                     {/* Numéro */}
                     <td className="px-6 py-4">
-                      <span className="font-mono text-sm font-medium text-gray-900">
+                      <Link href={`/invoices/${invoice.id}`} className="font-mono text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                         {invoice.invoice_number}
-                      </span>
+                      </Link>
                     </td>
 
                     {/* Date */}
@@ -225,14 +226,14 @@ export default async function InvoicesPage({
 
                     {/* Client */}
                     <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 truncate max-w-[220px]">
+                      <Link href={`/invoices/${invoice.id}`} className="block">
+                        <p className="text-sm font-medium text-gray-900 truncate max-w-[220px] hover:text-blue-600">
                           {invoice.client_name}
                         </p>
                         <p className="text-xs text-gray-500 truncate max-w-[220px]">
                           {invoice.client_address}
                         </p>
-                      </div>
+                      </Link>
                     </td>
 
                     {/* Montant TTC */}
