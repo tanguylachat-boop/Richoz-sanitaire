@@ -8,7 +8,9 @@
       "Bash(npx tsc:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
