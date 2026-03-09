@@ -3,7 +3,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, CalendarDays, Palmtree, LogOut } from 'lucide-react';
+import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface TechnicianLayoutProps {
@@ -37,6 +37,12 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
       icon: Palmtree,
       label: 'Congés',
       isActive: pathname === '/technician/leave',
+    },
+    {
+      href: '/technician/profile',
+      icon: UserCircle,
+      label: 'Profil',
+      isActive: pathname === '/technician/profile',
     },
   ];
 

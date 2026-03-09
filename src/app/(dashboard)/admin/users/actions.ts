@@ -6,6 +6,71 @@ import type { UserRole } from '@/types/database';
 
 const VALID_ROLES: UserRole[] = ['admin', 'secretary', 'technician'];
 
+interface UpdateUserPayload {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: UserRole;
+}
+
+export async function updateUser(payload: UpdateUserPayload) {
+  const { id, firstName, lastName, email, phone, role } = payload;
+
+  if (!firstName?.trim() || !lastName?.trim()) {
+    return { success: false, error: 'Le nom et le prénom sont requis.' };
+  }
+  if (!email?.trim() || !email.includes('@')) {
+    return { success: false, error: 'Adresse email invalide.' };
+  }
+  if (!VALID_ROLES.includes(role)) {
+    return { success: false, error: 'Rôle invalide.' };
+  }
+
+  try {
+    const supabase = createClient();
+
+    // Update public.users table
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: profileError } = await (supabase as any)
+      .from('users')
+      .update({
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone?.trim() || null,
+        role,
+      })
+      .eq('id', id);
+
+    if (profileError) {
+      console.error('Profile update error:', profileError);
+      return { success: false, error: 'Erreur lors de la mise à jour du profil.' };
+    }
+
+    // Sync auth user metadata
+    const { error: authError } = await supabase.auth.admin.updateUserById(id, {
+      email: email.trim().toLowerCase(),
+      user_metadata: {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        role,
+      },
+    });
+
+    if (authError) {
+      console.warn('Auth update warning (non-blocking):', authError);
+    }
+
+    revalidatePath('/admin/users');
+    return { success: true };
+  } catch (err) {
+    console.error('updateUser unexpected error:', err);
+    return { success: false, error: 'Erreur serveur inattendue.' };
+  }
+}
+
 interface CreateUserPayload {
   firstName: string;
   lastName: string;

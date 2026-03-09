@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: 'Richoz Sanitaire',
   description: 'Gestion des interventions plomberie et chauffage',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

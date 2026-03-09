@@ -57,6 +57,11 @@ export default function ValidateReportDetailPage() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
+  // Editable fields for secretary
+  const [editTextContent, setEditTextContent] = useState('');
+  const [editSuppliesText, setEditSuppliesText] = useState('');
+  const [editWorkDuration, setEditWorkDuration] = useState<number>(0);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -82,7 +87,11 @@ export default function ValidateReportDetailPage() {
         router.push('/reports/validate');
         return;
       }
-      setReport(data as Report);
+      const r = data as Report;
+      setReport(r);
+      setEditTextContent(r.text_content || '');
+      setEditSuppliesText(r.supplies_text || '');
+      setEditWorkDuration(r.work_duration_minutes || 0);
       setIsLoading(false);
     };
     fetchReport();
@@ -96,6 +105,19 @@ export default function ValidateReportDetailPage() {
     if (!report) return;
     setIsValidating(true);
     try {
+      // ÉTAPE 0: SAUVEGARDER LES MODIFICATIONS DE LA SECRÉTAIRE
+      console.log('[VALIDATE] Étape 0: Sauvegarde des modifications...');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: saveError } = await (supabase as any)
+        .from('reports')
+        .update({
+          text_content: editTextContent || null,
+          supplies_text: editSuppliesText || null,
+          work_duration_minutes: editWorkDuration || null,
+        })
+        .eq('id', report.id);
+      if (saveError) throw saveError;
+
       // ÉTAPE 1: GÉNÉRER LE PDF RAPPORT
       console.log('[VALIDATE] Étape 1: Génération du PDF rapport...');
       try {
@@ -248,7 +270,6 @@ export default function ValidateReportDetailPage() {
   const allPhotosAfter = hasCategories ? photosAfter : [];
 
   const hourlyRate = 110;
-  const laborCost = report.work_duration_minutes ? (report.work_duration_minutes / 60) * hourlyRate : 0;
 
   const PhotoGallery = ({ photos, title, emptyText }: { photos: { url: string; caption?: string }[]; title: string; emptyText: string }) => (
     <div>
@@ -374,21 +395,25 @@ export default function ValidateReportDetailPage() {
                 )}
               </div>
             )}
-            {report.text_content ? (
-              <div className="p-4 bg-gray-50 rounded-xl"><p className="text-gray-700 whitespace-pre-wrap">{report.text_content}</p></div>
-            ) : !report.vocal_url && (<p className="text-gray-400 italic">Aucune description fournie</p>)}
+            <textarea
+              value={editTextContent}
+              onChange={(e) => setEditTextContent(e.target.value)}
+              placeholder="Aucune description fournie"
+              rows={5}
+              className="w-full px-4 py-3 bg-blue-50/50 border-2 border-blue-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-y"
+            />
           </div>
 
           {/* Fournitures (texte libre) */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package className="w-5 h-5 text-amber-600" />Fournitures utilisées</h2>
-            {report.supplies_text ? (
-              <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                <p className="text-gray-700 whitespace-pre-wrap">{report.supplies_text}</p>
-              </div>
-            ) : (
-              <p className="text-gray-400 italic">Aucune fourniture notée</p>
-            )}
+            <textarea
+              value={editSuppliesText}
+              onChange={(e) => setEditSuppliesText(e.target.value)}
+              placeholder="Aucune fourniture notée"
+              rows={4}
+              className="w-full px-4 py-3 bg-blue-50/50 border-2 border-blue-200 rounded-xl text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-y"
+            />
             <p className="text-xs text-gray-400 mt-3">💡 Les prix des fournitures seront ajoutés lors de la facturation dans Bexio</p>
           </div>
         </div>
@@ -434,17 +459,25 @@ export default function ValidateReportDetailPage() {
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-600" />Récapitulatif</h2>
             <div className="space-y-4">
               {/* Durée */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-blue-50/50 border-2 border-blue-200 rounded-xl">
                 <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-gray-400" />
+                  <Clock className="w-5 h-5 text-blue-500" />
                   <div>
                     <p className="font-medium text-gray-900">Temps de travail</p>
                     <p className="text-sm text-gray-500">{hourlyRate} CHF/heure</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{report.work_duration_minutes || 0} min</p>
-                  <p className="text-sm text-gray-500">≈ {laborCost.toFixed(2)} CHF</p>
+                <div className="text-right flex items-baseline gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={15}
+                    value={editWorkDuration}
+                    onChange={(e) => setEditWorkDuration(Number(e.target.value))}
+                    className="w-20 text-right text-2xl font-bold text-gray-900 bg-white border-2 border-blue-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                  />
+                  <span className="text-lg font-semibold text-gray-600">min</span>
+                  <p className="text-sm text-gray-500 ml-2">≈ {((editWorkDuration / 60) * hourlyRate).toFixed(2)} CHF</p>
                 </div>
               </div>
 

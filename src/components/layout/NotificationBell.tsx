@@ -1,9 +1,34 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, FileText, Wrench } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/utils';
+
+const DISMISSED_KEY = 'richoz_dismissed_notifications';
+
+function getDismissedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function addDismissedId(id: string) {
+  const ids = getDismissedIds();
+  ids.add(id);
+  // Keep only the 50 most recent to avoid unbounded growth
+  const arr = Array.from(ids).slice(-50);
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify(arr));
+}
+
+const NOTIFICATION_ROUTES: Record<string, string> = {
+  invoice_paid: '/invoices',
+  intervention_created: '/interventions',
+};
 
 interface NotificationItem {
   id: string;
@@ -16,6 +41,7 @@ interface NotificationItem {
 const RECENT_THRESHOLD_DAYS = 7;
 
 export function NotificationBell() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [hasRecent, setHasRecent] = useState(false);
@@ -78,9 +104,11 @@ export function NotificationBell() {
       }
     }
 
-    // Sort by date descending, take 5
+    // Sort by date descending, filter dismissed, take 5
     items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const top5 = items.slice(0, 5);
+    const dismissed = getDismissedIds();
+    const visible = items.filter((n) => !dismissed.has(n.id));
+    const top5 = visible.slice(0, 5);
 
     // Check if any are within the recent threshold
     const threshold = new Date();
@@ -95,6 +123,14 @@ export function NotificationBell() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  const handleNotificationClick = (n: NotificationItem) => {
+    addDismissedId(n.id);
+    setNotifications((prev) => prev.filter((item) => item.id !== n.id));
+    setIsOpen(false);
+    const route = NOTIFICATION_ROUTES[n.type] || '/';
+    router.push(route);
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -123,9 +159,10 @@ export function NotificationBell() {
               </div>
             ) : (
               notifications.map((n) => (
-                <div
+                <button
                   key={n.id}
-                  className="px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
+                  onClick={() => handleNotificationClick(n)}
+                  className="w-full text-left px-4 py-3 hover:bg-blue-50/60 transition-colors border-b border-gray-50 last:border-0 cursor-pointer"
                 >
                   <div className="flex items-start gap-3">
                     <div
@@ -147,7 +184,7 @@ export function NotificationBell() {
                       {formatRelativeTime(n.date)}
                     </span>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>

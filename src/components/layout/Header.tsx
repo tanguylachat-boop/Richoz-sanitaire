@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Search, Wrench, FileText, Mail, Building, Loader2 } from 'lucide-react';
+import { Menu, Search, Wrench, FileText, Mail, Building, Loader2, FilePlus, Package } from 'lucide-react';
 import { ROLES } from '@/lib/constants';
 import type { User } from '@/types/database';
 import { cn } from '@/lib/utils';
@@ -35,8 +35,10 @@ interface SearchResult {
 
 interface SearchResults {
   interventions: SearchResult[];
-  invoices: SearchResult[];
   emails: SearchResult[];
+  quotes: SearchResult[];
+  invoices: SearchResult[];
+  products: SearchResult[];
   regies: SearchResult[];
 }
 
@@ -75,7 +77,7 @@ export function Header({ user }: HeaderProps) {
     setIsLoading(true);
     const pattern = `%${term}%`;
 
-    const [interventionsRes, invoicesRes, emailsRes, regiesRes] = await Promise.all([
+    const [interventionsRes, emailsRes, quotesRes, invoicesRes, productsRes, regiesRes] = await Promise.all([
       supabase
         .from('interventions')
         .select('id, title, address, work_order_number, status')
@@ -83,17 +85,29 @@ export function Header({ user }: HeaderProps) {
         .limit(5)
         .returns<{ id: string; title: string; address: string; work_order_number: string | null; status: string }[]>(),
       supabase
+        .from('email_inbox')
+        .select('id, subject, from_name, from_email, received_at')
+        .or(`subject.ilike."${pattern}",from_name.ilike."${pattern}"`)
+        .limit(5)
+        .returns<{ id: string; subject: string | null; from_name: string | null; from_email: string; received_at: string }[]>(),
+      supabase
+        .from('quotes')
+        .select('id, quote_number, client_name, description, total_ttc')
+        .or(`quote_number.ilike."${pattern}",client_name.ilike."${pattern}",description.ilike."${pattern}"`)
+        .limit(5)
+        .returns<{ id: string; quote_number: string | null; client_name: string; description: string | null; total_ttc: number }[]>(),
+      supabase
         .from('invoices')
         .select('id, invoice_number, client_name, amount_total, status')
         .or(`invoice_number.ilike."${pattern}",client_name.ilike."${pattern}"`)
         .limit(5)
         .returns<{ id: string; invoice_number: string; client_name: string; amount_total: number; status: string }[]>(),
       supabase
-        .from('email_inbox')
-        .select('id, subject, from_name, from_email, received_at')
-        .or(`subject.ilike."${pattern}",from_name.ilike."${pattern}"`)
+        .from('products')
+        .select('id, name, description, sku, category, price')
+        .or(`name.ilike."${pattern}",description.ilike."${pattern}",sku.ilike."${pattern}"`)
         .limit(5)
-        .returns<{ id: string; subject: string | null; from_name: string | null; from_email: string; received_at: string }[]>(),
+        .returns<{ id: string; name: string; description: string | null; sku: string | null; category: string; price: number }[]>(),
       supabase
         .from('regies')
         .select('id, name')
@@ -109,17 +123,29 @@ export function Header({ user }: HeaderProps) {
         sub: i.work_order_number ? `#${i.work_order_number} — ${i.address}` : i.address,
         href: '/interventions',
       })),
+      emails: (emailsRes.data ?? []).map((e) => ({
+        id: e.id,
+        label: e.subject ?? '(sans objet)',
+        sub: e.from_name ?? e.from_email,
+        href: '/inbox',
+      })),
+      quotes: (quotesRes.data ?? []).map((q) => ({
+        id: q.id,
+        label: q.quote_number ? `Devis ${q.quote_number}` : 'Devis',
+        sub: q.description ? `${q.client_name} — ${q.description}` : q.client_name,
+        href: '/quotes',
+      })),
       invoices: (invoicesRes.data ?? []).map((i) => ({
         id: i.id,
         label: `Facture ${i.invoice_number}`,
         sub: `${i.client_name} — CHF ${i.amount_total.toFixed(2)}`,
         href: '/invoices',
       })),
-      emails: (emailsRes.data ?? []).map((e) => ({
-        id: e.id,
-        label: e.subject ?? '(sans objet)',
-        sub: e.from_name ?? e.from_email,
-        href: '/inbox',
+      products: (productsRes.data ?? []).map((p) => ({
+        id: p.id,
+        label: p.name,
+        sub: p.sku ? `SKU: ${p.sku} — CHF ${p.price.toFixed(2)}` : `CHF ${p.price.toFixed(2)}`,
+        href: '/products',
       })),
       regies: (regiesRes.data ?? []).map((r) => ({
         id: r.id,
@@ -172,13 +198,15 @@ export function Header({ user }: HeaderProps) {
   };
 
   const totalResults = results
-    ? results.interventions.length + results.invoices.length + results.emails.length + results.regies.length
+    ? results.interventions.length + results.emails.length + results.quotes.length + results.invoices.length + results.products.length + results.regies.length
     : 0;
 
   const categories: { key: keyof SearchResults; label: string; icon: React.ReactNode }[] = [
     { key: 'interventions', label: 'Interventions', icon: <Wrench className="w-4 h-4 text-gray-400" /> },
-    { key: 'invoices', label: 'Factures', icon: <FileText className="w-4 h-4 text-gray-400" /> },
     { key: 'emails', label: 'Emails', icon: <Mail className="w-4 h-4 text-gray-400" /> },
+    { key: 'quotes', label: 'Devis', icon: <FilePlus className="w-4 h-4 text-gray-400" /> },
+    { key: 'invoices', label: 'Factures', icon: <FileText className="w-4 h-4 text-gray-400" /> },
+    { key: 'products', label: 'Produits', icon: <Package className="w-4 h-4 text-gray-400" /> },
     { key: 'regies', label: 'Régies', icon: <Building className="w-4 h-4 text-gray-400" /> },
   ];
 

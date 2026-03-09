@@ -71,6 +71,7 @@ export const TECHNICIAN_ROUTES = [
   { href: '/technician/week', label: 'Ma semaine', icon: 'calendar' },
   { href: '/interventions', label: 'Historique', icon: 'history' },
   { href: '/technician/leave', label: 'Mes congés', icon: 'calendar-check' },
+  { href: '/technician/profile', label: 'Mon profil', icon: 'users' },
 ];
 
 // ==============================================

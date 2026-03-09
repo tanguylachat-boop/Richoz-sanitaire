@@ -19,7 +19,6 @@ import {
   CalendarCheck,
   History,
   LogOut,
-  Droplets,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -83,14 +82,12 @@ export function Sidebar({ user, className }: SidebarProps) {
     >
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-gray-200">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Droplets className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <span className="text-lg font-bold text-gray-900">Richoz</span>
-            <span className="text-sm text-gray-400 ml-1">Sanitaire</span>
-          </div>
+        <Link href="/">
+          <img
+            src="https://yuumzhlvmqcbogqzuonp.supabase.co/storage/v1/object/public/photos/logo%20richoz/Logo%20Richoz%20Sanitaire%20(1).png"
+            alt="Richoz Sanitaire"
+            style={{ height: '40px' }}
+          />
         </Link>
       </div>
 

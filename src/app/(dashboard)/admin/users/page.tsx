@@ -4,14 +4,15 @@ import { cn } from '@/lib/utils';
 import { ROLES } from '@/lib/constants';
 import type { User } from '@/types/database';
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog';
+import { EditUserDialog } from '@/components/admin/EditUserDialog';
 import {
   Users,
   Search,
-  MoreVertical,
   UserCheck,
   Mail,
   Phone,
   Shield,
+  Pencil,
 } from 'lucide-react';
 
 export default async function UsersPage() {
@@ -150,7 +151,7 @@ export default async function UsersPage() {
             </div>
             <div className="divide-y divide-gray-100">
               {roleUsers.map((userItem) => (
-                <div key={userItem.id} className="p-4 hover:bg-gray-50/50 transition-colors">
+                <EditUserDialog key={userItem.id} user={userItem}>
                   <div className="flex items-center gap-4">
                     {/* Avatar */}
                     <div className={cn(
@@ -194,12 +195,12 @@ export default async function UsersPage() {
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                    {/* Edit indicator */}
+                    <div className="p-2 text-gray-400">
+                      <Pencil className="w-4 h-4" />
+                    </div>
                   </div>
-                </div>
+                </EditUserDialog>
               ))}
             </div>
           </div>
