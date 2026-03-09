@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Wrench, Plus, Search, Filter, MapPin, Clock, User, Edit2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
+import { PlanificationSplitView } from '@/components/interventions/PlanificationSplitView';
 import { createClient } from '@/lib/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -26,6 +27,18 @@ interface Intervention {
     first_name: string | null;
     last_name: string | null;
   } | null;
+}
+
+interface Technician {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+}
+
+interface Regie {
+  id: string;
+  name: string;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -51,6 +64,8 @@ export default function InterventionsPage() {
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [regies, setRegies] = useState<Regie[]>([]);
 
   const supabase = createClient();
 
@@ -73,8 +88,25 @@ export default function InterventionsPage() {
     setIsLoading(false);
   };
 
+  const fetchReferenceData = async () => {
+    const { data: techData } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, email')
+      .eq('role', 'technician')
+      .order('last_name');
+    if (techData) setTechnicians(techData);
+
+    const { data: regiesData } = await supabase
+      .from('regies')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name');
+    if (regiesData) setRegies(regiesData);
+  };
+
   useEffect(() => {
     fetchInterventions();
+    fetchReferenceData();
   }, []);
 
   const handleCreateSuccess = () => {
@@ -182,8 +214,8 @@ export default function InterventionsPage() {
               const technicianName = getTechnicianName(intervention.technician);
 
               return (
-                <div 
-                  key={intervention.id} 
+                <div
+                  key={intervention.id}
                   className="p-4 hover:bg-gray-50/50 transition-colors cursor-pointer group"
                   onClick={() => handleInterventionClick(intervention)}
                 >
@@ -208,7 +240,7 @@ export default function InterventionsPage() {
                           <span className={`px-2.5 py-1 text-xs font-medium rounded-lg border ${status.className}`}>
                             {status.label}
                           </span>
-                          <button 
+                          <button
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -267,14 +299,16 @@ export default function InterventionsPage() {
         )}
       </div>
 
-      {/* Modal Nouvelle Intervention */}
+      {/* Modal Nouvelle Intervention — PlanificationSplitView */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Nouvelle intervention"
-        size="lg"
+        title="Planifier une intervention"
+        size="full"
       >
-        <InterventionForm
+        <PlanificationSplitView
+          technicians={technicians}
+          regies={regies}
           onSuccess={handleCreateSuccess}
           onCancel={() => setIsCreateModalOpen(false)}
         />

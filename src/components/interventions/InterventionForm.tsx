@@ -399,6 +399,7 @@ export function InterventionForm({
             type="time"
             id="time_planned"
             name="time_planned"
+            step="1800"
             value={formData.time_planned}
             onChange={handleChange}
             className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

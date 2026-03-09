@@ -298,7 +298,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Heure</label><input type="time" name="time_planned" value={formData.time_planned} onChange={handleChange} className={ic} /></div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-1">Heure</label><input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={ic} /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label><input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={ic} /></div>
