@@ -24,6 +24,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { useNotificationCounts } from '@/hooks/useNotificationCounts';
 
 // Icon mapping
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -53,9 +54,18 @@ export function Sidebar({ user, className }: SidebarProps) {
 
   const isAdmin = user.role === 'admin';
   const isTechnician = user.role === 'technician';
+  const counts = useNotificationCounts();
 
   const mainRoutes = isTechnician ? TECHNICIAN_ROUTES : ADMIN_ROUTES;
   const adminRoutes = isAdmin ? ADMIN_ONLY_ROUTES : [];
+
+  const badgeMap: Record<string, number> = isAdmin
+    ? {
+        '/inbox': counts.inbox,
+        '/reports/validate': counts.reportsToValidate,
+        '/leave': counts.pendingLeave,
+      }
+    : {};
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -108,7 +118,12 @@ export function Sidebar({ user, className }: SidebarProps) {
                     )}
                   >
                     <Icon className={cn('w-5 h-5', isActive ? 'text-blue-600' : 'text-gray-400')} />
-                    {route.label}
+                    <span className="flex-1">{route.label}</span>
+                    {(badgeMap[route.href] ?? 0) > 0 && (
+                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-semibold">
+                        {badgeMap[route.href]}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
