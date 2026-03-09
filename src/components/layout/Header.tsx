@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Search, Wrench, FileText, Mail, Loader2 } from 'lucide-react';
+import { Menu, Search, Wrench, FileText, Mail, Building, Loader2 } from 'lucide-react';
 import { ROLES } from '@/lib/constants';
 import type { User } from '@/types/database';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,7 @@ interface SearchResults {
   interventions: SearchResult[];
   invoices: SearchResult[];
   emails: SearchResult[];
+  regies: SearchResult[];
 }
 
 interface HeaderProps {
@@ -65,7 +66,7 @@ export function Header({ user }: HeaderProps) {
   const roleInfo = ROLES[user.role];
 
   const search = useCallback(async (term: string) => {
-    if (!term.trim()) {
+    if (term.trim().length < 2) {
       setResults(null);
       setIsOpen(false);
       return;
@@ -74,25 +75,31 @@ export function Header({ user }: HeaderProps) {
     setIsLoading(true);
     const pattern = `%${term}%`;
 
-    const [interventionsRes, invoicesRes, emailsRes] = await Promise.all([
+    const [interventionsRes, invoicesRes, emailsRes, regiesRes] = await Promise.all([
       supabase
         .from('interventions')
         .select('id, title, address, work_order_number, status')
-        .or(`title.ilike.${pattern},address.ilike.${pattern},work_order_number.ilike.${pattern}`)
+        .or(`title.ilike."${pattern}",address.ilike."${pattern}",work_order_number.ilike."${pattern}"`)
         .limit(5)
         .returns<{ id: string; title: string; address: string; work_order_number: string | null; status: string }[]>(),
       supabase
         .from('invoices')
         .select('id, invoice_number, client_name, amount_total, status')
-        .ilike('invoice_number', pattern)
+        .or(`invoice_number.ilike."${pattern}",client_name.ilike."${pattern}"`)
         .limit(5)
         .returns<{ id: string; invoice_number: string; client_name: string; amount_total: number; status: string }[]>(),
       supabase
         .from('email_inbox')
         .select('id, subject, from_name, from_email, received_at')
-        .or(`subject.ilike.${pattern},from_name.ilike.${pattern}`)
+        .or(`subject.ilike."${pattern}",from_name.ilike."${pattern}"`)
         .limit(5)
         .returns<{ id: string; subject: string | null; from_name: string | null; from_email: string; received_at: string }[]>(),
+      supabase
+        .from('regies')
+        .select('id, name')
+        .ilike('name', pattern)
+        .limit(5)
+        .returns<{ id: string; name: string }[]>(),
     ]);
 
     setResults({
@@ -100,19 +107,25 @@ export function Header({ user }: HeaderProps) {
         id: i.id,
         label: i.title,
         sub: i.work_order_number ? `#${i.work_order_number} — ${i.address}` : i.address,
-        href: `/interventions/${i.id}`,
+        href: '/interventions',
       })),
       invoices: (invoicesRes.data ?? []).map((i) => ({
         id: i.id,
         label: `Facture ${i.invoice_number}`,
         sub: `${i.client_name} — CHF ${i.amount_total.toFixed(2)}`,
-        href: `/invoices`,
+        href: '/invoices',
       })),
       emails: (emailsRes.data ?? []).map((e) => ({
         id: e.id,
         label: e.subject ?? '(sans objet)',
         sub: e.from_name ?? e.from_email,
-        href: `/inbox`,
+        href: '/inbox',
+      })),
+      regies: (regiesRes.data ?? []).map((r) => ({
+        id: r.id,
+        label: r.name,
+        sub: 'Régie',
+        href: '/admin/regies',
       })),
     });
 
@@ -122,7 +135,7 @@ export function Header({ user }: HeaderProps) {
 
   // Debounce
   useEffect(() => {
-    if (!query.trim()) {
+    if (query.trim().length < 2) {
       setResults(null);
       setIsOpen(false);
       return;
@@ -159,13 +172,14 @@ export function Header({ user }: HeaderProps) {
   };
 
   const totalResults = results
-    ? results.interventions.length + results.invoices.length + results.emails.length
+    ? results.interventions.length + results.invoices.length + results.emails.length + results.regies.length
     : 0;
 
   const categories: { key: keyof SearchResults; label: string; icon: React.ReactNode }[] = [
     { key: 'interventions', label: 'Interventions', icon: <Wrench className="w-4 h-4 text-gray-400" /> },
     { key: 'invoices', label: 'Factures', icon: <FileText className="w-4 h-4 text-gray-400" /> },
     { key: 'emails', label: 'Emails', icon: <Mail className="w-4 h-4 text-gray-400" /> },
+    { key: 'regies', label: 'Régies', icon: <Building className="w-4 h-4 text-gray-400" /> },
   ];
 
   return (
@@ -193,6 +207,12 @@ export function Header({ user }: HeaderProps) {
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => { if (results && totalResults > 0) setIsOpen(true); }}
               placeholder="Rechercher..."
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              name="search-global-lx"
+              id="search-global-lx"
               className="w-56 h-9 pl-9 pr-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
 
