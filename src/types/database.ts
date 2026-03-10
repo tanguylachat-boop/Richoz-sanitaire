@@ -183,6 +183,11 @@ export interface Database {
           billable_reason: string | null;
           work_duration_minutes: number | null;
           materials_used: Json;
+          supplies_text: string | null;
+          client_signature: string | null;
+          is_completed: boolean;
+          revision_requested: boolean;
+          revision_message: string | null;
           status: ReportStatus;
           validated_at: string | null;
           validated_by: string | null;
@@ -202,6 +207,11 @@ export interface Database {
           billable_reason?: string | null;
           work_duration_minutes?: number | null;
           materials_used?: Json;
+          supplies_text?: string | null;
+          client_signature?: string | null;
+          is_completed?: boolean;
+          revision_requested?: boolean;
+          revision_message?: string | null;
           status?: ReportStatus;
           validated_at?: string | null;
           validated_by?: string | null;
@@ -221,6 +231,11 @@ export interface Database {
           billable_reason?: string | null;
           work_duration_minutes?: number | null;
           materials_used?: Json;
+          supplies_text?: string | null;
+          client_signature?: string | null;
+          is_completed?: boolean;
+          revision_requested?: boolean;
+          revision_message?: string | null;
           status?: ReportStatus;
           validated_at?: string | null;
           validated_by?: string | null;

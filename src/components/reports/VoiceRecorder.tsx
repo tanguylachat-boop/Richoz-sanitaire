@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { Mic, Square, Trash2, AlertCircle } from 'lucide-react';
+import { Mic, Square, Trash2, AlertCircle, Loader2 } from 'lucide-react';
 
 interface VoiceRecorderProps {
   interventionId: string;
@@ -46,6 +46,8 @@ export function VoiceRecorder({
   const [recordingTime, setRecordingTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(existingUrl || null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -204,7 +206,8 @@ export function VoiceRecorder({
     }
   };
 
-  const uploadAudioInBackground = useCallback(async (audioBlob: Blob) => {
+  const uploadAudioAndNotify = useCallback(async (audioBlob: Blob) => {
+    setIsUploading(true);
     try {
       const supabase = createClient();
       const fileName = `intervention-${interventionId}-${Date.now()}.webm`;
@@ -218,7 +221,8 @@ export function VoiceRecorder({
         });
 
       if (uploadError) {
-        console.warn('Échec upload audio (non bloquant):', uploadError);
+        console.error('[AUDIO] Échec upload:', uploadError);
+        setError('Échec de l\'upload audio. La transcription a été conservée.');
         return;
       }
 
@@ -226,12 +230,16 @@ export function VoiceRecorder({
         .from('audio')
         .getPublicUrl(fileName);
 
-      // Update the parent with the real audio URL
+      // Update local state and parent with the real audio URL
+      setAudioUrl(publicUrl);
       const finalText = transcriptionRef.current;
       onRecordingComplete(publicUrl, finalText || undefined);
       console.log('[AUDIO] Upload réussi:', publicUrl);
     } catch (err) {
-      console.warn('Erreur upload audio (non bloquant):', err);
+      console.error('[AUDIO] Erreur upload:', err);
+      setError('Échec de l\'upload audio. La transcription a été conservée.');
+    } finally {
+      setIsUploading(false);
     }
   }, [interventionId, onRecordingComplete]);
 
@@ -249,13 +257,14 @@ export function VoiceRecorder({
 
     stopRecordingCleanup();
 
-    // Envoyer la transcription au parent immédiatement (URL vide en attendant l'upload audio)
+    // Send transcription to parent immediately (keep existing URL if any)
     const finalText = transcriptionRef.current;
     if (finalText) {
-      onRecordingComplete('', finalText);
+      // Use existing audioUrl or empty string - the upload will update it
+      onRecordingComplete(audioUrl || '', finalText);
     }
 
-    // Stop MediaRecorder and upload audio in background
+    // Stop MediaRecorder and upload audio
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       const recorder = mediaRecorderRef.current;
 
@@ -265,7 +274,7 @@ export function VoiceRecorder({
 
         if (audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-          uploadAudioInBackground(audioBlob);
+          uploadAudioAndNotify(audioBlob);
         }
       };
 
@@ -276,13 +285,14 @@ export function VoiceRecorder({
       }
       mediaRecorderRef.current = null;
     }
-  }, [onRecordingComplete, uploadAudioInBackground]);
+  }, [onRecordingComplete, uploadAudioAndNotify, audioUrl]);
 
   const deleteTranscription = () => {
     setTranscription('');
     setInterimText('');
     setRecordingTime(0);
     setError(null);
+    setAudioUrl(null);
     transcriptionRef.current = '';
     audioChunksRef.current = [];
     onRecordingComplete('', '');
@@ -324,11 +334,28 @@ export function VoiceRecorder({
         </div>
       )}
 
+      {/* Audio playback (existing recording) */}
+      {audioUrl && !isRecording && (
+        <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
+          <p className="text-xs text-blue-600 font-medium mb-2">🔊 Enregistrement audio</p>
+          <audio controls src={audioUrl} className="w-full h-10" preload="metadata" />
+        </div>
+      )}
+
+      {/* Upload in progress indicator */}
+      {isUploading && (
+        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
+          <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+          <p className="text-sm text-amber-700">Upload de l&apos;audio en cours...</p>
+        </div>
+      )}
+
       {/* Start button */}
       {!isRecording && !transcription && isSupported && (
         <button
           onClick={startRecording}
-          className="w-full flex items-center justify-center gap-3 py-5 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] bg-red-50 hover:bg-red-100 border-red-200"
+          disabled={isUploading}
+          className="w-full flex items-center justify-center gap-3 py-5 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] bg-red-50 hover:bg-red-100 border-red-200 disabled:opacity-50"
         >
           <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-500">
             <Mic className="w-7 h-7 text-white" />
