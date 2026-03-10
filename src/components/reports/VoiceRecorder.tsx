@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 import { Mic, Square, Trash2, AlertCircle } from 'lucide-react';
 
 interface VoiceRecorderProps {
@@ -47,6 +48,8 @@ export function VoiceRecorder({
   const [isSupported, setIsSupported] = useState(true);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptionRef = useRef('');
   const isStoppingRef = useRef(false);
@@ -72,6 +75,13 @@ export function VoiceRecorder({
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
         } catch {
           // ignore
         }
@@ -166,6 +176,23 @@ export function VoiceRecorder({
       console.error('Failed to start recognition:', err);
       setError('Impossible de démarrer la reconnaissance vocale.');
     }
+
+    // Start MediaRecorder in parallel for audio capture
+    audioChunksRef.current = [];
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+    }).catch((err) => {
+      console.warn('MediaRecorder non disponible, audio ne sera pas enregistré:', err);
+    });
   }, []);
 
   const stopRecordingCleanup = () => {
@@ -176,6 +203,37 @@ export function VoiceRecorder({
       timerRef.current = null;
     }
   };
+
+  const uploadAudioInBackground = useCallback(async (audioBlob: Blob) => {
+    try {
+      const supabase = createClient();
+      const fileName = `intervention-${interventionId}-${Date.now()}.webm`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('audio')
+        .upload(fileName, audioBlob, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: audioBlob.type || 'audio/webm',
+        });
+
+      if (uploadError) {
+        console.warn('Échec upload audio (non bloquant):', uploadError);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('audio')
+        .getPublicUrl(fileName);
+
+      // Update the parent with the real audio URL
+      const finalText = transcriptionRef.current;
+      onRecordingComplete(publicUrl, finalText || undefined);
+      console.log('[AUDIO] Upload réussi:', publicUrl);
+    } catch (err) {
+      console.warn('Erreur upload audio (non bloquant):', err);
+    }
+  }, [interventionId, onRecordingComplete]);
 
   const stopRecording = useCallback(() => {
     isStoppingRef.current = true;
@@ -191,12 +249,34 @@ export function VoiceRecorder({
 
     stopRecordingCleanup();
 
-    // Envoyer la transcription au parent
+    // Envoyer la transcription au parent immédiatement
     const finalText = transcriptionRef.current;
     if (finalText) {
       onRecordingComplete('voice-transcription', finalText);
     }
-  }, [onRecordingComplete]);
+
+    // Stop MediaRecorder and upload audio in background
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      const recorder = mediaRecorderRef.current;
+
+      recorder.onstop = () => {
+        // Stop all tracks to release microphone
+        recorder.stream.getTracks().forEach((track) => track.stop());
+
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+          uploadAudioInBackground(audioBlob);
+        }
+      };
+
+      try {
+        recorder.stop();
+      } catch {
+        // ignore
+      }
+      mediaRecorderRef.current = null;
+    }
+  }, [onRecordingComplete, uploadAudioInBackground]);
 
   const deleteTranscription = () => {
     setTranscription('');
@@ -204,6 +284,7 @@ export function VoiceRecorder({
     setRecordingTime(0);
     setError(null);
     transcriptionRef.current = '';
+    audioChunksRef.current = [];
     onRecordingComplete('', '');
   };
 

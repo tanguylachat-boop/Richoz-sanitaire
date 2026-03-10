@@ -385,13 +385,15 @@ export default function ValidateReportDetailPage() {
           {/* Description */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-600" />Description du travail</h2>
-            {report.vocal_url && (
+            {(report.vocal_url || editVocalTranscription) && (
               <div className="mb-4 p-4 bg-blue-50 rounded-xl space-y-3">
                 <div className="flex items-center gap-3">
                   <Mic className="w-5 h-5 text-blue-600" />
                   <p className="font-medium text-blue-900">Enregistrement vocal</p>
                 </div>
-                <audio controls src={report.vocal_url} className="w-full" />
+                {report.vocal_url && report.vocal_url.startsWith('http') && (
+                  <audio controls src={report.vocal_url} className="w-full" />
+                )}
                 {(report.vocal_transcription || editVocalTranscription) && (
                   <div className="pt-3 border-t border-blue-200">
                     <label className="text-xs text-blue-600 font-medium mb-1 block">Transcription (modifiable) :</label>
