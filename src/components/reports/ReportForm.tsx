@@ -202,6 +202,8 @@ export function ReportForm({
     client_signature: signatureUrl,
     is_completed: isCompleted,
     status,
+    // Reset revision fields on submit so the banner disappears
+    ...(status === 'submitted' ? { revision_requested: false, revision_message: null } : {}),
   });
 
   // =============================================

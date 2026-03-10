@@ -249,10 +249,10 @@ export function VoiceRecorder({
 
     stopRecordingCleanup();
 
-    // Envoyer la transcription au parent immédiatement
+    // Envoyer la transcription au parent immédiatement (URL vide en attendant l'upload audio)
     const finalText = transcriptionRef.current;
     if (finalText) {
-      onRecordingComplete('voice-transcription', finalText);
+      onRecordingComplete('', finalText);
     }
 
     // Stop MediaRecorder and upload audio in background
