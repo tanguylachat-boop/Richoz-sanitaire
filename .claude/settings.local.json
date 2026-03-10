@@ -15,7 +15,8 @@
       "Bash(node scripts/generate-icons.mjs:*)",
       "Bash(npm uninstall:*)",
       "Bash(curl:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npx next:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

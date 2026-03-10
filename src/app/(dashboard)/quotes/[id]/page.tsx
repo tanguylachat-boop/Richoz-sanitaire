@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import {
   ChevronLeft, FileText, Building2, MapPin, Calendar,
   Download, FileOutput, Loader2, User, Phone, Mail,
+  Pencil, Save, Plus, Trash2, X,
 } from 'lucide-react';
 
 interface LineItem {
@@ -63,6 +64,12 @@ export default function QuoteDetailPage() {
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editClientName, setEditClientName] = useState('');
+  const [editClientAddress, setEditClientAddress] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editItems, setEditItems] = useState<LineItem[]>([]);
 
   const supabase = createClient();
 
@@ -112,6 +119,78 @@ export default function QuoteDetailPage() {
     }
   };
 
+  const startEditing = () => {
+    if (!quote) return;
+    setEditClientName(quote.client_name);
+    setEditClientAddress(quote.client_address || '');
+    setEditDescription(quote.description || '');
+    setEditItems(Array.isArray(quote.items) ? quote.items.map(i => ({ ...i })) : []);
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+  };
+
+  const updateEditItem = (index: number, field: keyof LineItem, value: string | number) => {
+    setEditItems(prev => {
+      const updated = [...prev];
+      if (field === 'quantity' || field === 'unit_price') {
+        const numVal = Number(value) || 0;
+        updated[index] = { ...updated[index], [field]: numVal, total: field === 'quantity' ? numVal * updated[index].unit_price : updated[index].quantity * numVal };
+      } else {
+        updated[index] = { ...updated[index], [field]: value };
+      }
+      return updated;
+    });
+  };
+
+  const addEditItem = () => {
+    setEditItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0, total: 0 }]);
+  };
+
+  const removeEditItem = (index: number) => {
+    setEditItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!quote) return;
+    setIsSaving(true);
+    try {
+      const computedItems = editItems.map(i => ({ ...i, total: i.quantity * i.unit_price }));
+      const subtotal = computedItems.reduce((sum, i) => sum + i.total, 0);
+      const discountAmount = subtotal * (quote.discount_percentage || 0) / 100;
+      const afterDiscount = subtotal - discountAmount;
+      const vatAmount = afterDiscount * (quote.vat_rate || 0) / 100;
+      const totalTtc = afterDiscount + vatAmount;
+
+      const updateData = {
+        client_name: editClientName,
+        client_address: editClientAddress || null,
+        description: editDescription || null,
+        items: computedItems,
+        subtotal,
+        discount_amount: discountAmount,
+        vat_amount: vatAmount,
+        total_ttc: totalTtc,
+        pdf_url: null, // reset PDF since data changed
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('quotes').update(updateData).eq('id', quote.id);
+      if (error) throw error;
+
+      setQuote({ ...quote, ...updateData, items: computedItems });
+      setIsEditing(false);
+      toast.success('Devis mis à jour !');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erreur lors de la sauvegarde');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -149,7 +228,35 @@ export default function QuoteDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {quote.pdf_url ? (
+          {!isEditing && (
+            <button
+              onClick={startEditing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+              Modifier
+            </button>
+          )}
+          {isEditing && (
+            <>
+              <button
+                onClick={cancelEditing}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isSaving ? 'Sauvegarde...' : 'Enregistrer'}
+              </button>
+            </>
+          )}
+          {!isEditing && quote.pdf_url ? (
             <a
               href={quote.pdf_url}
               target="_blank"
@@ -159,7 +266,7 @@ export default function QuoteDetailPage() {
               <Download className="w-4 h-4" />
               Télécharger PDF
             </a>
-          ) : (
+          ) : !isEditing ? (
             <button
               onClick={handleGeneratePdf}
               disabled={isGeneratingPdf}
@@ -168,7 +275,7 @@ export default function QuoteDetailPage() {
               {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileOutput className="w-4 h-4" />}
               {isGeneratingPdf ? 'Génération...' : 'Générer PDF'}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -205,24 +312,39 @@ export default function QuoteDetailPage() {
               <User className="w-5 h-5 text-blue-600" />Client
             </h2>
             <div className="space-y-3">
-              <p className="font-medium text-gray-900">{quote.client_name}</p>
-              {quote.client_address && (
-                <div className="flex items-start gap-2 text-sm text-gray-600">
-                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
-                  <span>{quote.client_address}</span>
-                </div>
-              )}
-              {quote.client_email && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  <span>{quote.client_email}</span>
-                </div>
-              )}
-              {quote.client_phone && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                  <span>{quote.client_phone}</span>
-                </div>
+              {isEditing ? (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Nom du client</label>
+                    <input value={editClientName} onChange={(e) => setEditClientName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Adresse</label>
+                    <textarea value={editClientAddress} onChange={(e) => setEditClientAddress(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-gray-900">{quote.client_name}</p>
+                  {quote.client_address && (
+                    <div className="flex items-start gap-2 text-sm text-gray-600">
+                      <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                      <span>{quote.client_address}</span>
+                    </div>
+                  )}
+                  {quote.client_email && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <span>{quote.client_email}</span>
+                    </div>
+                  )}
+                  {quote.client_phone && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Phone className="w-4 h-4 text-gray-400" />
+                      <span>{quote.client_phone}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -243,11 +365,20 @@ export default function QuoteDetailPage() {
               <FileText className="w-5 h-5 text-blue-600" />Informations
             </h2>
             <div className="space-y-3 text-sm">
-              {quote.description && (
+              {isEditing ? (
                 <div>
-                  <p className="text-gray-500 mb-1">Description</p>
-                  <p className="text-gray-900">{quote.description}</p>
+                  <label className="text-xs text-gray-500 mb-1 block">Description</label>
+                  <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-y" />
                 </div>
+              ) : (
+                <>
+                  {quote.description && (
+                    <div>
+                      <p className="text-gray-500 mb-1">Description</p>
+                      <p className="text-gray-900">{quote.description}</p>
+                    </div>
+                  )}
+                </>
               )}
               {quote.valid_until && (
                 <div className="flex items-center gap-2">
@@ -266,7 +397,38 @@ export default function QuoteDetailPage() {
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <h2 className="font-semibold text-gray-900">Lignes du devis</h2>
             </div>
-            {items.length > 0 ? (
+            {isEditing ? (
+              <div className="p-4 space-y-3">
+                {editItems.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2 p-3 bg-gray-50 rounded-xl">
+                    <div className="flex-1 space-y-2">
+                      <input value={item.description} onChange={(e) => updateEditItem(i, 'description', e.target.value)} placeholder="Description" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500">Quantité</label>
+                          <input type="number" min={0} step={1} value={item.quantity} onChange={(e) => updateEditItem(i, 'quantity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500">Prix unit. (CHF)</label>
+                          <input type="number" min={0} step={0.01} value={item.unit_price} onChange={(e) => updateEditItem(i, 'unit_price', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500">Total</label>
+                          <p className="px-3 py-2 text-sm font-medium text-gray-900">{formatCHF(item.quantity * item.unit_price)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => removeEditItem(i)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg mt-1">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button onClick={addEditItem} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                  <Plus className="w-4 h-4" />
+                  Ajouter une ligne
+                </button>
+              </div>
+            ) : items.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>

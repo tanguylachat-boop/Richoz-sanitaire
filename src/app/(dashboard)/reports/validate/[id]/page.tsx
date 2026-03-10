@@ -61,6 +61,8 @@ export default function ValidateReportDetailPage() {
   const [editTextContent, setEditTextContent] = useState('');
   const [editSuppliesText, setEditSuppliesText] = useState('');
   const [editWorkDuration, setEditWorkDuration] = useState<number>(0);
+  const [editVocalTranscription, setEditVocalTranscription] = useState('');
+  const [revisionMessage, setRevisionMessage] = useState('');
 
   const supabase = createClient();
 
@@ -92,6 +94,7 @@ export default function ValidateReportDetailPage() {
       setEditTextContent(r.text_content || '');
       setEditSuppliesText(r.supplies_text || '');
       setEditWorkDuration(r.work_duration_minutes || 0);
+      setEditVocalTranscription(r.vocal_transcription || '');
       setIsLoading(false);
     };
     fetchReport();
@@ -114,6 +117,7 @@ export default function ValidateReportDetailPage() {
           text_content: editTextContent || null,
           supplies_text: editSuppliesText || null,
           work_duration_minutes: editWorkDuration || null,
+          vocal_transcription: editVocalTranscription || null,
         })
         .eq('id', report.id);
       if (saveError) throw saveError;
@@ -188,15 +192,18 @@ export default function ValidateReportDetailPage() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
-        .from('reports').update({ status: 'rejected', billable_reason: rejectReason }).eq('id', report.id);
+        .from('reports').update({
+          revision_requested: true,
+          revision_message: rejectReason.trim(),
+        }).eq('id', report.id);
       if (error) throw error;
-      toast.success('Rapport renvoyé au technicien');
+      toast.success('Demande d\'informations envoyée au technicien');
       setShowRejectModal(false);
       router.push('/reports/validate');
       router.refresh();
     } catch (error) {
       console.error('Rejection error:', error);
-      toast.error('Erreur lors du rejet');
+      toast.error('Erreur lors de l\'envoi');
     } finally {
       setIsRejecting(false);
     }
@@ -379,18 +386,21 @@ export default function ValidateReportDetailPage() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-600" />Description du travail</h2>
             {report.vocal_url && (
-              <div className="mb-4 p-4 bg-blue-50 rounded-xl">
+              <div className="mb-4 p-4 bg-blue-50 rounded-xl space-y-3">
                 <div className="flex items-center gap-3">
-                  <button onClick={toggleAudio} className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors">
-                    {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-1" />}
-                  </button>
-                  <div className="flex-1"><p className="font-medium text-blue-900">Enregistrement vocal</p><p className="text-sm text-blue-600">Cliquez pour écouter</p></div>
-                  <Mic className="w-5 h-5 text-blue-400" />
+                  <Mic className="w-5 h-5 text-blue-600" />
+                  <p className="font-medium text-blue-900">Enregistrement vocal</p>
                 </div>
-                {report.vocal_transcription && (
-                  <div className="mt-3 pt-3 border-t border-blue-200">
-                    <p className="text-xs text-blue-600 font-medium mb-1">Transcription :</p>
-                    <p className="text-sm text-blue-800">{report.vocal_transcription}</p>
+                <audio controls src={report.vocal_url} className="w-full" />
+                {(report.vocal_transcription || editVocalTranscription) && (
+                  <div className="pt-3 border-t border-blue-200">
+                    <label className="text-xs text-blue-600 font-medium mb-1 block">Transcription (modifiable) :</label>
+                    <textarea
+                      value={editVocalTranscription}
+                      onChange={(e) => setEditVocalTranscription(e.target.value)}
+                      rows={4}
+                      className="w-full px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-y"
+                    />
                   </div>
                 )}
               </div>
@@ -514,7 +524,7 @@ export default function ValidateReportDetailPage() {
               </button>
               <button onClick={() => setShowRejectModal(true)} disabled={isValidating || report.status === 'validated'}
                 className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-white border-2 border-red-200 text-red-600 rounded-xl font-semibold hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-[0.98]">
-                <AlertTriangle className="w-5 h-5" />Demander des précisions
+                <MessageSquare className="w-5 h-5" />Demander des informations
               </button>
             </div>
             {report.status === 'validated' && (<p className="text-sm text-emerald-600 text-center mt-4">✓ Ce rapport a déjà été validé</p>)}
@@ -540,7 +550,7 @@ export default function ValidateReportDetailPage() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
-                <div><h3 className="font-semibold text-gray-900">Demander des précisions</h3><p className="text-sm text-gray-500">Le technicien sera notifié</p></div>
+                <div><h3 className="font-semibold text-gray-900">Demander des informations</h3><p className="text-sm text-gray-500">Le technicien sera notifié</p></div>
               </div>
               <button onClick={() => setShowRejectModal(false)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             </div>
