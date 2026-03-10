@@ -226,13 +226,30 @@ export function ReportForm({
 
       const reportData = buildReportData(allPhotos, signatureUrl, 'draft');
 
-      if (existingReport) {
+      // Determine the report ID to update
+      let reportId = existingReport?.id;
+
+      if (!reportId) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { data: foundReport } = await (supabase as any)
+          .from('reports')
+          .select('id')
+          .eq('intervention_id', intervention.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (foundReport) reportId = foundReport.id;
+      }
+
+      if (reportId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any)
           .from('reports')
           .update(reportData)
-          .eq('id', existingReport.id);
+          .eq('id', reportId)
+          .select();
         if (error) throw error;
+        if (!data || data.length === 0) throw new Error('Mise à jour échouée (0 lignes)');
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await (supabase as any).from('reports').insert(reportData);
@@ -241,8 +258,9 @@ export function ReportForm({
 
       toast.success('Brouillon sauvegardé');
     } catch (error) {
-      console.error('Save error:', error);
-      toast.error('Erreur lors de la sauvegarde');
+      console.error('[SAVE DRAFT ERROR]', error);
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Erreur sauvegarde: ${message}`);
     } finally {
       setIsSaving(false);
     }
@@ -253,6 +271,8 @@ export function ReportForm({
   // =============================================
 
   const handleSubmit = async () => {
+    console.log('[SUBMIT] Start - existingReport:', existingReport?.id, 'status:', existingReport?.status, 'revision_requested:', (existingReport as Record<string, unknown>)?.revision_requested);
+
     if (!textContent && !vocalTranscription) {
       toast.error('Veuillez ajouter une description ou un enregistrement vocal');
       return;
@@ -294,30 +314,77 @@ export function ReportForm({
       // Save report
       setSubmitProgress('Sauvegarde du rapport...');
       const reportData = buildReportData(allPhotos, signatureUrl, 'submitted');
+      console.log('[SUBMIT] reportData:', JSON.stringify(reportData, null, 2));
 
-      if (existingReport) {
+      // Determine the report ID to update: use existingReport prop,
+      // or look up directly if the prop was null (e.g. RLS/query issue)
+      let reportId = existingReport?.id;
+
+      if (!reportId) {
+        console.log('[SUBMIT] existingReport is null - looking up report for intervention:', intervention.id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
+        const { data: foundReport, error: lookupError } = await (supabase as any)
+          .from('reports')
+          .select('id')
+          .eq('intervention_id', intervention.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lookupError) {
+          console.error('[SUBMIT] Report lookup error:', lookupError);
+        }
+        if (foundReport) {
+          reportId = foundReport.id;
+          console.log('[SUBMIT] Found existing report via direct lookup:', reportId);
+        }
+      }
+
+      if (reportId) {
+        console.log('[SUBMIT] Updating report:', reportId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: updatedData, error } = await (supabase as any)
           .from('reports')
           .update(reportData)
-          .eq('id', existingReport.id);
+          .eq('id', reportId)
+          .select();
+
+        console.log('[SUBMIT] Update result - data:', updatedData, 'error:', error);
+
         if (error) throw error;
+        if (!updatedData || updatedData.length === 0) {
+          console.error('[SUBMIT] UPDATE returned 0 rows! Possible RLS issue.');
+          throw new Error('La mise à jour du rapport a échoué (aucune ligne modifiée). Vérifiez les permissions.');
+        }
       } else {
+        console.log('[SUBMIT] No existing report found - inserting new report');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any).from('reports').insert(reportData);
+        const { data: insertedData, error } = await (supabase as any)
+          .from('reports')
+          .insert(reportData)
+          .select();
+
+        console.log('[SUBMIT] Insert result - data:', insertedData, 'error:', error);
+
         if (error) throw error;
+        if (!insertedData || insertedData.length === 0) {
+          throw new Error("L'insertion du rapport a échoué. Vérifiez les permissions.");
+        }
       }
 
       // Update intervention status
       setSubmitProgress("Mise à jour de l'intervention...");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: interventionError } = await (supabase as any)
+      const { data: intUpdateData, error: interventionError } = await (supabase as any)
         .from('interventions')
         .update({
           status: isCompleted ? 'termine' : 'en_cours',
           date_completed: isCompleted ? new Date().toISOString() : null,
         })
-        .eq('id', intervention.id);
+        .eq('id', intervention.id)
+        .select();
+
+      console.log('[SUBMIT] Intervention update result - data:', intUpdateData, 'error:', interventionError);
 
       if (interventionError) {
         console.error('[DB ERROR] Intervention update:', interventionError);
@@ -325,7 +392,7 @@ export function ReportForm({
       }
 
       setSubmitProgress('Terminé!');
-      toast.success('Rapport soumis avec succès ! 🎉');
+      toast.success('Rapport soumis avec succès !');
 
       setTimeout(() => {
         router.push('/technician/today');
@@ -333,7 +400,8 @@ export function ReportForm({
       }, 500);
     } catch (error) {
       console.error('[SUBMIT ERROR]', error);
-      toast.error(`Erreur: ${error instanceof Error ? error.message : 'Erreur lors de la soumission'}`);
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Erreur: ${message}`);
     } finally {
       setIsSubmitting(false);
       setSubmitProgress(null);

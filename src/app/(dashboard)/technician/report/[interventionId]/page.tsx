@@ -118,6 +118,8 @@ export default function TechnicianReportPage() {
   }
 
   const existingReport = intervention.reports?.[0] || null;
+  console.log('[REPORT PAGE] intervention.reports:', intervention.reports);
+  console.log('[REPORT PAGE] existingReport:', existingReport?.id, 'status:', existingReport?.status, 'revision_requested:', (existingReport as Record<string, unknown>)?.revision_requested);
   const startTime = intervention.date_planned ? new Date(intervention.date_planned) : null;
   const endTime = startTime ? addMinutes(startTime, intervention.estimated_duration_minutes || 60) : null;
   const clientInfo = intervention.client_info as { name?: string; phone?: string } | null;
