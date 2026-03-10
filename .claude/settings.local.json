@@ -16,7 +16,8 @@
       "Bash(npm uninstall:*)",
       "Bash(curl:*)",
       "Bash(node:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(grep -r \"quote\" /Users/tanguylachat/n8n/ics-sanitaire/src/app/api --include=\"*.ts\" --include=\"*.tsx\" 2>/dev/null | head -10)"
     ]
   },
   "enableAllProjectMcpServers": true,

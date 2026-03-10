@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
   ChevronLeft, FileText, Building2, MapPin, Calendar,
   Download, FileOutput, Loader2, User, Phone, Mail,
-  Pencil, Save, Plus, Trash2, X,
+  Pencil, Save, Plus, Trash2, X, Copy,
 } from 'lucide-react';
 
 interface LineItem {
@@ -16,6 +16,11 @@ interface LineItem {
   quantity: number;
   unit_price: number;
   total: number;
+}
+
+interface Regie {
+  id: string;
+  name: string;
 }
 
 interface QuoteDetail {
@@ -26,17 +31,19 @@ interface QuoteDetail {
   client_email: string | null;
   client_phone: string | null;
   description: string | null;
+  regie_id: string | null;
   items: LineItem[];
   subtotal: number;
   discount_percentage: number;
   discount_amount: number;
   vat_rate: number;
   vat_amount: number;
-  total_ttc: number;
+  total: number;
   status: string;
   valid_until: string | null;
   created_at: string;
   pdf_url: string | null;
+  parent_quote_id: string | null;
   regie?: { id: string; name: string } | null;
 }
 
@@ -66,33 +73,42 @@ export default function QuoteDetailPage() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingCounter, setIsCreatingCounter] = useState(false);
   const [editClientName, setEditClientName] = useState('');
   const [editClientAddress, setEditClientAddress] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editRegieId, setEditRegieId] = useState<string | null>(null);
   const [editItems, setEditItems] = useState<LineItem[]>([]);
+  const [regies, setRegies] = useState<Regie[]>([]);
 
   const supabase = createClient();
 
   useEffect(() => {
-    const fetchQuote = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
-        .from('quotes')
-        .select('*, regie:regies(id, name)')
-        .eq('id', quoteId)
-        .single();
 
-      if (error || !data) {
+      const [quoteRes, regiesRes] = await Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('quotes')
+          .select('*, regie:regies(id, name)')
+          .eq('id', quoteId)
+          .single(),
+        supabase.from('regies').select('id, name').order('name'),
+      ]);
+
+      if (quoteRes.error || !quoteRes.data) {
         toast.error('Devis introuvable');
         router.push('/quotes');
         return;
       }
-      setQuote(data as QuoteDetail);
+
+      setQuote(quoteRes.data as QuoteDetail);
+      if (regiesRes.data) setRegies(regiesRes.data as Regie[]);
       setIsLoading(false);
     };
-    fetchQuote();
-  }, [quoteId]);
+    fetchData();
+  }, [quoteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGeneratePdf = async () => {
     if (!quote) return;
@@ -119,11 +135,14 @@ export default function QuoteDetailPage() {
     }
   };
 
+  // ─── Edit mode ──────────────────────────────────────────────────────────────
+
   const startEditing = () => {
     if (!quote) return;
     setEditClientName(quote.client_name);
     setEditClientAddress(quote.client_address || '');
     setEditDescription(quote.description || '');
+    setEditRegieId(quote.regie_id || null);
     setEditItems(Array.isArray(quote.items) ? quote.items.map(i => ({ ...i })) : []);
     setIsEditing(true);
   };
@@ -137,7 +156,11 @@ export default function QuoteDetailPage() {
       const updated = [...prev];
       if (field === 'quantity' || field === 'unit_price') {
         const numVal = Number(value) || 0;
-        updated[index] = { ...updated[index], [field]: numVal, total: field === 'quantity' ? numVal * updated[index].unit_price : updated[index].quantity * numVal };
+        updated[index] = {
+          ...updated[index],
+          [field]: numVal,
+          total: field === 'quantity' ? numVal * updated[index].unit_price : updated[index].quantity * numVal,
+        };
       } else {
         updated[index] = { ...updated[index], [field]: value };
       }
@@ -162,17 +185,18 @@ export default function QuoteDetailPage() {
       const discountAmount = subtotal * (quote.discount_percentage || 0) / 100;
       const afterDiscount = subtotal - discountAmount;
       const vatAmount = afterDiscount * (quote.vat_rate || 0) / 100;
-      const totalTtc = afterDiscount + vatAmount;
+      const total = afterDiscount + vatAmount;
 
       const updateData = {
         client_name: editClientName,
         client_address: editClientAddress || null,
         description: editDescription || null,
+        regie_id: editRegieId || null,
         items: computedItems,
         subtotal,
         discount_amount: discountAmount,
         vat_amount: vatAmount,
-        total_ttc: totalTtc,
+        total,
         pdf_url: null, // reset PDF since data changed
       };
 
@@ -180,7 +204,14 @@ export default function QuoteDetailPage() {
       const { error } = await (supabase as any).from('quotes').update(updateData).eq('id', quote.id);
       if (error) throw error;
 
-      setQuote({ ...quote, ...updateData, items: computedItems });
+      // Update local state with new regie info
+      const selectedRegie = regies.find(r => r.id === editRegieId);
+      setQuote({
+        ...quote,
+        ...updateData,
+        items: computedItems,
+        regie: selectedRegie ? { id: selectedRegie.id, name: selectedRegie.name } : null,
+      });
       setIsEditing(false);
       toast.success('Devis mis à jour !');
     } catch (err) {
@@ -190,6 +221,80 @@ export default function QuoteDetailPage() {
       setIsSaving(false);
     }
   };
+
+  // ─── Counter-quote (contre-devis) ──────────────────────────────────────────
+
+  const handleCreateCounterQuote = async () => {
+    if (!quote) return;
+    setIsCreatingCounter(true);
+    try {
+      // Generate counter-quote number: replace D prefix with CD-
+      const counterNumber = quote.quote_number
+        ? quote.quote_number.replace(/^D/, 'CD-')
+        : null;
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const validUntil = new Date();
+      validUntil.setDate(validUntil.getDate() + 30);
+
+      // Duplicate the quote
+      const insertData = {
+        client_name: quote.client_name,
+        client_email: quote.client_email || null,
+        client_phone: quote.client_phone || null,
+        client_address: quote.client_address || null,
+        regie_id: quote.regie_id || null,
+        quote_number: counterNumber,
+        description: quote.description || null,
+        items: Array.isArray(quote.items) ? quote.items : [],
+        subtotal: quote.subtotal || 0,
+        discount_percentage: quote.discount_percentage || 0,
+        discount_amount: quote.discount_amount || 0,
+        vat_rate: quote.vat_rate || 0,
+        vat_amount: quote.vat_amount || 0,
+        total: quote.total || 0,
+        valid_until: validUntil.toISOString().split('T')[0],
+        status: 'draft' as const,
+        parent_quote_id: quote.id,
+        created_by: user?.id || null,
+        pdf_url: null,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newQuote, error } = await (supabase as any)
+        .from('quotes')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Contre-devis créé ! Vous pouvez maintenant le modifier.');
+      // Redirect to the new counter-quote in edit mode
+      router.push(`/quotes/${(newQuote as { id: string }).id}?edit=true`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Erreur lors de la création du contre-devis');
+    } finally {
+      setIsCreatingCounter(false);
+    }
+  };
+
+  // ─── Auto-enter edit mode if ?edit=true ─────────────────────────────────────
+
+  useEffect(() => {
+    if (!quote || isLoading) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('edit') === 'true') {
+      startEditing();
+      // Remove the query param from URL
+      window.history.replaceState({}, '', `/quotes/${quoteId}`);
+    }
+  }, [quote, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -206,6 +311,14 @@ export default function QuoteDetailPage() {
 
   const statusConf = STATUS_CONFIG[quote.status] || STATUS_CONFIG.draft;
   const items: LineItem[] = Array.isArray(quote.items) ? quote.items : [];
+  const isCounterQuote = quote.quote_number?.startsWith('CD-');
+
+  // Compute edit totals for live preview
+  const editSubtotal = editItems.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
+  const editDiscountAmount = editSubtotal * (quote.discount_percentage || 0) / 100;
+  const editAfterDiscount = editSubtotal - editDiscountAmount;
+  const editVatAmount = editAfterDiscount * (quote.vat_rate || 0) / 100;
+  const editTotal = editAfterDiscount + editVatAmount;
 
   return (
     <div className="space-y-6">
@@ -218,24 +331,41 @@ export default function QuoteDetailPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-gray-900">
-                {quote.quote_number ? `Devis ${quote.quote_number}` : 'Devis'}
+                {quote.quote_number
+                  ? `${isCounterQuote ? 'Contre-devis' : 'Devis'} ${quote.quote_number}`
+                  : 'Devis'}
               </h1>
               <span className={`px-2.5 py-1 text-xs font-medium rounded-lg border ${statusConf.className}`}>
                 {statusConf.label}
               </span>
+              {isCounterQuote && (
+                <span className="px-2.5 py-1 text-xs font-medium rounded-lg border bg-orange-50 text-orange-700 border-orange-200">
+                  Contre-devis
+                </span>
+              )}
             </div>
             <p className="text-sm text-gray-500">Créé le {formatDate(quote.created_at)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {!isEditing && (
-            <button
-              onClick={startEditing}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-            >
-              <Pencil className="w-4 h-4" />
-              Modifier
-            </button>
+            <>
+              <button
+                onClick={startEditing}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+                Modifier
+              </button>
+              <button
+                onClick={handleCreateCounterQuote}
+                disabled={isCreatingCounter}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {isCreatingCounter ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                {isCreatingCounter ? 'Création...' : 'Contre-devis'}
+              </button>
+            </>
           )}
           {isEditing && (
             <>
@@ -280,7 +410,7 @@ export default function QuoteDetailPage() {
       </div>
 
       {/* PDF Preview */}
-      {quote.pdf_url && (
+      {quote.pdf_url && !isEditing && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Aperçu du PDF</h2>
@@ -350,14 +480,27 @@ export default function QuoteDetailPage() {
           </div>
 
           {/* Régie */}
-          {quote.regie && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-              <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-600" />Régie
-              </h2>
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+            <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-600" />Régie
+            </h2>
+            {isEditing ? (
+              <select
+                value={editRegieId || ''}
+                onChange={(e) => setEditRegieId(e.target.value || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 appearance-none"
+              >
+                <option value="">— Aucune régie —</option>
+                {regies.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            ) : quote.regie ? (
               <p className="font-medium text-gray-900">{quote.regie.name}</p>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-gray-400 italic">Aucune régie</p>
+            )}
+          </div>
 
           {/* Infos */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
@@ -462,21 +605,21 @@ export default function QuoteDetailPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Sous-total HT</span>
-                <span className="font-medium text-gray-900">{formatCHF(quote.subtotal || 0)}</span>
+                <span className="font-medium text-gray-900">{formatCHF(isEditing ? editSubtotal : (quote.subtotal || 0))}</span>
               </div>
-              {quote.discount_amount > 0 && (
+              {(isEditing ? editDiscountAmount : quote.discount_amount) > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Remise ({quote.discount_percentage}%)</span>
-                  <span className="font-medium text-red-600">-{formatCHF(quote.discount_amount)}</span>
+                  <span className="font-medium text-red-600">-{formatCHF(isEditing ? editDiscountAmount : quote.discount_amount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">TVA ({quote.vat_rate || 0}%)</span>
-                <span className="font-medium text-gray-900">{formatCHF(quote.vat_amount || 0)}</span>
+                <span className="font-medium text-gray-900">{formatCHF(isEditing ? editVatAmount : (quote.vat_amount || 0))}</span>
               </div>
               <div className="border-t border-gray-200 pt-3 flex justify-between">
                 <span className="text-base font-semibold text-gray-900">Total TTC</span>
-                <span className="text-xl font-bold text-gray-900">{formatCHF(quote.total_ttc || 0)}</span>
+                <span className="text-xl font-bold text-gray-900">{formatCHF(isEditing ? editTotal : (quote.total || 0))}</span>
               </div>
             </div>
           </div>

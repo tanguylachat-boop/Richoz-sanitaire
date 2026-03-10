@@ -300,6 +300,7 @@ export interface Database {
           rejected_at: string | null;
           rejection_reason: string | null;
           pdf_url: string | null;
+          parent_quote_id: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -328,6 +329,7 @@ export interface Database {
           rejected_at?: string | null;
           rejection_reason?: string | null;
           pdf_url?: string | null;
+          parent_quote_id?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -356,6 +358,7 @@ export interface Database {
           rejected_at?: string | null;
           rejection_reason?: string | null;
           pdf_url?: string | null;
+          parent_quote_id?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
