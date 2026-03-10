@@ -12,10 +12,14 @@ import {
 } from 'lucide-react';
 
 interface LineItem {
+  id?: string;
   description: string;
   quantity: number;
   unit_price: number;
   total: number;
+  item_type?: string;
+  section_name?: string;
+  catalog_service_id?: number | null;
 }
 
 interface Regie {
@@ -32,13 +36,10 @@ interface QuoteDetail {
   client_phone: string | null;
   description: string | null;
   regie_id: string | null;
-  items: LineItem[];
-  subtotal: number;
-  discount_percentage: number;
-  discount_amount: number;
-  vat_rate: number;
-  vat_amount: number;
-  total: number;
+  total_ht: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_ttc: number;
   status: string;
   valid_until: string | null;
   created_at: string;
@@ -79,6 +80,7 @@ export default function QuoteDetailPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editRegieId, setEditRegieId] = useState<string | null>(null);
   const [editItems, setEditItems] = useState<LineItem[]>([]);
+  const [quoteItems, setQuoteItems] = useState<LineItem[]>([]);
   const [regies, setRegies] = useState<Regie[]>([]);
 
   const supabase = createClient();
@@ -87,7 +89,7 @@ export default function QuoteDetailPage() {
     const fetchData = async () => {
       setIsLoading(true);
 
-      const [quoteRes, regiesRes] = await Promise.all([
+      const [quoteRes, regiesRes, itemsRes] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
           .from('quotes')
@@ -95,6 +97,12 @@ export default function QuoteDetailPage() {
           .eq('id', quoteId)
           .single(),
         supabase.from('regies').select('id, name').order('name'),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from('quote_items')
+          .select('*')
+          .eq('quote_id', quoteId)
+          .order('sort_order', { ascending: true }),
       ]);
 
       if (quoteRes.error || !quoteRes.data) {
@@ -105,6 +113,22 @@ export default function QuoteDetailPage() {
 
       setQuote(quoteRes.data as QuoteDetail);
       if (regiesRes.data) setRegies(regiesRes.data as Regie[]);
+
+      // Load items from quote_items table
+      if (itemsRes.data && itemsRes.data.length > 0) {
+        const loadedItems: LineItem[] = (itemsRes.data as any[]).map((item) => ({
+          id: item.id,
+          description: item.description || '',
+          quantity: Number(item.quantity) || 0,
+          unit_price: Number(item.unit_price) || 0,
+          total: Number(item.total) || (Number(item.quantity) * Number(item.unit_price)) || 0,
+          item_type: item.item_type,
+          section_name: item.section_name,
+          catalog_service_id: item.catalog_service_id,
+        }));
+        setQuoteItems(loadedItems);
+      }
+
       setIsLoading(false);
     };
     fetchData();
@@ -143,7 +167,7 @@ export default function QuoteDetailPage() {
     setEditClientAddress(quote.client_address || '');
     setEditDescription(quote.description || '');
     setEditRegieId(quote.regie_id || null);
-    setEditItems(Array.isArray(quote.items) ? quote.items.map(i => ({ ...i })) : []);
+    setEditItems(quoteItems.length > 0 ? quoteItems.map(i => ({ ...i })) : []);
     setIsEditing(true);
   };
 
@@ -180,23 +204,20 @@ export default function QuoteDetailPage() {
     if (!quote) return;
     setIsSaving(true);
     try {
-      const computedItems = editItems.map(i => ({ ...i, total: i.quantity * i.unit_price }));
-      const subtotal = computedItems.reduce((sum, i) => sum + i.total, 0);
-      const discountAmount = subtotal * (quote.discount_percentage || 0) / 100;
-      const afterDiscount = subtotal - discountAmount;
-      const vatAmount = afterDiscount * (quote.vat_rate || 0) / 100;
-      const total = afterDiscount + vatAmount;
+      const computedItems = editItems.map(i => ({ ...i, total: Math.round(i.quantity * i.unit_price * 100) / 100 }));
+      const totalHt = computedItems.reduce((sum, i) => sum + i.total, 0);
+      const taxRate = quote.tax_rate || 8.1;
+      const taxAmount = Math.round(totalHt * taxRate / 100 * 100) / 100;
+      const totalTtc = Math.round((totalHt + taxAmount) * 100) / 100;
 
       const updateData = {
         client_name: editClientName,
         client_address: editClientAddress || null,
         description: editDescription || null,
         regie_id: editRegieId || null,
-        items: computedItems,
-        subtotal,
-        discount_amount: discountAmount,
-        vat_amount: vatAmount,
-        total,
+        total_ht: totalHt,
+        tax_amount: taxAmount,
+        total_ttc: totalTtc,
         pdf_url: null, // reset PDF since data changed
       };
 
@@ -204,19 +225,40 @@ export default function QuoteDetailPage() {
       const { error } = await (supabase as any).from('quotes').update(updateData).eq('id', quote.id);
       if (error) throw error;
 
-      // Update local state with new regie info
+      // Delete old quote_items and insert new ones
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('quote_items').delete().eq('quote_id', quote.id);
+
+      if (computedItems.length > 0) {
+        const newItems = computedItems.map((item, index) => ({
+          quote_id: quote.id,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.total,
+          item_type: item.item_type || 'service',
+          section_name: item.section_name || 'Prestations',
+          catalog_service_id: item.catalog_service_id || null,
+          sort_order: index,
+        }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: itemsError } = await (supabase as any).from('quote_items').insert(newItems);
+        if (itemsError) throw itemsError;
+      }
+
+      // Update local state
       const selectedRegie = regies.find(r => r.id === editRegieId);
       setQuote({
         ...quote,
         ...updateData,
-        items: computedItems,
         regie: selectedRegie ? { id: selectedRegie.id, name: selectedRegie.name } : null,
       });
+      setQuoteItems(computedItems);
       setIsEditing(false);
       toast.success('Devis mis à jour !');
-    } catch (err) {
-      console.error(err);
-      toast.error('Erreur lors de la sauvegarde');
+    } catch (err: any) {
+      console.error('Erreur sauvegarde devis:', err);
+      toast.error('Erreur: ' + (err?.message || 'Impossible de sauvegarder'));
     } finally {
       setIsSaving(false);
     }
@@ -239,7 +281,7 @@ export default function QuoteDetailPage() {
       const validUntil = new Date();
       validUntil.setDate(validUntil.getDate() + 30);
 
-      // Duplicate the quote
+      // Duplicate the quote - use same column names as quotes/new/page.tsx
       const insertData = {
         client_name: quote.client_name,
         client_email: quote.client_email || null,
@@ -248,19 +290,18 @@ export default function QuoteDetailPage() {
         regie_id: quote.regie_id || null,
         quote_number: counterNumber,
         description: quote.description || null,
-        items: Array.isArray(quote.items) ? quote.items : [],
-        subtotal: quote.subtotal || 0,
-        discount_percentage: quote.discount_percentage || 0,
-        discount_amount: quote.discount_amount || 0,
-        vat_rate: quote.vat_rate || 0,
-        vat_amount: quote.vat_amount || 0,
-        total: quote.total || 0,
+        total_ht: quote.total_ht || 0,
+        tax_rate: quote.tax_rate || 8.1,
+        tax_amount: quote.tax_amount || 0,
+        total_ttc: quote.total_ttc || 0,
         valid_until: validUntil.toISOString().split('T')[0],
         status: 'draft' as const,
         parent_quote_id: quote.id,
-        created_by: user?.id || null,
+        user_id: user?.id || null,
         pdf_url: null,
       };
+
+      console.log('Contre-devis insertData:', insertData);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newQuote, error } = await (supabase as any)
@@ -269,14 +310,38 @@ export default function QuoteDetailPage() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erreur Supabase contre-devis:', error);
+        throw error;
+      }
+
+      // Copy quote_items to the new counter-quote
+      if (quoteItems.length > 0) {
+        const newItems = quoteItems.map((item, index) => ({
+          quote_id: (newQuote as { id: string }).id,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total: item.total || item.quantity * item.unit_price,
+          item_type: item.item_type || 'service',
+          section_name: item.section_name || 'Prestations',
+          catalog_service_id: item.catalog_service_id || null,
+          sort_order: index,
+        }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: itemsError } = await (supabase as any)
+          .from('quote_items')
+          .insert(newItems);
+        if (itemsError) {
+          console.error('Erreur copie quote_items:', itemsError);
+        }
+      }
 
       toast.success('Contre-devis créé ! Vous pouvez maintenant le modifier.');
-      // Redirect to the new counter-quote in edit mode
       router.push(`/quotes/${(newQuote as { id: string }).id}?edit=true`);
-    } catch (err) {
-      console.error(err);
-      toast.error('Erreur lors de la création du contre-devis');
+    } catch (err: any) {
+      console.error('Erreur création contre-devis:', err);
+      toast.error('Erreur contre-devis: ' + (err?.message || JSON.stringify(err)));
     } finally {
       setIsCreatingCounter(false);
     }
@@ -310,15 +375,14 @@ export default function QuoteDetailPage() {
   if (!quote) return null;
 
   const statusConf = STATUS_CONFIG[quote.status] || STATUS_CONFIG.draft;
-  const items: LineItem[] = Array.isArray(quote.items) ? quote.items : [];
+  const items: LineItem[] = quoteItems;
   const isCounterQuote = quote.quote_number?.startsWith('CD-');
 
   // Compute edit totals for live preview
   const editSubtotal = editItems.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
-  const editDiscountAmount = editSubtotal * (quote.discount_percentage || 0) / 100;
-  const editAfterDiscount = editSubtotal - editDiscountAmount;
-  const editVatAmount = editAfterDiscount * (quote.vat_rate || 0) / 100;
-  const editTotal = editAfterDiscount + editVatAmount;
+  const editTaxRate = quote.tax_rate || 8.1;
+  const editTaxAmount = Math.round(editSubtotal * editTaxRate / 100 * 100) / 100;
+  const editTotal = Math.round((editSubtotal + editTaxAmount) * 100) / 100;
 
   return (
     <div className="space-y-6">
@@ -605,21 +669,15 @@ export default function QuoteDetailPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Sous-total HT</span>
-                <span className="font-medium text-gray-900">{formatCHF(isEditing ? editSubtotal : (quote.subtotal || 0))}</span>
+                <span className="font-medium text-gray-900">{formatCHF(isEditing ? editSubtotal : (quote.total_ht || 0))}</span>
               </div>
-              {(isEditing ? editDiscountAmount : quote.discount_amount) > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Remise ({quote.discount_percentage}%)</span>
-                  <span className="font-medium text-red-600">-{formatCHF(isEditing ? editDiscountAmount : quote.discount_amount)}</span>
-                </div>
-              )}
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">TVA ({quote.vat_rate || 0}%)</span>
-                <span className="font-medium text-gray-900">{formatCHF(isEditing ? editVatAmount : (quote.vat_amount || 0))}</span>
+                <span className="text-gray-500">TVA ({quote.tax_rate || 8.1}%)</span>
+                <span className="font-medium text-gray-900">{formatCHF(isEditing ? editTaxAmount : (quote.tax_amount || 0))}</span>
               </div>
               <div className="border-t border-gray-200 pt-3 flex justify-between">
                 <span className="text-base font-semibold text-gray-900">Total TTC</span>
-                <span className="text-xl font-bold text-gray-900">{formatCHF(isEditing ? editTotal : (quote.total || 0))}</span>
+                <span className="text-xl font-bold text-gray-900">{formatCHF(isEditing ? editTotal : (quote.total_ttc || 0))}</span>
               </div>
             </div>
           </div>
