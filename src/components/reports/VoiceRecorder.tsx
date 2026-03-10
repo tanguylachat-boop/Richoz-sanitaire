@@ -1,15 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { cn } from '@/lib/utils';
-import { createClient } from '@/lib/supabase/client';
-import { Mic, Square, Trash2, AlertCircle, Loader2 } from 'lucide-react';
+import { Mic, Square, Trash2, AlertCircle } from 'lucide-react';
 
 interface VoiceRecorderProps {
-  interventionId: string;
-  existingUrl?: string;
-  onRecordingComplete: (url: string, transcription?: string) => void;
-  onUploadStateChange?: (isUploading: boolean) => void;
+  onRecordingComplete: (transcription: string) => void;
 }
 
 // Type for Web Speech API
@@ -36,24 +31,15 @@ type SpeechRecognitionInstance = {
   onstart: (() => void) | null;
 };
 
-export function VoiceRecorder({
-  interventionId,
-  existingUrl,
-  onRecordingComplete,
-  onUploadStateChange,
-}: VoiceRecorderProps) {
+export function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [interimText, setInterimText] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(existingUrl || null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptionRef = useRef('');
   const interimTextRef = useRef('');
@@ -84,15 +70,17 @@ export function VoiceRecorder({
           // ignore
         }
       }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        try {
-          mediaRecorderRef.current.stop();
-        } catch {
-          // ignore
-        }
-      }
     };
   }, []);
+
+  const stopRecordingCleanup = () => {
+    setIsRecording(false);
+    setInterimText('');
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   const startRecording = useCallback(() => {
     setError(null);
@@ -182,81 +170,12 @@ export function VoiceRecorder({
       console.error('Failed to start recognition:', err);
       setError('Impossible de démarrer la reconnaissance vocale.');
     }
-
-    // Start MediaRecorder in parallel for audio capture
-    audioChunksRef.current = [];
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.start();
-    }).catch((err) => {
-      console.warn('MediaRecorder non disponible, audio ne sera pas enregistré:', err);
-    });
   }, []);
-
-  const stopRecordingCleanup = () => {
-    setIsRecording(false);
-    setInterimText('');
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  const uploadAudioAndNotify = useCallback(async (audioBlob: Blob) => {
-    setIsUploading(true);
-    onUploadStateChange?.(true);
-    try {
-      const supabase = createClient();
-      const fileName = `intervention-${interventionId}-${Date.now()}.webm`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('audio')
-        .upload(fileName, audioBlob, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: audioBlob.type || 'audio/webm',
-        });
-
-      if (uploadError) {
-        console.error('[AUDIO] Échec upload:', uploadError);
-        setError('Échec de l\'upload audio. La transcription a été conservée.');
-        return;
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('audio')
-        .getPublicUrl(fileName);
-
-      // Update local state and parent with the real audio URL
-      setAudioUrl(publicUrl);
-      const finalText = transcriptionRef.current;
-      onRecordingComplete(publicUrl, finalText);
-      console.log('[AUDIO] Upload réussi:', publicUrl);
-    } catch (err) {
-      console.error('[AUDIO] Erreur upload:', err);
-      setError('Échec de l\'upload audio. La transcription a été conservée.');
-      // On upload failure, still notify parent with transcription only
-      const finalText = transcriptionRef.current;
-      onRecordingComplete('', finalText);
-    } finally {
-      setIsUploading(false);
-      onUploadStateChange?.(false);
-    }
-  }, [interventionId, onRecordingComplete, onUploadStateChange]);
 
   const stopRecording = useCallback(() => {
     isStoppingRef.current = true;
 
     // Merge any pending interim text into the final transcription
-    // (some browsers never finalize the last speech result)
     if (interimTextRef.current) {
       const pending = interimTextRef.current.trim();
       if (pending) {
@@ -279,49 +198,18 @@ export function VoiceRecorder({
 
     stopRecordingCleanup();
 
-    // Stop MediaRecorder and upload audio — only notify parent AFTER upload succeeds
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      const recorder = mediaRecorderRef.current;
-
-      recorder.onstop = () => {
-        // Stop all tracks to release microphone
-        recorder.stream.getTracks().forEach((track) => track.stop());
-
-        if (audioChunksRef.current.length > 0) {
-          const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-          uploadAudioAndNotify(audioBlob);
-        } else {
-          // No audio chunks — notify parent with transcription only
-          const finalText = transcriptionRef.current;
-          onRecordingComplete('', finalText);
-        }
-      };
-
-      try {
-        recorder.stop();
-      } catch {
-        // recorder.stop() failed — notify parent with transcription anyway
-        recorder.stream.getTracks().forEach((track) => track.stop());
-        const finalText = transcriptionRef.current;
-        onRecordingComplete('', finalText);
-      }
-      mediaRecorderRef.current = null;
-    } else {
-      // No MediaRecorder — notify parent with transcription only
-      const finalText = transcriptionRef.current;
-      onRecordingComplete('', finalText);
-    }
-  }, [onRecordingComplete, uploadAudioAndNotify]);
+    // Notify parent with transcription text
+    const finalText = transcriptionRef.current;
+    onRecordingComplete(finalText);
+  }, [onRecordingComplete]);
 
   const deleteTranscription = () => {
     setTranscription('');
     setInterimText('');
     setRecordingTime(0);
     setError(null);
-    setAudioUrl(null);
     transcriptionRef.current = '';
-    audioChunksRef.current = [];
-    onRecordingComplete('', '');
+    onRecordingComplete('');
   };
 
   const formatTime = (seconds: number) => {
@@ -360,28 +248,11 @@ export function VoiceRecorder({
         </div>
       )}
 
-      {/* Audio playback (existing recording) */}
-      {audioUrl && !isRecording && (
-        <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
-          <p className="text-xs text-blue-600 font-medium mb-2">🔊 Enregistrement audio</p>
-          <audio controls src={audioUrl} className="w-full h-10" preload="metadata" />
-        </div>
-      )}
-
-      {/* Upload in progress indicator */}
-      {isUploading && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
-          <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
-          <p className="text-sm text-amber-700">Upload de l&apos;audio en cours...</p>
-        </div>
-      )}
-
       {/* Start button */}
       {!isRecording && !transcription && isSupported && (
         <button
           onClick={startRecording}
-          disabled={isUploading}
-          className="w-full flex items-center justify-center gap-3 py-5 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] bg-red-50 hover:bg-red-100 border-red-200 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-3 py-5 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] bg-red-50 hover:bg-red-100 border-red-200"
         >
           <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-500">
             <Mic className="w-7 h-7 text-white" />

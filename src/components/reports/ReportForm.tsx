@@ -67,7 +67,6 @@ export function ReportForm({
   // =============================================
 
   const [textContent, setTextContent] = useState(existingReport?.text_content || '');
-  const [vocalUrl, setVocalUrl] = useState(existingReport?.vocal_url || '');
   const [vocalTranscription, setVocalTranscription] = useState(
     existingReport?.vocal_transcription || ''
   );
@@ -90,26 +89,14 @@ export function ReportForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isAudioUploading, setIsAudioUploading] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
 
   // =============================================
   // HANDLERS
   // =============================================
 
-  const handleRecordingComplete = (url: string, transcription?: string) => {
-    // Deletion case: both url and transcription are empty
-    if (!url && transcription === '') {
-      setVocalUrl('');
-      setVocalTranscription('');
-      return;
-    }
-    // Only update vocalUrl if a real URL is provided (not empty string)
-    if (url) {
-      setVocalUrl(url);
-    }
-    // Always update transcription (even if empty string)
-    setVocalTranscription(transcription || '');
+  const handleRecordingComplete = (transcription: string) => {
+    setVocalTranscription(transcription);
   };
 
   const handlePhotosBeforeChange = (newPhotos: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]) => {
@@ -199,7 +186,7 @@ export function ReportForm({
     intervention_id: intervention.id,
     technician_id: technicianId,
     text_content: textContent || null,
-    vocal_url: vocalUrl || null,
+    vocal_url: null,
     vocal_transcription: vocalTranscription || null,
     photos: allPhotos.length > 0 ? allPhotos : [],
     checklist: [],
@@ -282,7 +269,7 @@ export function ReportForm({
   const handleSubmit = async () => {
     console.log('[SUBMIT] Start - existingReport:', existingReport?.id, 'status:', existingReport?.status, 'revision_requested:', (existingReport as Record<string, unknown>)?.revision_requested);
 
-    if (!textContent && !vocalTranscription && !vocalUrl) {
+    if (!textContent && !vocalTranscription) {
       toast.error('Veuillez ajouter une description ou un enregistrement vocal');
       return;
     }
@@ -508,10 +495,7 @@ export function ReportForm({
           Plus simple que de taper sur le téléphone !
         </p>
         <VoiceRecorder
-          interventionId={intervention.id}
-          existingUrl={vocalUrl}
           onRecordingComplete={handleRecordingComplete}
-          onUploadStateChange={setIsAudioUploading}
         />
         {vocalTranscription && (
           <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -673,7 +657,7 @@ export function ReportForm({
         <div className="flex gap-3 max-w-2xl mx-auto">
           <button
             onClick={handleSaveDraft}
-            disabled={isSaving || isSubmitting || isAudioUploading}
+            disabled={isSaving || isSubmitting}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-4 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {isSaving ? (
@@ -685,7 +669,7 @@ export function ReportForm({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSaving || isSubmitting || isAudioUploading}
+            disabled={isSaving || isSubmitting}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 rounded-xl font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98] transition-all shadow-lg shadow-emerald-600/30"
           >
             {isSubmitting ? (
