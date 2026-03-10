@@ -9,6 +9,7 @@ interface VoiceRecorderProps {
   interventionId: string;
   existingUrl?: string;
   onRecordingComplete: (url: string, transcription?: string) => void;
+  onUploadStateChange?: (isUploading: boolean) => void;
 }
 
 // Type for Web Speech API
@@ -39,6 +40,7 @@ export function VoiceRecorder({
   interventionId,
   existingUrl,
   onRecordingComplete,
+  onUploadStateChange,
 }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
@@ -208,6 +210,7 @@ export function VoiceRecorder({
 
   const uploadAudioAndNotify = useCallback(async (audioBlob: Blob) => {
     setIsUploading(true);
+    onUploadStateChange?.(true);
     try {
       const supabase = createClient();
       const fileName = `intervention-${interventionId}-${Date.now()}.webm`;
@@ -238,10 +241,16 @@ export function VoiceRecorder({
     } catch (err) {
       console.error('[AUDIO] Erreur upload:', err);
       setError('Échec de l\'upload audio. La transcription a été conservée.');
+      // On upload failure, still notify parent with transcription only
+      const finalText = transcriptionRef.current;
+      if (finalText) {
+        onRecordingComplete('', finalText);
+      }
     } finally {
       setIsUploading(false);
+      onUploadStateChange?.(false);
     }
-  }, [interventionId, onRecordingComplete]);
+  }, [interventionId, onRecordingComplete, onUploadStateChange]);
 
   const stopRecording = useCallback(() => {
     isStoppingRef.current = true;
@@ -257,14 +266,7 @@ export function VoiceRecorder({
 
     stopRecordingCleanup();
 
-    // Send transcription to parent immediately (keep existing URL if any)
-    const finalText = transcriptionRef.current;
-    if (finalText) {
-      // Use existing audioUrl or empty string - the upload will update it
-      onRecordingComplete(audioUrl || '', finalText);
-    }
-
-    // Stop MediaRecorder and upload audio
+    // Stop MediaRecorder and upload audio — only notify parent AFTER upload succeeds
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       const recorder = mediaRecorderRef.current;
 
@@ -275,6 +277,12 @@ export function VoiceRecorder({
         if (audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
           uploadAudioAndNotify(audioBlob);
+        } else {
+          // No audio chunks — notify parent with transcription only
+          const finalText = transcriptionRef.current;
+          if (finalText) {
+            onRecordingComplete('', finalText);
+          }
         }
       };
 
@@ -284,8 +292,14 @@ export function VoiceRecorder({
         // ignore
       }
       mediaRecorderRef.current = null;
+    } else {
+      // No MediaRecorder — notify parent with transcription only
+      const finalText = transcriptionRef.current;
+      if (finalText) {
+        onRecordingComplete('', finalText);
+      }
     }
-  }, [onRecordingComplete, uploadAudioAndNotify, audioUrl]);
+  }, [onRecordingComplete, uploadAudioAndNotify]);
 
   const deleteTranscription = () => {
     setTranscription('');

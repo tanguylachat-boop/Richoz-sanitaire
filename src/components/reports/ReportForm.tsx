@@ -90,6 +90,7 @@ export function ReportForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAudioUploading, setIsAudioUploading] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
 
   // =============================================
@@ -97,8 +98,17 @@ export function ReportForm({
   // =============================================
 
   const handleRecordingComplete = (url: string, transcription?: string) => {
-    setVocalUrl(url);
-    if (transcription) {
+    // Deletion case: both url and transcription are empty
+    if (!url && transcription === '') {
+      setVocalUrl('');
+      setVocalTranscription('');
+      return;
+    }
+    // Only update vocalUrl if a real URL is provided (not empty string)
+    if (url) {
+      setVocalUrl(url);
+    }
+    if (transcription !== undefined) {
       setVocalTranscription(transcription);
     }
   };
@@ -502,6 +512,7 @@ export function ReportForm({
           interventionId={intervention.id}
           existingUrl={vocalUrl}
           onRecordingComplete={handleRecordingComplete}
+          onUploadStateChange={setIsAudioUploading}
         />
         {vocalTranscription && (
           <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -663,7 +674,7 @@ export function ReportForm({
         <div className="flex gap-3 max-w-2xl mx-auto">
           <button
             onClick={handleSaveDraft}
-            disabled={isSaving || isSubmitting}
+            disabled={isSaving || isSubmitting || isAudioUploading}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-4 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {isSaving ? (
@@ -675,7 +686,7 @@ export function ReportForm({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSaving || isSubmitting}
+            disabled={isSaving || isSubmitting || isAudioUploading}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 rounded-xl font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98] transition-all shadow-lg shadow-emerald-600/30"
           >
             {isSubmitting ? (
