@@ -108,9 +108,8 @@ export function ReportForm({
     if (url) {
       setVocalUrl(url);
     }
-    if (transcription !== undefined) {
-      setVocalTranscription(transcription);
-    }
+    // Always update transcription (even if empty string)
+    setVocalTranscription(transcription || '');
   };
 
   const handlePhotosBeforeChange = (newPhotos: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]) => {
@@ -283,7 +282,7 @@ export function ReportForm({
   const handleSubmit = async () => {
     console.log('[SUBMIT] Start - existingReport:', existingReport?.id, 'status:', existingReport?.status, 'revision_requested:', (existingReport as Record<string, unknown>)?.revision_requested);
 
-    if (!textContent && !vocalTranscription) {
+    if (!textContent && !vocalTranscription && !vocalUrl) {
       toast.error('Veuillez ajouter une description ou un enregistrement vocal');
       return;
     }

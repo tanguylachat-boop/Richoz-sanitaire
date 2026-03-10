@@ -56,6 +56,7 @@ export function VoiceRecorder({
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptionRef = useRef('');
+  const interimTextRef = useRef('');
   const isStoppingRef = useRef(false);
 
   // Check browser support
@@ -139,6 +140,7 @@ export function VoiceRecorder({
       transcriptionRef.current = finalText;
       setTranscription(finalText);
       setInterimText(interim);
+      interimTextRef.current = interim;
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -236,16 +238,14 @@ export function VoiceRecorder({
       // Update local state and parent with the real audio URL
       setAudioUrl(publicUrl);
       const finalText = transcriptionRef.current;
-      onRecordingComplete(publicUrl, finalText || undefined);
+      onRecordingComplete(publicUrl, finalText);
       console.log('[AUDIO] Upload réussi:', publicUrl);
     } catch (err) {
       console.error('[AUDIO] Erreur upload:', err);
       setError('Échec de l\'upload audio. La transcription a été conservée.');
       // On upload failure, still notify parent with transcription only
       const finalText = transcriptionRef.current;
-      if (finalText) {
-        onRecordingComplete('', finalText);
-      }
+      onRecordingComplete('', finalText);
     } finally {
       setIsUploading(false);
       onUploadStateChange?.(false);
@@ -254,6 +254,19 @@ export function VoiceRecorder({
 
   const stopRecording = useCallback(() => {
     isStoppingRef.current = true;
+
+    // Merge any pending interim text into the final transcription
+    // (some browsers never finalize the last speech result)
+    if (interimTextRef.current) {
+      const pending = interimTextRef.current.trim();
+      if (pending) {
+        transcriptionRef.current = transcriptionRef.current
+          ? `${transcriptionRef.current} ${pending}`
+          : pending;
+        setTranscription(transcriptionRef.current);
+      }
+      interimTextRef.current = '';
+    }
 
     if (recognitionRef.current) {
       try {
@@ -280,24 +293,23 @@ export function VoiceRecorder({
         } else {
           // No audio chunks — notify parent with transcription only
           const finalText = transcriptionRef.current;
-          if (finalText) {
-            onRecordingComplete('', finalText);
-          }
+          onRecordingComplete('', finalText);
         }
       };
 
       try {
         recorder.stop();
       } catch {
-        // ignore
+        // recorder.stop() failed — notify parent with transcription anyway
+        recorder.stream.getTracks().forEach((track) => track.stop());
+        const finalText = transcriptionRef.current;
+        onRecordingComplete('', finalText);
       }
       mediaRecorderRef.current = null;
     } else {
       // No MediaRecorder — notify parent with transcription only
       const finalText = transcriptionRef.current;
-      if (finalText) {
-        onRecordingComplete('', finalText);
-      }
+      onRecordingComplete('', finalText);
     }
   }, [onRecordingComplete, uploadAudioAndNotify]);
 
