@@ -16,7 +16,7 @@ interface LineItem {
   description: string;
   quantity: number;
   unit_price: number;
-  total: number;
+  total_price: number;
   item_type?: string;
   section_name?: string;
   catalog_service_id?: number | null;
@@ -84,6 +84,7 @@ export default function QuoteDetailPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       setIsLoading(true);
 
@@ -103,6 +104,8 @@ export default function QuoteDetailPage() {
           .order('created_at', { ascending: true }),
       ]);
 
+      if (cancelled) return;
+
       if (quoteRes.error || !quoteRes.data) {
         toast.error('Devis introuvable');
         router.push('/quotes');
@@ -112,14 +115,14 @@ export default function QuoteDetailPage() {
       setQuote(quoteRes.data as QuoteDetail);
       if (regiesRes.data) setRegies(regiesRes.data as Regie[]);
 
-      // Load items from quote_items table
+      // Load items from quote_items table — DB column is total_price
       if (itemsRes.data && itemsRes.data.length > 0) {
         const loadedItems: LineItem[] = (itemsRes.data as any[]).map((item) => ({
           id: item.id,
           description: item.description || '',
           quantity: Number(item.quantity) || 0,
           unit_price: Number(item.unit_price) || 0,
-          total: Number(item.total) || (Number(item.quantity) * Number(item.unit_price)) || 0,
+          total_price: Number(item.total_price) || (Number(item.quantity) * Number(item.unit_price)) || 0,
           item_type: item.item_type,
           section_name: item.section_name,
           catalog_service_id: item.catalog_service_id,
@@ -130,6 +133,7 @@ export default function QuoteDetailPage() {
       setIsLoading(false);
     };
     fetchData();
+    return () => { cancelled = true; };
   }, [quoteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGeneratePdf = async () => {
@@ -181,7 +185,9 @@ export default function QuoteDetailPage() {
         updated[index] = {
           ...updated[index],
           [field]: numVal,
-          total: field === 'quantity' ? numVal * updated[index].unit_price : updated[index].quantity * numVal,
+          total_price: field === 'quantity'
+            ? numVal * updated[index].unit_price
+            : updated[index].quantity * numVal,
         };
       } else {
         updated[index] = { ...updated[index], [field]: value };
@@ -191,7 +197,7 @@ export default function QuoteDetailPage() {
   };
 
   const addEditItem = () => {
-    setEditItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0, total: 0 }]);
+    setEditItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0, total_price: 0 }]);
   };
 
   const removeEditItem = (index: number) => {
@@ -202,8 +208,11 @@ export default function QuoteDetailPage() {
     if (!quote) return;
     setIsSaving(true);
     try {
-      const computedItems = editItems.map(i => ({ ...i, total: Math.round(i.quantity * i.unit_price * 100) / 100 }));
-      const totalHt = computedItems.reduce((sum, i) => sum + i.total, 0);
+      const computedItems = editItems.map(i => ({
+        ...i,
+        total_price: Math.round(i.quantity * i.unit_price * 100) / 100,
+      }));
+      const totalHt = computedItems.reduce((sum, i) => sum + i.total_price, 0);
       const taxRate = quote.tax_rate || 8.1;
       const taxAmount = Math.round(totalHt * taxRate / 100 * 100) / 100;
       const totalTtc = Math.round((totalHt + taxAmount) * 100) / 100;
@@ -235,6 +244,7 @@ export default function QuoteDetailPage() {
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          total_price: item.total_price,
           section_name: item.section_name || 'Prestations',
         }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -266,18 +276,13 @@ export default function QuoteDetailPage() {
     if (!quote) return;
     setIsCreatingCounter(true);
     try {
-      // Generate counter-quote number: replace D prefix with CD-
-      const counterNumber = quote.quote_number
-        ? quote.quote_number.replace(/^D/, 'CD-')
-        : null;
-
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
       const validUntil = new Date();
       validUntil.setDate(validUntil.getDate() + 30);
 
-      // Duplicate the quote - use same column names as quotes/new/page.tsx
+      // Duplicate the quote — columns match DB schema exactly
       const insertData = {
         user_id: user?.id || null,
         client_name: quote.client_name,
@@ -307,7 +312,7 @@ export default function QuoteDetailPage() {
         throw error;
       }
 
-      // Copy quote_items to the new counter-quote
+      // Copy quote_items to the new counter-quote — include total_price
       if (quoteItems.length > 0) {
         const newItems = quoteItems.map((item) => ({
           quote_id: (newQuote as { id: string }).id,
@@ -316,6 +321,7 @@ export default function QuoteDetailPage() {
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          total_price: item.total_price,
           section_name: item.section_name || 'Prestations',
         }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -463,7 +469,7 @@ export default function QuoteDetailPage() {
         </div>
       </div>
 
-      {/* PDF Preview */}
+      {/* PDF Preview — only if pdf_url exists (fixes BUG 2) */}
       {quote.pdf_url && !isEditing && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
@@ -627,11 +633,11 @@ export default function QuoteDetailPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {items.map((item, i) => (
-                      <tr key={i}>
+                      <tr key={item.id || i}>
                         <td className="px-6 py-3 text-sm text-gray-900">{item.description}</td>
                         <td className="px-6 py-3 text-sm text-gray-600 text-right">{item.quantity}</td>
                         <td className="px-6 py-3 text-sm text-gray-600 text-right">{formatCHF(item.unit_price)}</td>
-                        <td className="px-6 py-3 text-sm font-medium text-gray-900 text-right">{formatCHF(item.total)}</td>
+                        <td className="px-6 py-3 text-sm font-medium text-gray-900 text-right">{formatCHF(item.total_price)}</td>
                       </tr>
                     ))}
                   </tbody>
