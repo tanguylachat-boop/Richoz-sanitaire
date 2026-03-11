@@ -221,8 +221,15 @@ export default function QuoteDetailPage() {
     });
   };
 
-  const addEditItem = () => {
-    setEditItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0, total_price: 0 }]);
+  const addEditItem = (type: 'service' | 'material' = 'service') => {
+    setEditItems(prev => [...prev, {
+      description: '',
+      quantity: 1,
+      unit_price: 0,
+      total_price: 0,
+      item_type: type,
+      section_name: type === 'service' ? 'Prestations' : 'Fournitures',
+    }]);
   };
 
   const removeEditItem = (index: number) => {
@@ -638,11 +645,16 @@ export default function QuoteDetailPage() {
                     </button>
                   </div>
                 ))}
-                <button onClick={addEditItem} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
-                  <Plus className="w-4 h-4" />
-                  Ajouter une ligne
-                </button>
-              </div>
+                <div className="flex gap-2">
+  <button onClick={() => addEditItem('service')} className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-blue-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+    <Plus className="w-4 h-4" />
+    Prestation
+  </button>
+  <button onClick={() => addEditItem('material')} className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-amber-300 rounded-xl text-sm font-medium text-amber-500 hover:border-amber-400 hover:text-amber-600 transition-colors">
+    <Plus className="w-4 h-4" />
+    Fourniture
+  </button>
+</div>
             ) : items.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
