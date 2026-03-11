@@ -115,7 +115,6 @@ export default function QuoteDetailPage() {
       setQuote(quoteRes.data as QuoteDetail);
       if (regiesRes.data) setRegies(regiesRes.data as Regie[]);
 
-      // Load items from quote_items table — DB column is total_price
       if (itemsRes.data && itemsRes.data.length > 0) {
         const loadedItems: LineItem[] = (itemsRes.data as any[]).map((item) => ({
           id: item.id,
@@ -135,6 +134,8 @@ export default function QuoteDetailPage() {
     fetchData();
     return () => { cancelled = true; };
   }, [quoteId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Generate PDF ───────────────────────────────────────────────────────────
 
   const handleGeneratePdf = async () => {
     if (!quote) return;
@@ -174,7 +175,8 @@ export default function QuoteDetailPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (!json.pdf_url) throw new Error('Pas de pdf_url dans la réponse');
-  
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from('quotes').update({ pdf_url: json.pdf_url }).eq('id', quote.id);
       setQuote({ ...quote, pdf_url: json.pdf_url });
       toast.success('PDF généré avec succès !');
@@ -257,18 +259,18 @@ export default function QuoteDetailPage() {
         total_ht: totalHt,
         tax_amount: taxAmount,
         total_ttc: totalTtc,
-        pdf_url: null, // reset PDF since data changed
+        pdf_url: null,
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any).from('quotes').update(updateData).eq('id', quote.id);
       if (error) throw error;
 
-      // Delete old quote_items and insert new ones
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from('quote_items').delete().eq('quote_id', quote.id);
 
       if (computedItems.length > 0) {
+        // total_price is a generated column — do NOT include it in INSERT
         const newItems = computedItems.map((item) => ({
           quote_id: quote.id,
           item_type: item.item_type || 'service',
@@ -283,7 +285,6 @@ export default function QuoteDetailPage() {
         if (itemsError) throw itemsError;
       }
 
-      // Update local state
       const selectedRegie = regies.find(r => r.id === editRegieId);
       setQuote({
         ...quote,
@@ -301,19 +302,17 @@ export default function QuoteDetailPage() {
     }
   };
 
-  // ─── Counter-quote (contre-devis) ──────────────────────────────────────────
+  // ─── Counter-quote ──────────────────────────────────────────────────────────
 
   const handleCreateCounterQuote = async () => {
     if (!quote) return;
     setIsCreatingCounter(true);
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
       const validUntil = new Date();
       validUntil.setDate(validUntil.getDate() + 30);
 
-      // Duplicate the quote — columns match DB schema exactly
       const insertData = {
         user_id: user?.id || null,
         client_name: quote.client_name,
@@ -329,8 +328,6 @@ export default function QuoteDetailPage() {
         parent_quote_id: quote.id,
       };
 
-      console.log('Contre-devis insertData:', insertData);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: newQuote, error } = await (supabase as any)
         .from('quotes')
@@ -343,7 +340,7 @@ export default function QuoteDetailPage() {
         throw error;
       }
 
-      // Copy quote_items to the new counter-quote — include total_price
+      // total_price is a generated column — do NOT include it in INSERT
       if (quoteItems.length > 0) {
         const newItems = quoteItems.map((item) => ({
           quote_id: (newQuote as { id: string }).id,
@@ -380,7 +377,6 @@ export default function QuoteDetailPage() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('edit') === 'true') {
       startEditing();
-      // Remove the query param from URL
       window.history.replaceState({}, '', `/quotes/${quoteId}`);
     }
   }, [quote, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -404,7 +400,6 @@ export default function QuoteDetailPage() {
   const items: LineItem[] = quoteItems;
   const isCounterQuote = quote.quote_number?.startsWith('CD-');
 
-  // Compute edit totals for live preview
   const editSubtotal = editItems.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
   const editTaxRate = quote.tax_rate || 8.1;
   const editTaxAmount = Math.round(editSubtotal * editTaxRate / 100 * 100) / 100;
@@ -499,7 +494,7 @@ export default function QuoteDetailPage() {
         </div>
       </div>
 
-      {/* PDF Preview — only if pdf_url exists (fixes BUG 2) */}
+      {/* PDF Preview */}
       {quote.pdf_url && !isEditing && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
@@ -527,7 +522,6 @@ export default function QuoteDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT: Client & Infos */}
         <div className="space-y-6">
-          {/* Client */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-blue-600" />Client
@@ -558,7 +552,6 @@ export default function QuoteDetailPage() {
             </div>
           </div>
 
-          {/* Régie */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Building2 className="w-5 h-5 text-blue-600" />Régie
@@ -581,7 +574,6 @@ export default function QuoteDetailPage() {
             )}
           </div>
 
-          {/* Infos */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-600" />Informations
@@ -614,7 +606,6 @@ export default function QuoteDetailPage() {
 
         {/* RIGHT: Items & Totaux */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Lignes du devis */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
               <h2 className="font-semibold text-gray-900">Lignes du devis</h2>
@@ -622,8 +613,13 @@ export default function QuoteDetailPage() {
             {isEditing ? (
               <div className="p-4 space-y-3">
                 {editItems.map((item, i) => (
-                  <div key={i} className="flex items-start gap-2 p-3 bg-gray-50 rounded-xl">
+                  <div key={i} className={`flex items-start gap-2 p-3 rounded-xl ${item.item_type === 'material' ? 'bg-amber-50' : 'bg-gray-50'}`}>
                     <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${item.item_type === 'material' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {item.item_type === 'material' ? 'Fourniture' : 'Prestation'}
+                        </span>
+                      </div>
                       <input value={item.description} onChange={(e) => updateEditItem(i, 'description', e.target.value)} placeholder="Description" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
                       <div className="flex gap-2">
                         <div className="flex-1">
@@ -646,15 +642,16 @@ export default function QuoteDetailPage() {
                   </div>
                 ))}
                 <div className="flex gap-2">
-  <button onClick={() => addEditItem('service')} className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-blue-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
-    <Plus className="w-4 h-4" />
-    Prestation
-  </button>
-  <button onClick={() => addEditItem('material')} className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-amber-300 rounded-xl text-sm font-medium text-amber-500 hover:border-amber-400 hover:text-amber-600 transition-colors">
-    <Plus className="w-4 h-4" />
-    Fourniture
-  </button>
-</div>
+                  <button onClick={() => addEditItem('service')} className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-blue-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                    <Plus className="w-4 h-4" />
+                    Prestation
+                  </button>
+                  <button onClick={() => addEditItem('material')} className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-amber-300 rounded-xl text-sm font-medium text-amber-500 hover:border-amber-400 hover:text-amber-600 transition-colors">
+                    <Plus className="w-4 h-4" />
+                    Fourniture
+                  </button>
+                </div>
+              </div>
             ) : items.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -683,7 +680,6 @@ export default function QuoteDetailPage() {
             )}
           </div>
 
-          {/* Récapitulatif montants */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4">Récapitulatif</h2>
             <div className="space-y-3">
