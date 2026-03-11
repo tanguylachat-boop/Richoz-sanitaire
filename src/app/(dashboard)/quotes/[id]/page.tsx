@@ -244,7 +244,6 @@ export default function QuoteDetailPage() {
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total_price: item.total_price,
           section_name: item.section_name || 'Prestations',
         }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -321,7 +320,6 @@ export default function QuoteDetailPage() {
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total_price: item.total_price,
           section_name: item.section_name || 'Prestations',
         }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
