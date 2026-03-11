@@ -178,7 +178,7 @@ export default function QuoteDetailPage() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from('quotes').update({ pdf_url: json.pdf_url }).eq('id', quote.id);
-      setQuote({ ...quote, pdf_url: json.pdf_url });
+      setQuote({ ...quote, pdf_url: json.pdf_url + '?t=' + Date.now() });
       toast.success('PDF généré avec succès !');
     } catch (err) {
       console.error(err);
