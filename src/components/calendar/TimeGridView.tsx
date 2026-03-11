@@ -305,6 +305,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                         : '';
                       const initials = getTechInitials(iv.technician);
                       const typeLabel = iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
+                      const displayLabel = iv.work_order_number || iv.title;
 
                       return (
                         <button
@@ -312,12 +313,12 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                           onClick={() => onInterventionClick(iv)}
                           className={`absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5] ${color}`}
                           style={{ top, height: Math.max(height, 24) }}
-                          title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.title}`}
+                          title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${displayLabel}`}
                         >
                           <div className="px-2 py-1 h-full flex flex-col">
                             <div className="flex items-center gap-1">
                               <span className="text-[10px]">{typeLabel}</span>
-                              <span className="font-semibold truncate">{iv.title}</span>
+                              <span className="font-semibold truncate">{displayLabel}</span>
                             </div>
                             {height >= 40 && (
                               <span className="text-white/80 text-[10px]">
