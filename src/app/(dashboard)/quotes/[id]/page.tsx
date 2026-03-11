@@ -143,13 +143,38 @@ export default function QuoteDetailPage() {
       const res = await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote_id: quote.id }),
+        body: JSON.stringify({
+          quote_id: quote.id,
+          quote_number: quote.quote_number,
+          client_name: quote.client_name,
+          client_address: quote.client_address || null,
+          regie_name: quote.regie?.name || null,
+          description: quote.description || null,
+          items: quoteItems.map((item) => ({
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total_price,
+            type: item.item_type || 'service',
+            section_name: item.section_name || 'Prestations',
+          })),
+          total_ht: quote.total_ht,
+          tax_rate: quote.tax_rate,
+          tax_amount: quote.tax_amount,
+          total_ttc: quote.total_ttc,
+          valid_until: quote.valid_until,
+          created_at: quote.created_at,
+          company: {
+            name: 'RICHOZ Sanitaire',
+            address: 'Route de Chancy 50 - 1213 Petit-Lancy',
+            phone: '+41 22 313 00 27',
+          },
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (!json.pdf_url) throw new Error('Pas de pdf_url dans la réponse');
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
       await (supabase as any).from('quotes').update({ pdf_url: json.pdf_url }).eq('id', quote.id);
       setQuote({ ...quote, pdf_url: json.pdf_url });
       toast.success('PDF généré avec succès !');
