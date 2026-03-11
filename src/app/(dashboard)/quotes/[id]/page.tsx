@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
   ChevronLeft, FileText, Building2, MapPin, Calendar,
-  Download, FileOutput, Loader2, User, Phone, Mail,
+  Download, FileOutput, Loader2, User,
   Pencil, Save, Plus, Trash2, X, Copy,
 } from 'lucide-react';
 
@@ -32,8 +32,6 @@ interface QuoteDetail {
   quote_number: string | null;
   client_name: string;
   client_address: string | null;
-  client_email: string | null;
-  client_phone: string | null;
   description: string | null;
   regie_id: string | null;
   total_ht: number;
@@ -102,7 +100,7 @@ export default function QuoteDetailPage() {
           .from('quote_items')
           .select('*')
           .eq('quote_id', quoteId)
-          .order('sort_order', { ascending: true }),
+          .order('created_at', { ascending: true }),
       ]);
 
       if (quoteRes.error || !quoteRes.data) {
@@ -230,16 +228,14 @@ export default function QuoteDetailPage() {
       await (supabase as any).from('quote_items').delete().eq('quote_id', quote.id);
 
       if (computedItems.length > 0) {
-        const newItems = computedItems.map((item, index) => ({
+        const newItems = computedItems.map((item) => ({
           quote_id: quote.id,
+          item_type: item.item_type || 'service',
+          catalog_service_id: item.catalog_service_id || null,
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total: item.total,
-          item_type: item.item_type || 'service',
           section_name: item.section_name || 'Prestations',
-          catalog_service_id: item.catalog_service_id || null,
-          sort_order: index,
         }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: itemsError } = await (supabase as any).from('quote_items').insert(newItems);
@@ -283,22 +279,18 @@ export default function QuoteDetailPage() {
 
       // Duplicate the quote - use same column names as quotes/new/page.tsx
       const insertData = {
+        user_id: user?.id || null,
         client_name: quote.client_name,
-        client_email: quote.client_email || null,
-        client_phone: quote.client_phone || null,
         client_address: quote.client_address || null,
         regie_id: quote.regie_id || null,
-        quote_number: counterNumber,
         description: quote.description || null,
+        status: 'draft' as const,
         total_ht: quote.total_ht || 0,
         tax_rate: quote.tax_rate || 8.1,
         tax_amount: quote.tax_amount || 0,
         total_ttc: quote.total_ttc || 0,
         valid_until: validUntil.toISOString().split('T')[0],
-        status: 'draft' as const,
         parent_quote_id: quote.id,
-        user_id: user?.id || null,
-        pdf_url: null,
       };
 
       console.log('Contre-devis insertData:', insertData);
@@ -317,16 +309,14 @@ export default function QuoteDetailPage() {
 
       // Copy quote_items to the new counter-quote
       if (quoteItems.length > 0) {
-        const newItems = quoteItems.map((item, index) => ({
+        const newItems = quoteItems.map((item) => ({
           quote_id: (newQuote as { id: string }).id,
+          item_type: item.item_type || 'service',
+          catalog_service_id: item.catalog_service_id || null,
           description: item.description,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total: item.total || item.quantity * item.unit_price,
-          item_type: item.item_type || 'service',
           section_name: item.section_name || 'Prestations',
-          catalog_service_id: item.catalog_service_id || null,
-          sort_order: index,
         }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: itemsError } = await (supabase as any)
@@ -488,11 +478,12 @@ export default function QuoteDetailPage() {
               Ouvrir dans un nouvel onglet
             </a>
           </div>
-          <iframe
+          <embed
             src={quote.pdf_url}
-            className="w-full border-0"
-            style={{ height: '600px' }}
-            title={`PDF Devis ${quote.quote_number || ''}`}
+            type="application/pdf"
+            width="100%"
+            height="600px"
+            className="w-full"
           />
         </div>
       )}
@@ -524,18 +515,6 @@ export default function QuoteDetailPage() {
                     <div className="flex items-start gap-2 text-sm text-gray-600">
                       <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
                       <span>{quote.client_address}</span>
-                    </div>
-                  )}
-                  {quote.client_email && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span>{quote.client_email}</span>
-                    </div>
-                  )}
-                  {quote.client_phone && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span>{quote.client_phone}</span>
                     </div>
                   )}
                 </>
