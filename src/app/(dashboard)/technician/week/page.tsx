@@ -31,6 +31,7 @@ interface Intervention {
   date_planned: string | null;
   estimated_duration_minutes: number;
   status: string;
+  intervention_type?: 'depannage' | 'chantier' | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -61,7 +62,7 @@ export default function TechnicianWeekPage() {
 
     const { data, error } = await supabase
       .from('interventions')
-      .select('id, title, address, date_planned, estimated_duration_minutes, status')
+      .select('id, title, address, date_planned, estimated_duration_minutes, status, intervention_type')
       .gte('date_planned', currentWeekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
       .neq('status', 'annule')
@@ -203,29 +204,36 @@ export default function TechnicianWeekPage() {
                   {isExpanded && hasInterventions && (
                     <div className="border-t border-gray-100 divide-y divide-gray-100">
                       {dayInterventions.map((intervention) => {
-                        const startTime = intervention.date_planned 
-                          ? new Date(intervention.date_planned) 
+                        const startTime = intervention.date_planned
+                          ? new Date(intervention.date_planned)
                           : null;
-                        const endTime = startTime 
-                          ? addMinutes(startTime, intervention.estimated_duration_minutes || 60) 
+                        const endTime = startTime
+                          ? addMinutes(startTime, intervention.estimated_duration_minutes || 60)
                           : null;
                         const statusColor = STATUS_COLORS[intervention.status] || STATUS_COLORS.nouveau;
+                        const isChantier = intervention.intervention_type === 'chantier';
+                        const interventionHref = isChantier
+                          ? `/technician/chantier/${intervention.id}`
+                          : `/technician/report/${intervention.id}`;
 
                         return (
                           <Link
                             key={intervention.id}
-                            href={`/technician/report/${intervention.id}`}
+                            href={interventionHref}
                             className="flex items-start gap-3 p-4 active:bg-gray-50"
                           >
                             {/* Status indicator */}
                             <div className={`w-1 h-12 rounded-full ${statusColor} flex-shrink-0`} />
-                            
+
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
                                 <Clock className="w-3.5 h-3.5" />
                                 <span>
                                   {startTime ? format(startTime, 'HH:mm') : '--:--'}
                                   {endTime && ` - ${format(endTime, 'HH:mm')}`}
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isChantier ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {isChantier ? '🏗️' : '🔧'}
                                 </span>
                               </div>
                               <p className="font-medium text-gray-900 truncate">

@@ -29,6 +29,7 @@ interface Intervention {
   status: string;
   priority: number;
   client_info: { name?: string; phone?: string } | null;
+  intervention_type?: 'depannage' | 'chantier' | null;
 }
 
 interface RevisionReport {
@@ -73,7 +74,7 @@ export default function TechnicianTodayPage() {
 
     const { data, error } = await supabase
       .from('interventions')
-      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, client_info')
+      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, client_info, intervention_type')
       .gte('date_planned', startOfDay)
       .lte('date_planned', endOfDay)
       .neq('status', 'annule')
@@ -220,10 +221,15 @@ export default function TechnicianTodayPage() {
               const isCompleted = intervention.status === 'termine' || intervention.status === 'ready_to_bill' || intervention.status === 'billed';
               const isUrgent = intervention.priority > 0;
 
+              const isChantier = intervention.intervention_type === 'chantier';
+              const interventionHref = isChantier
+                ? `/technician/chantier/${intervention.id}`
+                : `/technician/report/${intervention.id}`;
+
               return (
                 <Link
                   key={intervention.id}
-                  href={`/technician/report/${intervention.id}`}
+                  href={interventionHref}
                   className={`block bg-white rounded-2xl shadow-sm overflow-hidden transition-all active:scale-[0.98] ${
                     isCompleted ? 'opacity-60' : ''
                   }`}
@@ -250,9 +256,14 @@ export default function TechnicianTodayPage() {
                           )}
                         </span>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${status.bgColor} ${status.color}`}>
-                        {status.label}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${isChantier ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {isChantier ? '🏗️ Chantier' : '🔧 Dépannage'}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${status.bgColor} ${status.color}`}>
+                          {status.label}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Title */}
@@ -295,7 +306,7 @@ export default function TechnicianTodayPage() {
                     {/* Arrow indicator */}
                     <div className="flex items-center justify-end mt-3 pt-3 border-t border-gray-100">
                       <span className="text-sm text-blue-600 font-medium flex items-center gap-1">
-                        {isCompleted ? 'Voir le rapport' : 'Faire le rapport'}
+                        {isChantier ? 'Voir le chantier' : isCompleted ? 'Voir le rapport' : 'Faire le rapport'}
                         <ChevronRight className="w-4 h-4" />
                       </span>
                     </div>
