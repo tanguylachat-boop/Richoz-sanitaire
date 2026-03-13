@@ -92,6 +92,7 @@ export default function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('new');
 
   const [urgentFilterActive, setUrgentFilterActive] = useState(false);
+  const [regieFilter, setRegieFilter] = useState<string | null>(null);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<EmailInbox | null>(null);
@@ -148,9 +149,11 @@ export default function InboxPage() {
   const sortByDateDesc = (a: EmailInbox, b: EmailInbox) =>
     new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
 
-  const filteredEmails = urgentFilterActive
-    ? enrichedEmails.filter(isEmailUrgent)
-    : enrichedEmails;
+  const filteredEmails = enrichedEmails.filter((email) => {
+    if (urgentFilterActive && !isEmailUrgent(email)) return false;
+    if (regieFilter && email.regie_id !== regieFilter) return false;
+    return true;
+  });
 
   const emailsByRegie = regies.reduce((acc, regie) => {
     acc[regie.id] = filteredEmails
@@ -200,6 +203,16 @@ export default function InboxPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-gray-900">Boîte de réception</h2>
         <div className="flex items-center gap-3">
+          <select
+            value={regieFilter || ''}
+            onChange={(e) => setRegieFilter(e.target.value || null)}
+            className="h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Toutes les régies</option>
+            {regies.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             {STATUS_FILTERS.map((f) => (
               <button key={f.value} onClick={() => setStatusFilter(f.value)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${statusFilter === f.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{f.label}</button>
