@@ -140,12 +140,19 @@ export default function InboxPage() {
     return matchedRegieId ? { ...email, regie_id: matchedRegieId } : email;
   });
 
+  const sortByDateDesc = (a: EmailInbox, b: EmailInbox) =>
+    new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
+
   const emailsByRegie = regies.reduce((acc, regie) => {
-    acc[regie.id] = enrichedEmails.filter((email) => email.regie_id === regie.id);
+    acc[regie.id] = enrichedEmails
+      .filter((email) => email.regie_id === regie.id)
+      .sort(sortByDateDesc);
     return acc;
   }, {} as Record<string, EmailInbox[]>);
 
-  const otherEmails = enrichedEmails.filter((email) => !email.regie_id);
+  const otherEmails = enrichedEmails
+    .filter((email) => !email.regie_id)
+    .sort(sortByDateDesc);
 
   const totalEmails = enrichedEmails.length;
   const regieEmails = enrichedEmails.filter((e) => e.regie_id).length;
