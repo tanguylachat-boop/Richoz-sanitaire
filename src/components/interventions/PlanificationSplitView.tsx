@@ -39,6 +39,19 @@ export interface PlanificationEmail {
   body_html: string | null;
   regie_id: string | null;
   attachment_urls: string[] | null;
+  work_order_number?: string | null;
+  extracted_data?: {
+    title?: string;
+    address?: string;
+    tenant_name?: string;
+    tenant_phone?: string;
+    tenant_email?: string;
+    description?: string;
+    priority?: string;
+    email_type?: string;
+    keys_info?: string;
+    owner_name?: string;
+  } | null;
 }
 
 export interface PlanificationTechnician {
@@ -108,13 +121,21 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
 
   const supabase = createClient();
 
-  // Pré-remplir depuis l'email si présent
+  // Pré-remplir depuis l'email + extracted_data si présent
   useEffect(() => {
     if (email) {
+      const ed = email.extracted_data;
       setFormData((prev) => ({
         ...prev,
-        title: email.subject || '',
+        title: ed?.title || email.subject || '',
+        description: ed?.description || '',
+        address: ed?.address || '',
         regie_id: email.regie_id || '',
+        work_order_number: email.work_order_number || '',
+        client_name: ed?.tenant_name || '',
+        client_phone: ed?.tenant_phone || '',
+        client_email: ed?.tenant_email || '',
+        priority: ed?.priority === 'urgent' ? 1 : 0,
       }));
     }
   }, [email]);
