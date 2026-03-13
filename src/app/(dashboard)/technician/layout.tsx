@@ -3,7 +3,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle } from 'lucide-react';
+import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface TechnicianLayoutProps {
@@ -31,6 +31,12 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
       icon: CalendarDays,
       label: 'Semaine',
       isActive: pathname === '/technician/week',
+    },
+    {
+      href: '/technician/chantier',
+      icon: HardHat,
+      label: 'Chantiers',
+      isActive: pathname.startsWith('/technician/chantier'),
     },
     {
       href: '/technician/leave',
@@ -63,8 +69,6 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
               className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${
                 item.isActive
                   ? 'text-blue-600'
-                  : item.disabled
-                  ? 'text-gray-300 pointer-events-none'
                   : 'text-gray-500 active:text-blue-600'
               }`}
             >
