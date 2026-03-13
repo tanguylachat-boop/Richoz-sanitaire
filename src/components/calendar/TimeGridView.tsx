@@ -71,7 +71,7 @@ interface TimeGridViewProps {
 export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick }: TimeGridViewProps) {
   // Build technician → color map from unique technician IDs
   const techColorMap = useMemo(() => {
-    const uniqueIds = [...new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))] as string[];
+    const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
     uniqueIds.sort(); // stable ordering
     const map: Record<string, string> = {};
     uniqueIds.forEach((id, idx) => { map[id] = TECHNICIAN_COLORS[idx % TECHNICIAN_COLORS.length]; });
