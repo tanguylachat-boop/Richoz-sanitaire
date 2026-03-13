@@ -11,8 +11,9 @@ import {
   ChevronLeft, User, MapPin, Building2, Clock, CheckCircle, XCircle,
   Phone, FileText, Image as ImageIcon, Package,
   CreditCard, Loader2, AlertTriangle, MessageSquare,
-  X, ZoomIn, Archive, PenTool, Download,
+  X, ZoomIn, Archive, PenTool, Download, FileDown,
 } from 'lucide-react';
+import { generateReportDocx } from '@/lib/generate-report-docx';
 
 interface Report {
   id: string;
@@ -54,6 +55,7 @@ export default function ValidateReportDetailPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [isGeneratingDocx, setIsGeneratingDocx] = useState(false);
   // Editable fields for secretary
   const [editTextContent, setEditTextContent] = useState('');
   const [editSuppliesText, setEditSuppliesText] = useState('');
@@ -200,6 +202,51 @@ export default function ValidateReportDetailPage() {
     }
   };
 
+  const handleDownloadDocx = async () => {
+    if (!report) return;
+    setIsGeneratingDocx(true);
+    try {
+      const intervention = report.intervention;
+      const technician = report.technician;
+      const clientInfo = intervention?.client_info as { name?: string; phone?: string } | null;
+
+      const blob = await generateReportDocx({
+        title: intervention?.title || "Rapport d'intervention",
+        technicianName: technician ? `${technician.first_name} ${technician.last_name}` : 'Non assigné',
+        technicianPhone: technician?.phone || undefined,
+        regieName: intervention?.regie?.name,
+        address: intervention?.address,
+        clientName: clientInfo?.name,
+        clientPhone: clientInfo?.phone,
+        datePlanned: intervention?.date_planned
+          ? format(new Date(intervention.date_planned), "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })
+          : undefined,
+        workOrderNumber: intervention?.work_order_number || undefined,
+        textContent: editTextContent || undefined,
+        suppliesText: editSuppliesText || undefined,
+        workDurationMinutes: editWorkDuration || undefined,
+        isBillable: report.is_billable,
+        billableReason: report.billable_reason || undefined,
+        isCompleted: report.is_completed !== false,
+        createdAt: format(new Date(report.created_at), "d MMMM yyyy 'à' HH:mm", { locale: fr }),
+      });
+
+      const fileName = `rapport-${intervention?.work_order_number || report.id}.docx`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Document Word généré');
+    } catch (error) {
+      console.error('Erreur génération DOCX:', error);
+      toast.error('Erreur lors de la génération du document Word');
+    } finally {
+      setIsGeneratingDocx(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -316,29 +363,50 @@ export default function ValidateReportDetailPage() {
         </div>
       )}
 
-      {/* PDF Banner */}
-      {report.pdf_url && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
+      {/* PDF & Word Banner */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        {report.pdf_url && (
+          <div className="flex-1 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <FileText className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">Rapport PDF</p>
+                <p className="text-sm text-gray-500">Généré à la validation</p>
+              </div>
+            </div>
+            <a
+              href={report.pdf_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 py-2.5 px-5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all active:scale-[0.98] shadow-lg shadow-red-600/30"
+            >
+              <Download className="w-4 h-4" />
+              PDF
+            </a>
+          </div>
+        )}
+        <div className={`${report.pdf_url ? '' : 'flex-1'} bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <FileText className="w-5 h-5 text-red-600" />
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <FileDown className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">Rapport PDF disponible</p>
-              <p className="text-sm text-gray-500">Généré automatiquement à la validation</p>
+              <p className="font-semibold text-gray-900">Rapport Word</p>
+              <p className="text-sm text-gray-500">Télécharger en .docx</p>
             </div>
           </div>
-          <a
-            href={report.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 py-2.5 px-5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all active:scale-[0.98] shadow-lg shadow-red-600/30"
+          <button
+            onClick={handleDownloadDocx}
+            disabled={isGeneratingDocx}
+            className="flex items-center gap-2 py-2.5 px-5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/30"
           >
-            <Download className="w-4 h-4" />
-            Télécharger PDF
-          </a>
+            {isGeneratingDocx ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            {isGeneratingDocx ? 'Génération...' : 'Word'}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
