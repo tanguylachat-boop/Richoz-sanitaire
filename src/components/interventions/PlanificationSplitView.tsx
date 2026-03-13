@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { getTechniciansOnLeave } from '@/lib/leave-utils';
 import {
   format,
   startOfWeek,
@@ -83,6 +84,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const [isLoading, setIsLoading] = useState(false);
   const [calendarWeek, setCalendarWeek] = useState(new Date());
   const [calendarInterventions, setCalendarInterventions] = useState<CalendarIntervention[]>([]);
+  const [techniciansOnLeave, setTechniciansOnLeave] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     title: '', description: '', address: '', date_planned: '', time_planned: '',
@@ -126,6 +128,25 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   }, [weekStart, weekEnd, formData.technician_id]);
 
   useEffect(() => { fetchCalendarData(); }, [fetchCalendarData]);
+
+  // Fetch technicians on leave when date changes
+  useEffect(() => {
+    if (formData.date_planned) {
+      getTechniciansOnLeave(formData.date_planned).then(setTechniciansOnLeave);
+    } else {
+      setTechniciansOnLeave([]);
+    }
+  }, [formData.date_planned]);
+
+  // Warn if assigned technician is on leave for selected date
+  useEffect(() => {
+    if (formData.technician_id && techniciansOnLeave.includes(formData.technician_id)) {
+      const tech = technicians.find(t => t.id === formData.technician_id);
+      if (tech) {
+        toast.warning(`${getTechName(tech)} est en congé ce jour-là`);
+      }
+    }
+  }, [techniciansOnLeave, formData.technician_id]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -310,7 +331,14 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
               <label className="block text-sm font-medium text-gray-700 mb-1">Technicien</label>
               <select name="technician_id" value={formData.technician_id} onChange={handleChange} className={selectClass}>
                 <option value="">-- Non assigné --</option>
-                {technicians.map((tech) => <option key={tech.id} value={tech.id}>{getTechName(tech)}</option>)}
+                {technicians.map((tech) => {
+                  const onLeave = techniciansOnLeave.includes(tech.id);
+                  return (
+                    <option key={tech.id} value={tech.id} disabled={onLeave}>
+                      {getTechName(tech)}{onLeave ? ' (En congé)' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div>
