@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Filter, ChevronLeft, ChevronRight, User, CalendarDays, CalendarRange, Calendar, Loader2 } from 'lucide-react';
+import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Calendar, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
-import { TimeGridView } from '@/components/calendar/TimeGridView';
+import { TimeGridView, TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
 import type { LeaveEntry, BirthdayEntry } from '@/components/calendar/TimeGridView';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -32,9 +32,7 @@ interface Technician { id: string; first_name: string | null; last_name: string 
 interface Regie { id: string; name: string; }
 interface CalendarBlock { id: string; title: string; date_planned: string; estimated_duration_minutes: number; status: string; technician_id: string | null; intervention_type?: string | null; work_order_number?: string | null; }
 
-const TYPE_COLORS: Record<string, string> = { depannage: 'bg-red-500 hover:bg-red-600', chantier: 'bg-blue-500 hover:bg-blue-600' };
-const STATUS_COLORS: Record<string, string> = { nouveau: 'bg-blue-500 hover:bg-blue-600', planifie: 'bg-amber-500 hover:bg-amber-600', en_cours: 'bg-orange-500 hover:bg-orange-600', termine: 'bg-emerald-500 hover:bg-emerald-600', ready_to_bill: 'bg-amber-400 hover:bg-amber-500', billed: 'bg-violet-500 hover:bg-violet-600', annule: 'bg-gray-400 hover:bg-gray-500' };
-const getInterventionColor = (iv: Intervention) => (iv.intervention_type && TYPE_COLORS[iv.intervention_type]) ? TYPE_COLORS[iv.intervention_type] : STATUS_COLORS[iv.status] || 'bg-gray-500 hover:bg-gray-600';
+const UNASSIGNED_COLOR = '#9CA3AF';
 
 const VIEW_TABS: { value: CalendarView; label: string; icon: typeof CalendarDays }[] = [
   { value: 'month', label: 'Mois', icon: CalendarDays },
@@ -125,6 +123,32 @@ export default function CalendarPage() {
     return interventions.filter((iv) => iv.intervention_type === typeFilter);
   }, [interventions, typeFilter]);
 
+  // Technician color map for month view
+  const techColorMap = useMemo(() => {
+    const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
+    uniqueIds.sort();
+    const map: Record<string, string> = {};
+    uniqueIds.forEach((id, idx) => { map[id] = TECHNICIAN_COLORS[idx % TECHNICIAN_COLORS.length]; });
+    return map;
+  }, [interventions]);
+
+  const getTechColor = (techId: string | null): string => {
+    if (!techId) return UNASSIGNED_COLOR;
+    return techColorMap[techId] || UNASSIGNED_COLOR;
+  };
+
+  // Unique technicians for legend
+  const uniqueTechnicians = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; color: string }>();
+    interventions.forEach((iv) => {
+      if (iv.technician_id && iv.technician && !seen.has(iv.technician_id)) {
+        const name = [iv.technician.first_name, iv.technician.last_name].filter(Boolean).join(' ') || '?';
+        seen.set(iv.technician_id, { id: iv.technician_id, name, color: techColorMap[iv.technician_id] || UNASSIGNED_COLOR });
+      }
+    });
+    return Array.from(seen.values());
+  }, [interventions, techColorMap]);
+
   const getIvsForDay = (date: Date) => filteredInterventions.filter((iv) => iv.date_planned && isSameDay(new Date(iv.date_planned), date));
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
   const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
@@ -180,7 +204,7 @@ export default function CalendarPage() {
                     {dayBirthdays.map((b) => (<div key={`b-${b.user_id}`} className="w-full text-left text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 mb-0.5 truncate">🎂 {b.first_name}</div>))}
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 mb-0.5 truncate">🌴 {getTechName(l.technician)}</div>))}
                     <div className="space-y-1">
-                      {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className={`w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer ${getInterventionColor(iv)}`} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.work_order_number || iv.title}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{iv.work_order_number || iv.title}</span></div></button>))}
+                      {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className="w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer hover:opacity-90" style={{ backgroundColor: getTechColor(iv.technician_id) }} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.work_order_number || iv.title}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{iv.work_order_number || iv.title}</span></div></button>))}
                       {overflow > 0 && (<button onClick={() => switchToDay(day)} className="w-full text-left text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-0.5 hover:bg-blue-50 rounded transition-colors">+ {overflow} autre{overflow > 1 ? 's' : ''}</button>)}
                     </div>
                   </div>);
@@ -194,13 +218,17 @@ export default function CalendarPage() {
 
         <div className="px-4 pb-4">
           <div className="flex flex-wrap items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500" /><span className="text-gray-600">🔧 Dépannage</span></div>
-            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-500" /><span className="text-gray-600">🏗️ Chantier</span></div>
+            {uniqueTechnicians.map((t) => (
+              <div key={t.id} className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ backgroundColor: t.color }} /><span className="text-gray-600">{t.name}</span></div>
+            ))}
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ backgroundColor: UNASSIGNED_COLOR }} /><span className="text-gray-600">Non assigné</span></div>
+            <div className="border-l border-gray-300 h-4" />
+            <div className="flex items-center gap-1.5"><span className="text-gray-600">🔧 Dépannage</span></div>
+            <div className="flex items-center gap-1.5"><span className="text-gray-600">🏗️ Chantier</span></div>
             <div className="border-l border-gray-300 h-4" />
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /><span className="text-gray-600">🌴 Congé</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /><span className="text-gray-600">🎂 Anniversaire</span></div>
             <div className="flex items-center gap-1.5"><span className="w-8 h-3 rounded bg-gray-100 border border-dashed border-gray-300" /><span className="text-gray-600">🍽️ Pause midi</span></div>
-            <div className="flex items-center gap-1.5"><User className="w-3 h-3 text-gray-500" /><span className="text-gray-600">= Technicien assigné</span></div>
           </div>
         </div>
       </div>

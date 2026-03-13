@@ -51,22 +51,13 @@ export interface BirthdayEntry {
   date: string; // 'YYYY-MM-DD' in current year
 }
 
-// Couleurs par TYPE d'intervention (dépannage vs chantier)
-const typeColors: Record<string, { bg: string; border: string; label: string }> = {
-  depannage: { bg: 'bg-red-500', border: 'border-red-700', label: 'Dépannage' },
-  chantier: { bg: 'bg-blue-500', border: 'border-blue-700', label: 'Chantier' },
-};
+// Palette de couleurs par technicien
+export const TECHNICIAN_COLORS = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
+  '#8B5CF6', '#EC4899', '#06B6D4', '#F97316',
+];
 
-// Couleur par défaut (si pas de type défini) = par statut
-const statusColors: Record<string, string> = {
-  nouveau: 'bg-blue-500 border-blue-600',
-  planifie: 'bg-amber-500 border-amber-600',
-  en_cours: 'bg-orange-500 border-orange-600',
-  termine: 'bg-emerald-500 border-emerald-600',
-  ready_to_bill: 'bg-amber-400 border-amber-500',
-  billed: 'bg-violet-500 border-violet-600',
-  annule: 'bg-gray-400 border-gray-500',
-};
+const UNASSIGNED_COLOR = '#9CA3AF'; // gray-400
 
 interface TimeGridViewProps {
   mode: 'week' | 'day';
@@ -78,6 +69,20 @@ interface TimeGridViewProps {
 }
 
 export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick }: TimeGridViewProps) {
+  // Build technician → color map from unique technician IDs
+  const techColorMap = useMemo(() => {
+    const uniqueIds = [...new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))] as string[];
+    uniqueIds.sort(); // stable ordering
+    const map: Record<string, string> = {};
+    uniqueIds.forEach((id, idx) => { map[id] = TECHNICIAN_COLORS[idx % TECHNICIAN_COLORS.length]; });
+    return map;
+  }, [interventions]);
+
+  const getTechColor = (techId: string | null): string => {
+    if (!techId) return UNASSIGNED_COLOR;
+    return techColorMap[techId] || UNASSIGNED_COLOR;
+  };
+
   const days = useMemo(() => {
     if (mode === 'day') return [currentDate];
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -122,12 +127,8 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
     return { top, height };
   };
 
-  const getBlockColor = (iv: Intervention) => {
-    const type = iv.intervention_type;
-    if (type && typeColors[type]) {
-      return `${typeColors[type].bg} ${typeColors[type].border}`;
-    }
-    return statusColors[iv.status] || 'bg-gray-500 border-gray-600';
+  const getBlockColor = (iv: Intervention): string => {
+    return getTechColor(iv.technician_id);
   };
 
   const getTechInitials = (tech: Intervention['technician']) => {
@@ -298,7 +299,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                     {/* Intervention blocks */}
                     {dayInterventions.map((iv) => {
                       const { top, height } = getBlockStyle(iv);
-                      const color = getBlockColor(iv);
+                      const bgColor = getBlockColor(iv);
                       const startTime = iv.date_planned ? format(new Date(iv.date_planned), 'HH:mm') : '';
                       const endTime = iv.date_planned
                         ? format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm')
@@ -311,8 +312,8 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                         <button
                           key={iv.id}
                           onClick={() => onInterventionClick(iv)}
-                          className={`absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5] ${color}`}
-                          style={{ top, height: Math.max(height, 24) }}
+                          className="absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5]"
+                          style={{ top, height: Math.max(height, 24), backgroundColor: bgColor, borderLeftColor: bgColor }}
                           title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${displayLabel}`}
                         >
                           <div className="px-2 py-1 h-full flex flex-col">
