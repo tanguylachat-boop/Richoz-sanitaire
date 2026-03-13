@@ -13,7 +13,6 @@ import {
   MapPin,
   Building,
   ChevronRight,
-  Mic,
   Image as ImageIcon,
 } from 'lucide-react';
 
@@ -205,12 +204,6 @@ export default async function ValidateReportsPage() {
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-4 h-4" />
                             <span>{report.work_duration_minutes} min</span>
-                          </div>
-                        )}
-                        {report.vocal_url && (
-                          <div className="flex items-center gap-1.5">
-                            <Mic className="w-4 h-4" />
-                            <span>Audio</span>
                           </div>
                         )}
                         {photos.length > 0 && (

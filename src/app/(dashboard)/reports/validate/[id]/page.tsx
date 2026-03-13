@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   ChevronLeft, User, MapPin, Building2, Clock, CheckCircle, XCircle,
-  Phone, FileText, Mic, Play, Pause, Image as ImageIcon, Package,
+  Phone, FileText, Image as ImageIcon, Package,
   CreditCard, Loader2, AlertTriangle, MessageSquare,
   X, ZoomIn, Archive, PenTool, Download,
 } from 'lucide-react';
@@ -54,14 +54,10 @@ export default function ValidateReportDetailPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-
   // Editable fields for secretary
   const [editTextContent, setEditTextContent] = useState('');
   const [editSuppliesText, setEditSuppliesText] = useState('');
   const [editWorkDuration, setEditWorkDuration] = useState<number>(0);
-  const [editVocalTranscription, setEditVocalTranscription] = useState('');
   const [revisionMessage, setRevisionMessage] = useState('');
 
   const supabase = createClient();
@@ -94,15 +90,10 @@ export default function ValidateReportDetailPage() {
       setEditTextContent(r.text_content || '');
       setEditSuppliesText(r.supplies_text || '');
       setEditWorkDuration(r.work_duration_minutes || 0);
-      setEditVocalTranscription(r.vocal_transcription || '');
       setIsLoading(false);
     };
     fetchReport();
   }, [reportId, router, supabase]);
-
-  useEffect(() => {
-    return () => { if (audioElement) audioElement.pause(); };
-  }, [audioElement]);
 
   const handleValidate = async () => {
     if (!report) return;
@@ -117,7 +108,7 @@ export default function ValidateReportDetailPage() {
           text_content: editTextContent || null,
           supplies_text: editSuppliesText || null,
           work_duration_minutes: editWorkDuration || null,
-          vocal_transcription: editVocalTranscription || null,
+          vocal_transcription: null,
         })
         .eq('id', report.id);
       if (saveError) throw saveError;
@@ -206,23 +197,6 @@ export default function ValidateReportDetailPage() {
       toast.error('Erreur lors de l\'envoi');
     } finally {
       setIsRejecting(false);
-    }
-  };
-
-  const toggleAudio = () => {
-    if (!report?.vocal_url) return;
-    if (!audioElement) {
-      const audio = new Audio(report.vocal_url);
-      audio.onended = () => setIsPlayingAudio(false);
-      setAudioElement(audio);
-      audio.play();
-      setIsPlayingAudio(true);
-    } else if (isPlayingAudio) {
-      audioElement.pause();
-      setIsPlayingAudio(false);
-    } else {
-      audioElement.play();
-      setIsPlayingAudio(true);
     }
   };
 
@@ -385,28 +359,6 @@ export default function ValidateReportDetailPage() {
           {/* Description */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-600" />Description du travail</h2>
-            {(report.vocal_url || editVocalTranscription) && (
-              <div className="mb-4 p-4 bg-blue-50 rounded-xl space-y-3">
-                <div className="flex items-center gap-3">
-                  <Mic className="w-5 h-5 text-blue-600" />
-                  <p className="font-medium text-blue-900">Enregistrement vocal</p>
-                </div>
-                {report.vocal_url && report.vocal_url.startsWith('http') && (
-                  <audio controls src={report.vocal_url} className="w-full" />
-                )}
-                {(report.vocal_transcription || editVocalTranscription) && (
-                  <div className="pt-3 border-t border-blue-200">
-                    <label className="text-xs text-blue-600 font-medium mb-1 block">Transcription (modifiable) :</label>
-                    <textarea
-                      value={editVocalTranscription}
-                      onChange={(e) => setEditVocalTranscription(e.target.value)}
-                      rows={4}
-                      className="w-full px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-y"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
             <textarea
               value={editTextContent}
               onChange={(e) => setEditTextContent(e.target.value)}

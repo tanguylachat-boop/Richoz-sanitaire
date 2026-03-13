@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { VoiceRecorder } from './VoiceRecorder';
 import { PhotoUploader } from './PhotoUploader';
 import { SignatureCanvas } from './SignatureCanvas';
 import { cn } from '@/lib/utils';
@@ -67,9 +66,6 @@ export function ReportForm({
   // =============================================
 
   const [textContent, setTextContent] = useState(existingReport?.text_content || '');
-  const [vocalTranscription, setVocalTranscription] = useState(
-    existingReport?.vocal_transcription || ''
-  );
   const [photosBefore, setPhotosBefore] = useState<{ url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]>(parsedPhotos.before);
   const [photosAfter, setPhotosAfter] = useState<{ url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]>(parsedPhotos.after);
   const [isBillable, setIsBillable] = useState(existingReport?.is_billable ?? true);
@@ -94,10 +90,6 @@ export function ReportForm({
   // =============================================
   // HANDLERS
   // =============================================
-
-  const handleRecordingComplete = (transcription: string) => {
-    setVocalTranscription(transcription);
-  };
 
   const handlePhotosBeforeChange = (newPhotos: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]) => {
     setPhotosBefore(newPhotos);
@@ -187,7 +179,7 @@ export function ReportForm({
     technician_id: technicianId,
     text_content: textContent || null,
     vocal_url: null,
-    vocal_transcription: vocalTranscription || null,
+    vocal_transcription: null,
     photos: allPhotos.length > 0 ? allPhotos : [],
     checklist: [],
     is_billable: isBillable,
@@ -269,8 +261,8 @@ export function ReportForm({
   const handleSubmit = async () => {
     console.log('[SUBMIT] Start - existingReport:', existingReport?.id, 'status:', existingReport?.status, 'revision_requested:', (existingReport as Record<string, unknown>)?.revision_requested);
 
-    if (!textContent && !vocalTranscription) {
-      toast.error('Veuillez ajouter une description ou un enregistrement vocal');
+    if (!textContent) {
+      toast.error('Veuillez ajouter une description de l\'intervention');
       return;
     }
 
@@ -484,25 +476,6 @@ export function ReportForm({
           placeholder="Ex: Remplacement du robinet mural mélangeur par un mitigeur 120x220. Coupure d'eau effectuée, test fonctionnement OK..."
           className="w-full h-32 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
-      </div>
-
-      {/* ===== ENREGISTREMENT VOCAL ===== */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h2 className="font-semibold text-gray-900 mb-3">
-          🎙️ Ou dictez votre rapport
-        </h2>
-        <p className="text-sm text-gray-500 mb-3">
-          Plus simple que de taper sur le téléphone !
-        </p>
-        <VoiceRecorder
-          onRecordingComplete={handleRecordingComplete}
-        />
-        {vocalTranscription && (
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-600 font-medium mb-1">📝 Transcription :</p>
-            <p className="text-sm text-blue-800">{vocalTranscription}</p>
-          </div>
-        )}
       </div>
 
       {/* ===== FOURNITURES / PIÈCES (texte libre, SANS PRIX) ===== */}
