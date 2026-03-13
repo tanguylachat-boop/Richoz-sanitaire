@@ -78,6 +78,10 @@ function getEmailType(email: EmailInbox): 'intervention' | 'info' {
   return type === 'intervention' ? 'intervention' : 'info';
 }
 
+function isEmailUrgent(email: EmailInbox): boolean {
+  return !!(email.subject?.toLowerCase().includes('urgent') || email.subject?.toLowerCase().includes('urgence') || email.extracted_data?.priority === 'urgent');
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function InboxPage() {
@@ -87,6 +91,7 @@ export default function InboxPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('new');
 
+  const [urgentFilterActive, setUrgentFilterActive] = useState(false);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<EmailInbox | null>(null);
@@ -143,20 +148,24 @@ export default function InboxPage() {
   const sortByDateDesc = (a: EmailInbox, b: EmailInbox) =>
     new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
 
+  const filteredEmails = urgentFilterActive
+    ? enrichedEmails.filter(isEmailUrgent)
+    : enrichedEmails;
+
   const emailsByRegie = regies.reduce((acc, regie) => {
-    acc[regie.id] = enrichedEmails
+    acc[regie.id] = filteredEmails
       .filter((email) => email.regie_id === regie.id)
       .sort(sortByDateDesc);
     return acc;
   }, {} as Record<string, EmailInbox[]>);
 
-  const otherEmails = enrichedEmails
+  const otherEmails = filteredEmails
     .filter((email) => !email.regie_id)
     .sort(sortByDateDesc);
 
   const totalEmails = enrichedEmails.length;
   const regieEmails = enrichedEmails.filter((e) => e.regie_id).length;
-  const urgentEmails = enrichedEmails.filter((e) => e.subject?.toLowerCase().includes('urgent') || e.subject?.toLowerCase().includes('urgence') || e.extracted_data?.priority === 'urgent').length;
+  const urgentEmails = enrichedEmails.filter(isEmailUrgent).length;
   const infoEmails = enrichedEmails.filter((e) => getEmailType(e) === 'info').length;
 
   const handlePlanIntervention = (email: EmailInbox) => { setSelectedEmail(email); setIsPlanModalOpen(true); };
@@ -183,7 +192,7 @@ export default function InboxPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard icon={<Mail className="w-6 h-6 text-blue-600" />} bgColor="bg-blue-50" value={totalEmails} label="Emails à traiter" />
         <StatCard icon={<Building2 className="w-6 h-6 text-amber-600" />} bgColor="bg-amber-50" value={regieEmails} label="Demandes de régies" />
-        <StatCard icon={<AlertCircle className="w-6 h-6 text-red-600" />} bgColor="bg-red-50" value={urgentEmails} label="Urgents" />
+        <StatCard icon={<AlertCircle className="w-6 h-6 text-red-600" />} bgColor="bg-red-50" value={urgentEmails} label="Urgents" onClick={() => setUrgentFilterActive(!urgentFilterActive)} active={urgentFilterActive} />
         <StatCard icon={<MessageSquare className="w-6 h-6 text-gray-600" />} bgColor="bg-gray-50" value={infoEmails} label="Infos / Suivi" />
       </div>
 
@@ -262,12 +271,12 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 
 // ─── Small Components ─────────────────────────────────────────────────────────
 
-function StatCard({ icon, bgColor, value, label }: { icon: React.ReactNode; bgColor: string; value: number; label: string }) {
+function StatCard({ icon, bgColor, value, label, onClick, active }: { icon: React.ReactNode; bgColor: string; value: number; label: string; onClick?: () => void; active?: boolean }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+    <div onClick={onClick} className={`rounded-xl border p-5 shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'bg-red-50 border-red-500 ring-1 ring-red-500' : 'bg-white border-gray-200'}`}>
       <div className="flex items-center gap-4">
         <div className={`w-12 h-12 rounded-xl ${bgColor} flex items-center justify-center`}>{icon}</div>
-        <div><p className="text-2xl font-bold text-gray-900">{value}</p><p className="text-sm text-gray-500">{label}</p></div>
+        <div><p className={`text-2xl font-bold ${active ? 'text-red-700' : 'text-gray-900'}`}>{value}</p><p className={`text-sm ${active ? 'text-red-600' : 'text-gray-500'}`}>{label}</p></div>
       </div>
     </div>
   );
@@ -334,7 +343,7 @@ function RegieSection({ regie, emails, onPlan, onView, onIgnore, onArchive, show
 function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true }: { email: EmailInbox; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean; }) {
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
-  const isUrgent = !isInfo && (email.subject?.toLowerCase().includes('urgent') || email.subject?.toLowerCase().includes('urgence') || email.extracted_data?.priority === 'urgent');
+  const isUrgent = !isInfo && isEmailUrgent(email);
   const timeAgo = formatDistanceToNow(new Date(email.received_at), { addSuffix: true, locale: fr });
 
   return (
