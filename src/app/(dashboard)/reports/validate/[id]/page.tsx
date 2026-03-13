@@ -210,6 +210,20 @@ export default function ValidateReportDetailPage() {
       const technician = report.technician;
       const clientInfo = intervention?.client_info as { name?: string; phone?: string } | null;
 
+      // Build photo arrays for docx
+      const rawPhotos = report.photos || [];
+      const docxPhotosBefore: { url: string; caption?: string }[] = [];
+      const docxPhotosAfter: { url: string; caption?: string }[] = [];
+      rawPhotos.forEach((photo) => {
+        if (typeof photo === 'string') {
+          docxPhotosBefore.push({ url: photo });
+        } else if (photo.category === 'after') {
+          docxPhotosAfter.push({ url: photo.url, caption: photo.caption });
+        } else {
+          docxPhotosBefore.push({ url: photo.url, caption: photo.caption });
+        }
+      });
+
       const blob = await generateReportDocx({
         title: intervention?.title || "Rapport d'intervention",
         technicianName: technician ? `${technician.first_name} ${technician.last_name}` : 'Non assigné',
@@ -229,6 +243,8 @@ export default function ValidateReportDetailPage() {
         billableReason: report.billable_reason || undefined,
         isCompleted: report.is_completed !== false,
         createdAt: format(new Date(report.created_at), "d MMMM yyyy 'à' HH:mm", { locale: fr }),
+        photosBefore: docxPhotosBefore.length > 0 ? docxPhotosBefore : undefined,
+        photosAfter: docxPhotosAfter.length > 0 ? docxPhotosAfter : undefined,
       });
 
       const fileName = `rapport-${intervention?.work_order_number || report.id}.docx`;
