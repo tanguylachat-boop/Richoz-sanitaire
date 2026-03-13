@@ -17,6 +17,7 @@ import {
 import { fr } from 'date-fns/locale';
 
 type CalendarView = 'month' | 'week' | 'day';
+type InterventionTypeFilter = 'all' | 'depannage' | 'chantier';
 
 interface Intervention {
   id: string; title: string; description: string | null; address: string;
@@ -43,6 +44,7 @@ const VIEW_TABS: { value: CalendarView; label: string; icon: typeof CalendarDays
 
 export default function CalendarPage() {
   const [view, setView] = useState<CalendarView>('week');
+  const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
@@ -118,7 +120,12 @@ export default function CalendarPage() {
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-  const getIvsForDay = (date: Date) => interventions.filter((iv) => iv.date_planned && isSameDay(new Date(iv.date_planned), date));
+  const filteredInterventions = useMemo(() => {
+    if (typeFilter === 'all') return interventions;
+    return interventions.filter((iv) => iv.intervention_type === typeFilter);
+  }, [interventions, typeFilter]);
+
+  const getIvsForDay = (date: Date) => filteredInterventions.filter((iv) => iv.date_planned && isSameDay(new Date(iv.date_planned), date));
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
   const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
   const getTechInitials = (t: Intervention['technician']) => t ? ((t.first_name?.[0] || '') + (t.last_name?.[0] || '')).toUpperCase() || '?' : null;
@@ -137,8 +144,19 @@ export default function CalendarPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-            {VIEW_TABS.map((tab) => { const Icon = tab.icon; const isActive = view === tab.value; return (<button key={tab.value} onClick={() => setView(tab.value)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Icon className="w-4 h-4" />{tab.label}</button>); })}
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+              {VIEW_TABS.map((tab) => { const Icon = tab.icon; const isActive = view === tab.value; return (<button key={tab.value} onClick={() => setView(tab.value)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><Icon className="w-4 h-4" />{tab.label}</button>); })}
+            </div>
+            <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg">
+              {([
+                { value: 'all' as const, label: 'Tout', color: 'text-gray-900', activeBg: 'bg-white' },
+                { value: 'depannage' as const, label: '🔧 Dépannage', color: 'text-red-700', activeBg: 'bg-red-50' },
+                { value: 'chantier' as const, label: '🏗️ Chantier', color: 'text-blue-700', activeBg: 'bg-blue-50' },
+              ]).map((tab) => (
+                <button key={tab.value} onClick={() => setTypeFilter(tab.value)} className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${typeFilter === tab.value ? `${tab.activeBg} ${tab.color} shadow-sm` : 'text-gray-500 hover:text-gray-700'}`}>{tab.label}</button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={navigatePrevious} className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"><ChevronLeft className="w-5 h-5" /></button>
@@ -169,8 +187,8 @@ export default function CalendarPage() {
                 })}
               </div>
             </>)}
-            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={interventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
-            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={interventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
+            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
+            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
           </>)}
         </div>
 
