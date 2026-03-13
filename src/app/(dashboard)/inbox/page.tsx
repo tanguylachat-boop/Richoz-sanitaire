@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Inbox,
   Mail,
@@ -98,6 +99,8 @@ export default function InboxPage() {
   const [selectedEmail, setSelectedEmail] = useState<EmailInbox | null>(null);
 
   const supabase = createClient();
+  const searchParams = useSearchParams();
+  const autoOpenHandled = useRef(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -128,6 +131,19 @@ export default function InboxPage() {
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [statusFilter]);
+
+  // Auto-open email from URL param ?email_id=<id>
+  useEffect(() => {
+    const emailId = searchParams.get('email_id');
+    if (emailId && emails.length > 0 && !autoOpenHandled.current) {
+      const targetEmail = emails.find((e) => e.id === emailId);
+      if (targetEmail) {
+        autoOpenHandled.current = true;
+        setSelectedEmail(targetEmail);
+        setIsDetailModalOpen(true);
+      }
+    }
+  }, [searchParams, emails]);
 
   const findRegieByEmail = (fromEmail: string): string | null => {
     if (!fromEmail) return null;
