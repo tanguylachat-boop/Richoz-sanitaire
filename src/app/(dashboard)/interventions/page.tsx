@@ -100,7 +100,7 @@ export default function InterventionsPage() {
 
     const { data: regiesData } = await supabase
       .from('regies')
-      .select('id, name')
+      .select('id, name, email_contact')
       .eq('is_active', true)
       .order('name');
     if (regiesData) setRegies(regiesData);

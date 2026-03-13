@@ -7,6 +7,9 @@ import {
   Loader2,
   Paperclip,
   FileText,
+  Mail,
+  Send,
+  X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -48,6 +51,7 @@ export interface PlanificationTechnician {
 export interface PlanificationRegie {
   id: string;
   name: string;
+  email_contact?: string | null;
 }
 
 interface CalendarIntervention {
@@ -86,10 +90,19 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const [calendarInterventions, setCalendarInterventions] = useState<CalendarIntervention[]>([]);
   const [techniciansOnLeave, setTechniciansOnLeave] = useState<string[]>([]);
 
+  // Confirmation modal state
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [createdInterventionId, setCreatedInterventionId] = useState<string | null>(null);
+  const [sendToRegie, setSendToRegie] = useState(false);
+  const [sendToLocataire, setSendToLocataire] = useState(false);
+  const [regieEmail, setRegieEmail] = useState('');
+  const [locataireEmail, setLocataireEmail] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   const [formData, setFormData] = useState({
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
-    technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '',
+    technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '', client_email: '',
     intervention_type: 'depannage',
   });
 
@@ -195,23 +208,24 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
 
       if (error) throw new Error(error.message);
 
-      // Envoyer email de confirmation à la régie
-      if (formData.regie_id && data?.[0]?.id) {
-        try {
-          await fetch('https://primary-production-66b7.up.railway.app/webhook/confirmation-regie', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ intervention_id: data[0].id }),
-          });
-          toast.success('Email de confirmation envoyé');
-        } catch (emailError) {
-          console.error('Erreur envoi email confirmation:', emailError);
-          toast.warning('Intervention créée mais email non envoyé');
-        }
-      }
-
       toast.success('Intervention planifiée avec succès');
-      onSuccess();
+
+      // Show confirmation modal to choose email recipients
+      const interventionId = data?.[0]?.id;
+      if (interventionId) {
+        setCreatedInterventionId(interventionId);
+        // Pre-fill régie email
+        const selectedRegie = regies.find(r => r.id === formData.regie_id);
+        const hasRegie = !!formData.regie_id && !!selectedRegie;
+        setSendToRegie(hasRegie);
+        setRegieEmail(selectedRegie?.email_contact || '');
+        // Pre-fill locataire email
+        setSendToLocataire(false);
+        setLocataireEmail(formData.client_email || '');
+        setShowConfirmationModal(true);
+      } else {
+        onSuccess();
+      }
     } catch (error) {
       console.error('Error creating intervention:', error);
       toast.error("Erreur lors de la création de l'intervention");
@@ -223,6 +237,42 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const getTechName = (tech: PlanificationTechnician) => {
     if (tech.first_name && tech.last_name) return `${tech.first_name} ${tech.last_name}`;
     return tech.first_name || tech.last_name || tech.email;
+  };
+
+  const handleSendConfirmation = async () => {
+    if (!createdInterventionId) return;
+    setIsSendingEmail(true);
+    try {
+      const recipients: string[] = [];
+      if (sendToRegie && regieEmail) recipients.push(regieEmail);
+      if (sendToLocataire && locataireEmail) recipients.push(locataireEmail);
+
+      if (recipients.length > 0) {
+        await fetch('https://primary-production-66b7.up.railway.app/webhook/confirmation-regie', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intervention_id: createdInterventionId,
+            recipients,
+            send_to_regie: sendToRegie,
+            send_to_locataire: sendToLocataire,
+          }),
+        });
+        toast.success(`Email de confirmation envoyé (${recipients.length} destinataire${recipients.length > 1 ? 's' : ''})`);
+      }
+    } catch (err) {
+      console.error('Erreur envoi email confirmation:', err);
+      toast.warning('Email de confirmation non envoyé');
+    } finally {
+      setIsSendingEmail(false);
+      setShowConfirmationModal(false);
+      onSuccess();
+    }
+  };
+
+  const handleSkipConfirmation = () => {
+    setShowConfirmationModal(false);
+    onSuccess();
   };
 
   const selectedTechName = formData.technician_id
@@ -416,6 +466,10 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
               <input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={inputClass} placeholder="+41 XX XXX XX XX" />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email client</label>
+            <input type="email" name="client_email" value={formData.client_email} onChange={handleChange} className={inputClass} placeholder="email@locataire.ch" />
+          </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
             <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Annuler</button>
@@ -553,6 +607,89 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
           <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-gray-100" />Pause midi</span>
         </div>
       </div>
+
+      {/* ═══ MODAL: Choix envoi confirmation email ═══ */}
+      {showConfirmationModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-blue-600" />
+                <h3 className="font-semibold text-gray-900">Email de confirmation</h3>
+              </div>
+              <button onClick={handleSkipConfirmation} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-500">Choisissez à qui envoyer un email de confirmation pour cette intervention.</p>
+
+              {/* Régie */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendToRegie}
+                    onChange={(e) => setSendToRegie(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Envoyer à la régie</span>
+                </label>
+                {sendToRegie && (
+                  <input
+                    type="email"
+                    value={regieEmail}
+                    onChange={(e) => setRegieEmail(e.target.value)}
+                    placeholder="email@regie.ch"
+                    className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                )}
+              </div>
+
+              {/* Locataire */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendToLocataire}
+                    onChange={(e) => setSendToLocataire(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Envoyer au locataire</span>
+                </label>
+                {sendToLocataire && (
+                  <input
+                    type="email"
+                    value={locataireEmail}
+                    onChange={(e) => setLocataireEmail(e.target.value)}
+                    placeholder="email@locataire.ch"
+                    className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={handleSkipConfirmation}
+                disabled={isSendingEmail}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+              >
+                Passer
+              </button>
+              <button
+                onClick={handleSendConfirmation}
+                disabled={isSendingEmail || (!sendToRegie && !sendToLocataire)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
+              >
+                {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {isSendingEmail ? 'Envoi...' : 'Envoyer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
