@@ -151,7 +151,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
 
   // Check if any day has all-day items
   const hasAnyAllDay = days.some((day) => getLeavesForDay(day).length > 0 || getBirthdaysForDay(day).length > 0);
-  const ALL_DAY_HEIGHT = 26;
+  const ALL_DAY_HEIGHT = 36;
 
   return (
     <div className="flex flex-col max-h-[calc(100vh-320px)]">
@@ -199,12 +199,12 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                 {hasAnyAllDay && (
                   <div
                     className="border-b border-gray-200 flex items-center gap-1 px-1 overflow-hidden"
-                    style={{ height: ALL_DAY_HEIGHT }}
+                    style={{ minHeight: ALL_DAY_HEIGHT }}
                   >
                     {dayBirthdays.map((b) => (
                       <span
                         key={`b-${b.user_id}`}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-medium whitespace-nowrap"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-violet-200 text-violet-800 text-xs font-semibold whitespace-nowrap border border-violet-300"
                       >
                         🎂 {b.first_name}
                       </span>
@@ -212,7 +212,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                     {dayLeaves.map((leave, i) => (
                       <span
                         key={`l-${leave.technician_id}-${i}`}
-                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] font-medium whitespace-nowrap"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-200 text-emerald-800 text-xs font-semibold whitespace-nowrap border border-emerald-400"
                       >
                         🌴 {getTechName(leave.technician)}
                       </span>
