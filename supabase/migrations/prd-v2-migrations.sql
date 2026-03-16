@@ -8,6 +8,12 @@
 --   - PRD says "regies.email" but actual column is "regies.email_contact" (already exists)
 -- ============================================================================
 
+-- ─── TECHNICIAN TYPE PREFERENCE ─────────────────────────────────────────────
+
+-- Distinguish depannage vs chantier technicians
+ALTER TABLE users ADD COLUMN IF NOT EXISTS intervention_type_preference TEXT
+  CHECK (intervention_type_preference IN ('depannage', 'chantier'));
+
 -- ─── MODULE 1: INBOX ─────────────────────────────────────────────────────────
 
 -- Add is_read flag to email_inbox (for unread count badge)
