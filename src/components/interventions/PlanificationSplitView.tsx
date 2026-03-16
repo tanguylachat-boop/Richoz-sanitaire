@@ -13,17 +13,15 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { getTechniciansOnLeave } from '@/lib/leave-utils';
+import { getApprovedLeaves } from '@/lib/leave-utils';
+import { TimeGridView } from '@/components/calendar/TimeGridView';
+import type { LeaveEntry, BirthdayEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import {
   format,
   startOfWeek,
   endOfWeek,
-  eachDayOfInterval,
-  isSameDay,
-  isToday,
   addWeeks,
   subWeeks,
-  addMinutes,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -70,22 +68,19 @@ export interface PlanificationRegie {
 interface CalendarIntervention {
   id: string;
   title: string;
-  date_planned: string;
+  description: string | null;
+  address: string;
+  date_planned: string | null;
   estimated_duration_minutes: number;
   status: string;
+  priority: number;
   technician_id: string | null;
-  intervention_type?: string | null;
+  regie_id: string | null;
+  client_info: { name?: string; phone?: string } | null;
+  work_order_number: string | null;
+  intervention_type?: 'depannage' | 'chantier' | null;
+  technician?: { id: string; first_name: string | null; last_name: string | null } | null;
 }
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const HOUR_HEIGHT = 48;
-const START_HOUR = 7;
-const END_HOUR = 18;
-const TOTAL_HOURS = END_HOUR - START_HOUR;
-const LUNCH_START = 12;
-const LUNCH_END_HOUR = 13;
-const LUNCH_END_MIN = 30;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -101,7 +96,8 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const [isLoading, setIsLoading] = useState(false);
   const [calendarWeek, setCalendarWeek] = useState(new Date());
   const [calendarInterventions, setCalendarInterventions] = useState<CalendarIntervention[]>([]);
-  const [techniciansOnLeave, setTechniciansOnLeave] = useState<string[]>([]);
+  const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
+  const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([]);
 
   // Confirmation modal state
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
@@ -143,12 +139,16 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   // Fetch calendar interventions
   const weekStart = useMemo(() => startOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
   const weekEnd = useMemo(() => endOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
-  const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
 
   const fetchCalendarData = useCallback(async () => {
-    let query = supabase
+    const sd = format(weekStart, 'yyyy-MM-dd');
+    const ed = format(weekEnd, 'yyyy-MM-dd');
+
+    // Fetch interventions with technician info
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase as any)
       .from('interventions')
-      .select('id, title, date_planned, estimated_duration_minutes, status, technician_id, intervention_type')
+      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)')
       .gte('date_planned', weekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
       .not('status', 'eq', 'annule');
@@ -157,30 +157,45 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       query = query.eq('technician_id', formData.technician_id);
     }
 
-    const { data } = await query;
-    if (data) setCalendarInterventions(data as CalendarIntervention[]);
+    const [{ data: ivData }, leavesData, { data: usersData }] = await Promise.all([
+      query,
+      getApprovedLeaves(sd, ed),
+      supabase.from('users').select('id, first_name, last_name, birth_date').not('birth_date', 'is', null).eq('is_active', true),
+    ]);
+
+    if (ivData) setCalendarInterventions(ivData as CalendarIntervention[]);
+    setLeaves(leavesData || []);
+
+    // Build birthday entries for current year
+    if (usersData) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const bdays: BirthdayEntry[] = usersData
+        .filter((u: { birth_date: string | null }) => u.birth_date)
+        .map((u: { id: string; first_name: string; last_name: string; birth_date: string }) => {
+          const [, m, d] = u.birth_date.split('-');
+          return { user_id: u.id, first_name: u.first_name || '', last_name: u.last_name || '', date: `${year}-${m}-${d}` };
+        });
+      setBirthdays(bdays);
+    }
   }, [weekStart, weekEnd, formData.technician_id]);
 
   useEffect(() => { fetchCalendarData(); }, [fetchCalendarData]);
 
-  // Fetch technicians on leave when date changes
-  useEffect(() => {
-    if (formData.date_planned) {
-      getTechniciansOnLeave(formData.date_planned).then(setTechniciansOnLeave);
-    } else {
-      setTechniciansOnLeave([]);
-    }
-  }, [formData.date_planned]);
-
   // Warn if assigned technician is on leave for selected date
   useEffect(() => {
-    if (formData.technician_id && techniciansOnLeave.includes(formData.technician_id)) {
-      const tech = technicians.find(t => t.id === formData.technician_id);
-      if (tech) {
-        toast.warning(`${getTechName(tech)} est en congé ce jour-là`);
+    if (formData.technician_id && formData.date_planned) {
+      const techLeave = leaves.find(l =>
+        l.technician_id === formData.technician_id &&
+        l.start_date <= formData.date_planned &&
+        l.end_date >= formData.date_planned
+      );
+      if (techLeave) {
+        const tech = technicians.find(t => t.id === formData.technician_id);
+        if (tech) toast.warning(`${getTechName(tech)} est en congé ce jour-là`);
       }
     }
-  }, [techniciansOnLeave, formData.technician_id]);
+  }, [leaves, formData.technician_id, formData.date_planned]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -191,7 +206,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   };
 
   const handleSlotClick = (day: Date, hour: number) => {
-    if (hour >= LUNCH_START && hour < 13.5) return;
+    if (hour >= 12 && hour < 13.5) return;
     setFormData((prev) => ({
       ...prev,
       date_planned: format(day, 'yyyy-MM-dd'),
@@ -303,27 +318,9 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const inputClass = 'w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
   const selectClass = `${inputClass} bg-white`;
 
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
-
-  const getInterventionsForDayCol = (day: Date) => {
-    return calendarInterventions.filter(iv => iv.date_planned && isSameDay(new Date(iv.date_planned), day));
-  };
-
-  const getBlockStyle = (iv: CalendarIntervention) => {
-    const d = new Date(iv.date_planned);
-    const h = d.getHours();
-    const m = d.getMinutes();
-    const startMin = Math.max((h - START_HOUR) * 60 + m, 0);
-    const dur = Math.max(iv.estimated_duration_minutes || 30, 15);
-    const endMin = Math.min(startMin + dur, TOTAL_HOURS * 60);
-    return {
-      top: (startMin / 60) * HOUR_HEIGHT,
-      height: Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 16),
-    };
-  };
-
-  const lunchTop = (LUNCH_START - START_HOUR) * HOUR_HEIGHT;
-  const lunchHeight = ((LUNCH_END_HOUR - LUNCH_START) * 60 + LUNCH_END_MIN) / 60 * HOUR_HEIGHT;
+  const calendarSelectedSlot: SelectedSlot | null = formData.date_planned && formData.time_planned
+    ? { date: formData.date_planned, time: formData.time_planned, durationMinutes: formData.estimated_duration_minutes || 60, title: formData.title || 'Nouvelle' }
+    : null;
 
   return (
     <div className="flex gap-0 max-h-[85vh]">
@@ -403,10 +400,15 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
               <select name="technician_id" value={formData.technician_id} onChange={handleChange} className={selectClass}>
                 <option value="">-- Non assigné --</option>
                 {technicians.map((tech) => {
-                  const onLeave = techniciansOnLeave.includes(tech.id);
+                  const techLeave = formData.date_planned
+                    ? leaves.find(l => l.technician_id === tech.id && l.start_date <= formData.date_planned && l.end_date >= formData.date_planned)
+                    : null;
+                  const leaveLabel = techLeave
+                    ? ` (En congé du ${format(new Date(techLeave.start_date + 'T00:00:00'), 'd MMM', { locale: fr })} au ${format(new Date(techLeave.end_date + 'T00:00:00'), 'd MMM', { locale: fr })})`
+                    : '';
                   return (
-                    <option key={tech.id} value={tech.id} disabled={onLeave}>
-                      {getTechName(tech)}{onLeave ? ' (En congé)' : ''}
+                    <option key={tech.id} value={tech.id} disabled={!!techLeave}>
+                      {getTechName(tech)}{leaveLabel}
                     </option>
                   );
                 })}
@@ -502,9 +504,9 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         </form>
       </div>
 
-      {/* ═══ RIGHT: Mini calendrier semaine ═══ */}
+      {/* ═══ RIGHT: Calendrier semaine (TimeGridView) ═══ */}
       <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-        <div className="flex items-center justify-between mb-3 px-3 pt-3 flex-shrink-0">
+        <div className="flex items-center justify-between mb-2 px-3 pt-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <button onClick={() => setCalendarWeek(subWeeks(calendarWeek, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-medium text-gray-700">
@@ -518,114 +520,17 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
           </span>
         </div>
 
-        <div className="flex-1 overflow-auto border border-gray-200 rounded-lg mx-3 mb-3">
-          <div className="flex min-w-[500px]">
-            <div className="flex-shrink-0 w-12 border-r border-gray-200">
-              <div className="h-8 border-b border-gray-200" />
-              <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
-                {hours.map((hour) => (
-                  <div key={hour} className="absolute w-full text-right pr-1.5 text-[10px] text-gray-400 -translate-y-1/2" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}>
-                    {`${String(hour).padStart(2, '0')}:00`}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
-              {weekDays.map((day, colIdx) => {
-                const dayIvs = getInterventionsForDayCol(day);
-                const today = isToday(day);
-                const isSelected = formData.date_planned && isSameDay(new Date(formData.date_planned + 'T00:00:00'), day);
-
-                return (
-                  <div key={colIdx} className="border-r border-gray-100 last:border-r-0">
-                    <div className={`h-8 flex items-center justify-center border-b border-gray-200 text-xs font-medium ${today ? 'bg-blue-50 text-blue-600' : isSelected ? 'bg-green-50 text-green-700' : 'text-gray-500'}`}>
-                      {format(day, 'EEE d', { locale: fr })}
-                    </div>
-
-                    <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
-                      {hours.map((hour) => (
-                        <div key={hour} className="absolute w-full border-t border-gray-50" style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }} />
-                      ))}
-
-                      {hours.map((hour) => [0, 0.5].map((half) => {
-                        const slotHour = hour + half;
-                        const isLunch = slotHour >= LUNCH_START && slotHour < 13.5;
-                        if (isLunch) return null;
-                        return (
-                          <div
-                            key={`${hour}-${half}`}
-                            className="absolute left-0 right-0 cursor-pointer hover:bg-blue-50 transition-colors z-[1]"
-                            style={{ top: (slotHour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT / 2 }}
-                            onClick={() => handleSlotClick(day, slotHour)}
-                            title={`${String(Math.floor(slotHour)).padStart(2, '0')}:${half ? '30' : '00'}`}
-                          />
-                        );
-                      }))}
-
-                      <div className="absolute left-0 right-0 z-[2] pointer-events-none" style={{ top: lunchTop, height: lunchHeight }}>
-                        <div className="w-full h-full bg-gray-100 border-y border-dashed border-gray-300 flex items-center justify-center">
-                          <span className="text-[10px] text-gray-400">🍽️</span>
-                        </div>
-                      </div>
-
-                      {today && (() => {
-                        const now = new Date();
-                        const nowMin = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
-                        if (nowMin < 0 || nowMin > TOTAL_HOURS * 60) return null;
-                        return <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: (nowMin / 60) * HOUR_HEIGHT }}><div className="h-px bg-red-500 w-full" /><div className="w-1.5 h-1.5 rounded-full bg-red-500 -mt-[3px] -ml-0.5" /></div>;
-                      })()}
-
-                      {isSelected && formData.time_planned && (() => {
-                        const [h, m] = formData.time_planned.split(':').map(Number);
-                        const slotMin = (h - START_HOUR) * 60 + m;
-                        const durMin = formData.estimated_duration_minutes || 60;
-                        const top = (slotMin / 60) * HOUR_HEIGHT;
-                        const height = (durMin / 60) * HOUR_HEIGHT;
-                        return (
-                          <div
-                            className="absolute left-0.5 right-0.5 rounded border-2 border-dashed border-green-500 bg-green-100/50 z-[8] pointer-events-none"
-                            style={{ top, height: Math.max(height, 16) }}
-                          >
-                            <div className="px-1 py-0.5 text-[10px] font-medium text-green-700 truncate">
-                              📌 {formData.title || 'Nouvelle'}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {dayIvs.map((iv) => {
-                        const { top, height } = getBlockStyle(iv);
-                        const isDepannage = iv.intervention_type !== 'chantier';
-                        const color = isDepannage ? 'bg-red-400 border-red-600' : 'bg-blue-400 border-blue-600';
-                        const startTime = format(new Date(iv.date_planned), 'HH:mm');
-                        const endTime = format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm');
-
-                        return (
-                          <div
-                            key={iv.id}
-                            className={`absolute left-0.5 right-0.5 rounded border-l-2 text-white text-[10px] overflow-hidden z-[5] ${color}`}
-                            style={{ top, height: Math.max(height, 16) }}
-                            title={`${iv.title} (${startTime}-${endTime})`}
-                          >
-                            <div className="px-1 py-0.5 truncate font-medium">{iv.title}</div>
-                            {height >= 28 && <div className="px-1 text-white/70">{startTime}-{endTime}</div>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 px-3 pb-2 text-[10px] text-gray-500 flex-shrink-0">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-400" />Dépannage</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400" />Chantier</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-100 border border-dashed border-green-500" />Nouveau RDV</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-gray-100" />Pause midi</span>
+        <div className="flex-1 overflow-hidden mx-3 mb-3">
+          <TimeGridView
+            mode="week"
+            currentDate={calendarWeek}
+            interventions={calendarInterventions}
+            leaves={leaves}
+            birthdays={birthdays}
+            onInterventionClick={() => {}}
+            onSlotClick={handleSlotClick}
+            selectedSlot={calendarSelectedSlot}
+          />
         </div>
       </div>
 

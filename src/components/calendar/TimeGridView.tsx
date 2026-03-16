@@ -59,6 +59,13 @@ export const TECHNICIAN_COLORS = [
 
 const UNASSIGNED_COLOR = '#9CA3AF'; // gray-400
 
+export interface SelectedSlot {
+  date: string; // 'YYYY-MM-DD'
+  time: string; // 'HH:mm'
+  durationMinutes: number;
+  title: string;
+}
+
 interface TimeGridViewProps {
   mode: 'week' | 'day';
   currentDate: Date;
@@ -66,9 +73,11 @@ interface TimeGridViewProps {
   leaves?: LeaveEntry[];
   birthdays?: BirthdayEntry[];
   onInterventionClick: (intervention: Intervention) => void;
+  onSlotClick?: (day: Date, hour: number) => void;
+  selectedSlot?: SelectedSlot | null;
 }
 
-export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick }: TimeGridViewProps) {
+export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick, onSlotClick, selectedSlot }: TimeGridViewProps) {
   // Build technician → color map from unique technician IDs
   const techColorMap = useMemo(() => {
     const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
@@ -276,6 +285,41 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                         </span>
                       </div>
                     </div>
+
+                    {/* Clickable time slots (when onSlotClick is provided) */}
+                    {onSlotClick && Array.from({ length: TOTAL_HOURS * 2 }, (_, i) => {
+                      const slotHour = START_HOUR + i * 0.5;
+                      const isLunch = slotHour >= LUNCH_START_HOUR && slotHour < LUNCH_END_HOUR + LUNCH_END_MIN / 60;
+                      if (isLunch) return null;
+                      return (
+                        <div
+                          key={`slot-${i}`}
+                          className="absolute left-0 right-0 cursor-pointer hover:bg-blue-50/60 transition-colors z-[2]"
+                          style={{ top: (slotHour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT / 2 }}
+                          onClick={() => onSlotClick(day, slotHour)}
+                          title={`${String(Math.floor(slotHour)).padStart(2, '0')}:${slotHour % 1 === 0.5 ? '30' : '00'}`}
+                        />
+                      );
+                    })}
+
+                    {/* Selected slot preview */}
+                    {selectedSlot && isSameDay(new Date(selectedSlot.date + 'T00:00:00'), day) && (() => {
+                      const [h, m] = selectedSlot.time.split(':').map(Number);
+                      const slotMin = (h - START_HOUR) * 60 + m;
+                      const durMin = selectedSlot.durationMinutes || 60;
+                      const top = (slotMin / 60) * HOUR_HEIGHT;
+                      const height = (durMin / 60) * HOUR_HEIGHT;
+                      return (
+                        <div
+                          className="absolute left-1 right-1 rounded-lg border-2 border-dashed border-green-500 bg-green-100/50 z-[8] pointer-events-none"
+                          style={{ top, height: Math.max(height, 20) }}
+                        >
+                          <div className="px-2 py-1 text-xs font-medium text-green-700 truncate">
+                            {selectedSlot.title || 'Nouveau'}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Now indicator */}
                     {today && (() => {
