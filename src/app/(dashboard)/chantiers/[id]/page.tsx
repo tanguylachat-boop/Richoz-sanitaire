@@ -24,7 +24,6 @@ import {
   Pencil,
   Save,
   X,
-  ExternalLink,
   Image as ImageIcon,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -82,6 +81,17 @@ interface PhotoEntry {
   url: string;
   caption?: string;
   type?: 'before' | 'after' | null;
+  source: 'chantier' | 'report' | 'journal';
+  date?: string;
+  author?: string;
+}
+
+interface ChantierPhotoRow {
+  id: string;
+  photo_url: string;
+  caption: string | null;
+  created_at: string;
+  user?: { id: string; first_name: string; last_name: string } | null;
 }
 
 type TabType = 'infos' | 'journal' | 'cutoffs' | 'photos';
@@ -191,41 +201,79 @@ export default function ChantierDetailAdminPage() {
     if (msgRes.data) setMessages(msgRes.data as ChantierMessage[]);
     if (cutoffRes.data) setCutoffs(cutoffRes.data as unknown as CutoffNotice[]);
 
-    // Fetch photos from reports for this intervention
-    const { data: reportData } = await supabase
-      .from('reports')
-      .select('photos')
-      .eq('intervention_id', interventionId);
+    // Fetch all photo sources in parallel
+    const [chantierPhotosRes, reportData] = await Promise.all([
+      supabase
+        .from('chantier_photos')
+        .select('id, photo_url, caption, created_at, user:users!chantier_photos_user_id_fkey(id, first_name, last_name)')
+        .eq('intervention_id', interventionId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('reports')
+        .select('photos, created_at, technician:users!reports_technician_id_fkey(first_name, last_name)')
+        .eq('intervention_id', interventionId),
+    ]);
 
-    if (reportData) {
-      const allPhotos: PhotoEntry[] = [];
-      reportData.forEach((r) => {
+    const allPhotos: PhotoEntry[] = [];
+
+    // 1. Chantier photos (standalone uploads by technician)
+    if (chantierPhotosRes.data) {
+      (chantierPhotosRes.data as ChantierPhotoRow[]).forEach((p) => {
+        const authorName = p.user ? `${p.user.first_name} ${p.user.last_name}` : undefined;
+        allPhotos.push({
+          url: p.photo_url,
+          caption: p.caption || undefined,
+          source: 'chantier',
+          date: p.created_at,
+          author: authorName,
+        });
+      });
+    }
+
+    // 2. Report photos
+    if (reportData.data) {
+      reportData.data.forEach((r) => {
+        const techName = (r as { technician?: { first_name: string; last_name: string } | null }).technician
+          ? `${(r as { technician: { first_name: string; last_name: string } }).technician.first_name} ${(r as { technician: { first_name: string; last_name: string } }).technician.last_name}`
+          : undefined;
         if (r.photos && Array.isArray(r.photos)) {
-          (r.photos as PhotoEntry[]).forEach((p) => {
+          (r.photos as ({ url: string; caption?: string; type?: string } | string)[]).forEach((p) => {
             if (typeof p === 'string') {
-              allPhotos.push({ url: p });
+              allPhotos.push({ url: p, source: 'report', date: r.created_at, author: techName });
             } else if (p && p.url) {
-              allPhotos.push(p);
+              allPhotos.push({
+                url: p.url,
+                caption: p.caption,
+                type: p.type === 'before' ? 'before' : p.type === 'after' ? 'after' : undefined,
+                source: 'report',
+                date: r.created_at,
+                author: techName,
+              });
             }
           });
         }
       });
-      setPhotos(allPhotos);
     }
 
-    // Also collect photos from journal messages
+    // 3. Journal message photos
     if (msgRes.data) {
-      const msgPhotos: PhotoEntry[] = [];
       (msgRes.data as ChantierMessage[]).forEach((m) => {
         if (m.photos && m.photos.length > 0) {
-          m.photos.forEach((p) => msgPhotos.push({ url: p, caption: `Journal - ${format(new Date(m.created_at), 'd MMM yyyy', { locale: fr })}` }));
+          const authorName = m.author ? `${m.author.first_name} ${m.author.last_name}` : undefined;
+          m.photos.forEach((p) => {
+            allPhotos.push({
+              url: p,
+              caption: `Journal - ${format(new Date(m.created_at), 'd MMM yyyy', { locale: fr })}`,
+              source: 'journal',
+              date: m.created_at,
+              author: authorName,
+            });
+          });
         }
       });
-      if (msgPhotos.length > 0) {
-        setPhotos((prev) => [...prev, ...msgPhotos]);
-      }
     }
 
+    setPhotos(allPhotos);
     setIsLoading(false);
   }, [interventionId]);
 
@@ -786,32 +834,37 @@ export default function ChantierDetailAdminPage() {
             </div>
           ) : (
             <>
-              {/* Group by type if tagged */}
               {(() => {
-                const beforePhotos = photos.filter(p => p.type === 'before');
-                const afterPhotos = photos.filter(p => p.type === 'after');
-                const otherPhotos = photos.filter(p => !p.type);
+                const chantierPhotos = photos.filter(p => p.source === 'chantier' || p.source === 'journal');
+                const reportPhotos = photos.filter(p => p.source === 'report');
 
                 return (
                   <div className="space-y-6">
-                    {beforePhotos.length > 0 && (
+                    {/* Chantier photos (advancement) */}
+                    {chantierPhotos.length > 0 && (
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-700 mb-3">Photos Avant</h3>
-                        <PhotoGrid photos={beforePhotos} onPhotoClick={setSelectedPhoto} />
+                        <div className="flex items-center gap-2 mb-3">
+                          <Camera className="w-4 h-4 text-blue-600" />
+                          <h3 className="text-sm font-semibold text-gray-700">Photos d&apos;avancement</h3>
+                          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                            {chantierPhotos.length}
+                          </span>
+                        </div>
+                        <PhotoGrid photos={chantierPhotos} onPhotoClick={setSelectedPhoto} variant="chantier" />
                       </div>
                     )}
-                    {afterPhotos.length > 0 && (
+
+                    {/* Report photos */}
+                    {reportPhotos.length > 0 && (
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-700 mb-3">Photos Après</h3>
-                        <PhotoGrid photos={afterPhotos} onPhotoClick={setSelectedPhoto} />
-                      </div>
-                    )}
-                    {otherPhotos.length > 0 && (
-                      <div>
-                        {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
-                          <h3 className="text-sm font-semibold text-gray-700 mb-3">Autres photos</h3>
-                        )}
-                        <PhotoGrid photos={otherPhotos} onPhotoClick={setSelectedPhoto} />
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText className="w-4 h-4 text-gray-500" />
+                          <h3 className="text-sm font-semibold text-gray-700">Photos de rapport</h3>
+                          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-600">
+                            {reportPhotos.length}
+                          </span>
+                        </div>
+                        <PhotoGrid photos={reportPhotos} onPhotoClick={setSelectedPhoto} variant="report" />
                       </div>
                     )}
                   </div>
@@ -874,26 +927,50 @@ function ContactRow({ role, name, phone, email }: { role: string; name: string; 
 
 // ─── Photo Grid ──────────────────────────────────────────────────────────────
 
-function PhotoGrid({ photos, onPhotoClick }: { photos: PhotoEntry[]; onPhotoClick: (url: string) => void }) {
+function PhotoGrid({ photos, onPhotoClick, variant = 'chantier' }: { photos: PhotoEntry[]; onPhotoClick: (url: string) => void; variant?: 'chantier' | 'report' }) {
+  const borderColor = variant === 'chantier' ? 'border-blue-100 hover:border-blue-300' : 'border-gray-200 hover:border-gray-400';
+  const bgOverlay = variant === 'chantier' ? 'bg-blue-50' : 'bg-gray-50';
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
       {photos.map((photo, i) => (
         <button
           key={i}
           onClick={() => onPhotoClick(photo.url)}
-          className="group relative aspect-square rounded-xl overflow-hidden border border-gray-200 hover:border-blue-300 transition-colors shadow-sm"
+          className={`group relative aspect-square rounded-xl overflow-hidden border shadow-sm transition-colors ${borderColor}`}
         >
+          {/* Source badge */}
+          <div className={`absolute top-2 left-2 z-10 p-1 rounded-md ${bgOverlay}`}>
+            {variant === 'chantier' ? (
+              <Camera className="w-3 h-3 text-blue-600" />
+            ) : (
+              <FileText className="w-3 h-3 text-gray-500" />
+            )}
+          </div>
+
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photo.url}
             alt={photo.caption || ''}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
           />
-          {photo.caption && (
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2 pt-6">
+            {photo.caption && (
               <p className="text-xs text-white truncate">{photo.caption}</p>
+            )}
+            <div className="flex items-center justify-between mt-0.5">
+              {photo.date && (
+                <p className="text-[10px] text-white/70">
+                  {format(new Date(photo.date), "d MMM yyyy", { locale: fr })}
+                </p>
+              )}
+              {photo.author && (
+                <p className="text-[10px] text-white/70 truncate ml-1">
+                  {photo.author}
+                </p>
+              )}
             </div>
-          )}
+          </div>
         </button>
       ))}
     </div>
