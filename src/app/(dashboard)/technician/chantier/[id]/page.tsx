@@ -20,7 +20,9 @@ import {
   Flame,
   FileText,
   Camera,
-  BarChart3,
+  Plus,
+  X,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -72,7 +74,15 @@ interface CutoffNotice {
   created_at: string;
 }
 
-type TabType = 'overview' | 'journal' | 'cutoffs';
+interface ChantierPhoto {
+  id: string;
+  photo_url: string;
+  caption: string | null;
+  created_at: string;
+  user?: { id: string; first_name: string; last_name: string } | null;
+}
+
+type TabType = 'overview' | 'journal' | 'cutoffs' | 'photos';
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -86,6 +96,7 @@ export default function ChantierDetailPage() {
   const [details, setDetails] = useState<ChantierDetails | null>(null);
   const [messages, setMessages] = useState<ChantierMessage[]>([]);
   const [cutoffs, setCutoffs] = useState<CutoffNotice[]>([]);
+  const [chantierPhotos, setChantierPhotos] = useState<ChantierPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
@@ -103,6 +114,11 @@ export default function ChantierDetailPage() {
     message: '',
   });
   const [isSavingCutoff, setIsSavingCutoff] = useState(false);
+
+  // Photo upload
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // Progress
   const [editProgress, setEditProgress] = useState(0);
@@ -160,6 +176,18 @@ export default function ChantierDetailPage() {
         .eq('intervention_id', interventionId)
         .order('created_at', { ascending: false });
       if (cutoffData) setCutoffs(cutoffData as CutoffNotice[]);
+    } catch {
+      // Table may not exist yet
+    }
+
+    // Fetch chantier photos
+    try {
+      const { data: photoData } = await supabase
+        .from('chantier_photos')
+        .select('id, photo_url, caption, created_at, user:users!chantier_photos_user_id_fkey(id, first_name, last_name)')
+        .eq('intervention_id', interventionId)
+        .order('created_at', { ascending: false });
+      if (photoData) setChantierPhotos(photoData as ChantierPhoto[]);
     } catch {
       // Table may not exist yet
     }
@@ -228,6 +256,68 @@ export default function ChantierDetailPage() {
       toast.error('Erreur lors de l\'enregistrement');
     } finally {
       setIsSavingCutoff(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsUploadingPhotos(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non authentifié');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const timestamp = Date.now();
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `chantier-photos/${interventionId}/${timestamp}_${i}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(path, file, { upsert: true });
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          // Try photos bucket as fallback
+          const { error: fallbackError } = await supabase.storage
+            .from('photos')
+            .upload(path, file, { upsert: true });
+          if (fallbackError) throw fallbackError;
+
+          const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('chantier_photos').insert({
+            intervention_id: interventionId,
+            user_id: user.id,
+            photo_url: urlData.publicUrl,
+            caption: photoCaption || null,
+          });
+        } else {
+          const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('chantier_photos').insert({
+            intervention_id: interventionId,
+            user_id: user.id,
+            photo_url: urlData.publicUrl,
+            caption: photoCaption || null,
+          });
+        }
+      }
+
+      toast.success(`${files.length} photo${files.length > 1 ? 's' : ''} uploadée${files.length > 1 ? 's' : ''}`);
+      setPhotoCaption('');
+      fetchData();
+    } catch (error) {
+      console.error('Error uploading photos:', error);
+      toast.error('Erreur lors de l\'upload');
+    } finally {
+      setIsUploadingPhotos(false);
+      // Reset the file input
+      e.target.value = '';
     }
   };
 
@@ -338,6 +428,7 @@ export default function ChantierDetailPage() {
           { key: 'overview' as TabType, label: 'Infos', icon: Building2 },
           { key: 'journal' as TabType, label: 'Journal', icon: MessageSquare },
           { key: 'cutoffs' as TabType, label: 'Coupures', icon: AlertTriangle },
+          { key: 'photos' as TabType, label: 'Photos', icon: Camera },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -348,6 +439,11 @@ export default function ChantierDetailPage() {
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
+            {tab.key === 'photos' && chantierPhotos.length > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-gray-200 text-gray-600">
+                {chantierPhotos.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -430,13 +526,30 @@ export default function ChantierDetailPage() {
             </div>
           )}
 
-          {/* Rapport link */}
-          <Link
-            href={`/technician/report/${intervention.id}`}
-            className="block bg-blue-600 text-white rounded-2xl p-4 text-center font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 active:scale-[0.98]"
-          >
-            Créer un rapport
-          </Link>
+          {/* Action buttons */}
+          <div className="space-y-3">
+            {/* Photo upload */}
+            <label className="block bg-white border-2 border-dashed border-blue-300 text-blue-600 rounded-2xl p-4 text-center font-semibold hover:bg-blue-50 transition-colors cursor-pointer active:scale-[0.98]">
+              <Camera className="w-5 h-5 mx-auto mb-1" />
+              {isUploadingPhotos ? 'Upload en cours...' : 'Ajouter des photos'}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePhotoUpload}
+                disabled={isUploadingPhotos}
+              />
+            </label>
+
+            {/* Rapport link */}
+            <Link
+              href={`/technician/report/${intervention.id}`}
+              className="block bg-blue-600 text-white rounded-2xl p-4 text-center font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30 active:scale-[0.98]"
+            >
+              Créer un rapport
+            </Link>
+          </div>
         </div>
       )}
 
@@ -621,6 +734,97 @@ export default function ChantierDetailPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══ TAB: Photos ═══ */}
+      {activeTab === 'photos' && (
+        <div className="space-y-4">
+          {/* Upload section */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Légende (optionnel)</label>
+              <input
+                type="text"
+                value={photoCaption}
+                onChange={(e) => setPhotoCaption(e.target.value)}
+                className={inputClass}
+                placeholder="Ex: Avancement salle de bain 2ème étage"
+              />
+            </div>
+            <label className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors cursor-pointer active:scale-[0.98] disabled:opacity-50">
+              {isUploadingPhotos ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Plus className="w-5 h-5" />
+              )}
+              {isUploadingPhotos ? 'Upload en cours...' : 'Ajouter des photos'}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePhotoUpload}
+                disabled={isUploadingPhotos}
+              />
+            </label>
+          </div>
+
+          {/* Photos grid */}
+          {chantierPhotos.length === 0 ? (
+            <div className="text-center py-12">
+              <ImageIcon className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+              <p className="text-gray-500">Aucune photo</p>
+              <p className="text-sm text-gray-400">Ajoutez des photos d&apos;avancement</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {chantierPhotos.map((photo) => (
+                <button
+                  key={photo.id}
+                  onClick={() => setSelectedPhoto(photo.photo_url)}
+                  className="group relative aspect-square rounded-2xl overflow-hidden border border-gray-200 shadow-sm"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.photo_url}
+                    alt={photo.caption || ''}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                    {photo.caption && (
+                      <p className="text-xs text-white truncate">{photo.caption}</p>
+                    )}
+                    <p className="text-[10px] text-white/70">
+                      {format(new Date(photo.created_at), "d MMM 'à' HH:mm", { locale: fr })}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Photo lightbox */}
+      {selectedPhoto && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <button
+            onClick={() => setSelectedPhoto(null)}
+            className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={selectedPhoto}
+            alt=""
+            className="max-w-full max-h-[90vh] rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

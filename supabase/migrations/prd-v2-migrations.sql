@@ -75,6 +75,16 @@ CREATE TABLE IF NOT EXISTS chantier_cutoff_notices (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Photos de chantier (standalone photos, not tied to a report)
+CREATE TABLE IF NOT EXISTS chantier_photos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  intervention_id UUID NOT NULL REFERENCES interventions(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id),
+  photo_url TEXT NOT NULL,
+  caption TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── INDEXES ─────────────────────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_email_inbox_is_read ON email_inbox(is_read) WHERE is_read = false;
@@ -82,6 +92,8 @@ CREATE INDEX IF NOT EXISTS idx_chantier_details_intervention ON chantier_details
 CREATE INDEX IF NOT EXISTS idx_chantier_messages_intervention ON chantier_messages(intervention_id);
 CREATE INDEX IF NOT EXISTS idx_chantier_messages_created ON chantier_messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chantier_cutoff_intervention ON chantier_cutoff_notices(intervention_id);
+CREATE INDEX IF NOT EXISTS idx_chantier_photos_intervention ON chantier_photos(intervention_id);
+CREATE INDEX IF NOT EXISTS idx_chantier_photos_created ON chantier_photos(created_at DESC);
 
 -- ─── RLS POLICIES (basic — adjust to your auth model) ────────────────────────
 
@@ -97,4 +109,9 @@ CREATE POLICY IF NOT EXISTS "chantier_messages_all" ON chantier_messages
   FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY IF NOT EXISTS "chantier_cutoff_notices_all" ON chantier_cutoff_notices
+  FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE chantier_photos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "chantier_photos_all" ON chantier_photos
   FOR ALL USING (true) WITH CHECK (true);
