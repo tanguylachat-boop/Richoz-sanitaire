@@ -74,10 +74,11 @@ interface TimeGridViewProps {
   birthdays?: BirthdayEntry[];
   onInterventionClick: (intervention: Intervention) => void;
   onSlotClick?: (day: Date, hour: number) => void;
+  onLeaveClick?: (leave: LeaveEntry) => void;
   selectedSlot?: SelectedSlot | null;
 }
 
-export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick, onSlotClick, selectedSlot }: TimeGridViewProps) {
+export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick, onSlotClick, onLeaveClick, selectedSlot }: TimeGridViewProps) {
   // Build technician → color map from unique technician IDs
   const techColorMap = useMemo(() => {
     const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
@@ -221,7 +222,8 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                     {dayLeaves.map((leave, i) => (
                       <span
                         key={`l-${leave.technician_id}-${i}`}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-200 text-emerald-800 text-xs font-semibold whitespace-nowrap border border-emerald-400"
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-200 text-emerald-800 text-xs font-semibold whitespace-nowrap border border-emerald-400 ${onLeaveClick ? 'cursor-pointer hover:bg-emerald-300 transition-colors' : ''}`}
+                        onClick={onLeaveClick ? () => onLeaveClick(leave) : undefined}
                       >
                         🌴 {getTechName(leave.technician)}
                       </span>

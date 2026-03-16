@@ -13,8 +13,8 @@ import {
   Loader2,
   CalendarDays,
   User,
-  ChevronDown,
-  ChevronUp,
+  Pencil,
+  Trash2,
   MessageSquare,
 } from 'lucide-react';
 
@@ -46,6 +46,13 @@ export default function LeaveManagementPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Edit / Cancel state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -150,6 +157,61 @@ export default function LeaveManagementPage() {
     } catch (error) {
       console.error('Error rejecting leave:', error);
       toast.error('Erreur lors du refus');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const startEditing = (req: LeaveRequest) => {
+    setEditingId(req.id);
+    setEditStartDate(req.start_date);
+    setEditEndDate(req.end_date);
+    setEditReason(req.reason || '');
+  };
+
+  const handleEdit = async (requestId: string) => {
+    setProcessingId(requestId);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('leave_requests')
+        .update({
+          start_date: editStartDate,
+          end_date: editEndDate,
+          reason: editReason || null,
+        })
+        .eq('id', requestId);
+
+      if (error) throw new Error(error.message);
+
+      toast.success('Congé modifié');
+      setEditingId(null);
+      fetchRequests();
+    } catch (error) {
+      console.error('Error editing leave:', error);
+      toast.error('Erreur lors de la modification');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDelete = async (requestId: string) => {
+    setProcessingId(requestId);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('leave_requests')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) throw new Error(error.message);
+
+      toast.success('Congé annulé et supprimé');
+      setCancellingId(null);
+      fetchRequests();
+    } catch (error) {
+      console.error('Error deleting leave:', error);
+      toast.error('Erreur lors de la suppression');
     } finally {
       setProcessingId(null);
     }
@@ -320,8 +382,24 @@ export default function LeaveManagementPage() {
                   </div>
 
                   {/* Action buttons for pending */}
-                  {isPending && !isRejecting && (
+                  {isPending && !isRejecting && editingId !== req.id && cancellingId !== req.id && (
                     <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => startEditing(req)}
+                        disabled={isProcessing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => setCancellingId(req.id)}
+                        disabled={isProcessing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Annuler
+                      </button>
                       <button
                         onClick={() => setRejectingId(req.id)}
                         disabled={isProcessing}
@@ -338,6 +416,108 @@ export default function LeaveManagementPage() {
                         {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                         Accepter
                       </button>
+                    </div>
+                  )}
+
+                  {/* Modifier/Annuler buttons for approved leaves */}
+                  {isApproved && editingId !== req.id && cancellingId !== req.id && (
+                    <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => startEditing(req)}
+                        disabled={isProcessing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => setCancellingId(req.id)}
+                        disabled={isProcessing}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-white border border-gray-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Annuler le congé
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Edit form */}
+                  {editingId === req.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                      <p className="text-sm font-medium text-gray-700">Modifier les dates du congé</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Date début</label>
+                          <input
+                            type="date"
+                            value={editStartDate}
+                            onChange={(e) => setEditStartDate(e.target.value)}
+                            className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Date fin</label>
+                          <input
+                            type="date"
+                            value={editEndDate}
+                            onChange={(e) => setEditEndDate(e.target.value)}
+                            className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Motif</label>
+                        <input
+                          type="text"
+                          value={editReason}
+                          onChange={(e) => setEditReason(e.target.value)}
+                          placeholder="Motif du congé..."
+                          className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+                        >
+                          Annuler
+                        </button>
+                        <button
+                          onClick={() => handleEdit(req.id)}
+                          disabled={isProcessing || !editStartDate || !editEndDate}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
+                          Enregistrer
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cancel confirmation */}
+                  {cancellingId === req.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <div className="bg-red-50 rounded-lg p-4">
+                        <p className="text-sm font-medium text-red-800 mb-3">
+                          Supprimer le congé de {getTechName(req.technician)} du {format(new Date(req.start_date + 'T00:00:00'), 'd MMM', { locale: fr })} au {format(new Date(req.end_date + 'T00:00:00'), 'd MMM yyyy', { locale: fr })} ?
+                        </p>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setCancellingId(null)}
+                            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+                          >
+                            Non, garder
+                          </button>
+                          <button
+                            onClick={() => handleDelete(req.id)}
+                            disabled={isProcessing}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            Oui, supprimer
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 

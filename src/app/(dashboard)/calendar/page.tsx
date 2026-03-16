@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Calendar, Loader2 } from 'lucide-react';
+import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Calendar, Loader2, Pencil, Trash2, X as XIcon } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
 import { TimeGridView, TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
-import type { LeaveEntry, BirthdayEntry } from '@/components/calendar/TimeGridView';
+import type { LeaveEntry, BirthdayEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
+import { getApprovedLeaves } from '@/lib/leave-utils';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay,
   eachDayOfInterval, isSameMonth, isSameDay, isToday, addWeeks, subWeeks, addDays,
-  subDays, addMinutes, isWithinInterval,
+  subDays, isWithinInterval,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -30,7 +31,6 @@ interface Intervention {
 
 interface Technician { id: string; first_name: string | null; last_name: string | null; email: string; }
 interface Regie { id: string; name: string; }
-interface CalendarBlock { id: string; title: string; date_planned: string; estimated_duration_minutes: number; status: string; technician_id: string | null; intervention_type?: string | null; work_order_number?: string | null; }
 
 const UNASSIGNED_COLOR = '#9CA3AF';
 
@@ -52,6 +52,13 @@ export default function CalendarPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedIntervention, setSelectedIntervention] = useState<Intervention | null>(null);
   const [detailIntervention, setDetailIntervention] = useState<Intervention | null>(null);
+  // Leave popup state
+  const [selectedLeave, setSelectedLeave] = useState<LeaveEntry & { id?: string } | null>(null);
+  const [isEditingLeave, setIsEditingLeave] = useState(false);
+  const [editLeaveStart, setEditLeaveStart] = useState('');
+  const [editLeaveEnd, setEditLeaveEnd] = useState('');
+  const [isDeletingLeave, setIsDeletingLeave] = useState(false);
+  const [leaveProcessing, setLeaveProcessing] = useState(false);
   const supabase = createClient();
 
   const getDateRange = useCallback(() => {
@@ -68,8 +75,8 @@ export default function CalendarPage() {
     const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)`).gte('date_planned', start.toISOString()).lte('date_planned', end.toISOString()).order('date_planned', { ascending: true });
     if (data) setInterventions(data as Intervention[]);
     const sd = format(start, 'yyyy-MM-dd'); const ed = format(end, 'yyyy-MM-dd');
-    const { data: leavesData } = await supabase.from('leave_requests').select(`technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
-    if (leavesData) setLeaves(leavesData as LeaveEntry[]);
+    const { data: leavesData } = await supabase.from('leave_requests').select(`id, technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
+    if (leavesData) setLeaves(leavesData as (LeaveEntry & { id: string })[]);
 
     // Fetch birthdays
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,6 +113,40 @@ export default function CalendarPage() {
       case 'day': return format(currentDate, 'EEEE d MMMM yyyy', { locale: fr });
     }
   }, [view, currentDate]);
+
+  const handleLeaveClick = (leave: LeaveEntry) => {
+    setSelectedLeave(leave as LeaveEntry & { id?: string });
+    setIsEditingLeave(false);
+    setIsDeletingLeave(false);
+  };
+
+  const handleEditLeave = async () => {
+    if (!selectedLeave || !(selectedLeave as { id?: string }).id) return;
+    setLeaveProcessing(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('leave_requests').update({ start_date: editLeaveStart, end_date: editLeaveEnd }).eq('id', (selectedLeave as { id: string }).id);
+      if (error) throw new Error(error.message);
+      toast.success('Congé modifié');
+      setSelectedLeave(null);
+      fetchInterventions();
+    } catch { toast.error('Erreur lors de la modification'); }
+    finally { setLeaveProcessing(false); }
+  };
+
+  const handleDeleteLeave = async () => {
+    if (!selectedLeave || !(selectedLeave as { id?: string }).id) return;
+    setLeaveProcessing(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('leave_requests').delete().eq('id', (selectedLeave as { id: string }).id);
+      if (error) throw new Error(error.message);
+      toast.success('Congé annulé et supprimé');
+      setSelectedLeave(null);
+      fetchInterventions();
+    } catch { toast.error('Erreur lors de la suppression'); }
+    finally { setLeaveProcessing(false); }
+  };
 
   const handleInterventionClick = (iv: Intervention) => setDetailIntervention(iv);
   const handleEditFromDetail = () => { if (detailIntervention) { setSelectedIntervention(detailIntervention); setDetailIntervention(null); setIsEditModalOpen(true); } };
@@ -211,8 +252,8 @@ export default function CalendarPage() {
                 })}
               </div>
             </>)}
-            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
-            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} />}
+            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
+            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
           </>)}
         </div>
 
@@ -243,26 +284,78 @@ export default function CalendarPage() {
       </Modal>
 
       <InterventionDetailSheet intervention={detailIntervention} onClose={() => setDetailIntervention(null)} onEdit={handleEditFromDetail} />
+
+      {/* Leave popup */}
+      {selectedLeave && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setSelectedLeave(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">🌴 Congé</h3>
+              <button onClick={() => setSelectedLeave(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><XIcon className="w-4 h-4 text-gray-400" /></button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <p className="text-xs text-gray-500">Technicien</p>
+                <p className="text-sm font-semibold text-gray-900">{getTechName(selectedLeave.technician)}</p>
+              </div>
+              <div className="flex gap-4">
+                <div><p className="text-xs text-gray-500">Du</p><p className="text-sm font-medium">{format(new Date(selectedLeave.start_date + 'T00:00:00'), 'd MMM yyyy', { locale: fr })}</p></div>
+                <div><p className="text-xs text-gray-500">Au</p><p className="text-sm font-medium">{format(new Date(selectedLeave.end_date + 'T00:00:00'), 'd MMM yyyy', { locale: fr })}</p></div>
+              </div>
+
+              {isEditingLeave && (
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <p className="text-sm font-medium text-gray-700">Modifier les dates</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={editLeaveStart} onChange={(e) => setEditLeaveStart(e.target.value)} className="h-9 px-3 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                    <input type="date" value={editLeaveEnd} onChange={(e) => setEditLeaveEnd(e.target.value)} className="h-9 px-3 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+              )}
+
+              {isDeletingLeave && (
+                <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                  <p className="text-sm text-red-800">Supprimer ce congé ?</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              {!isEditingLeave && !isDeletingLeave && (
+                <>
+                  <button onClick={() => { setIsEditingLeave(true); setEditLeaveStart(selectedLeave.start_date); setEditLeaveEnd(selectedLeave.end_date); }} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"><Pencil className="w-3.5 h-3.5" />Modifier</button>
+                  <button onClick={() => setIsDeletingLeave(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-white border border-gray-200 hover:bg-red-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" />Annuler</button>
+                </>
+              )}
+              {isEditingLeave && (
+                <>
+                  <button onClick={() => setIsEditingLeave(false)} className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Retour</button>
+                  <button onClick={handleEditLeave} disabled={leaveProcessing} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50">{leaveProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}Enregistrer</button>
+                </>
+              )}
+              {isDeletingLeave && (
+                <>
+                  <button onClick={() => setIsDeletingLeave(false)} className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Non, garder</button>
+                  <button onClick={handleDeleteLeave} disabled={leaveProcessing} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">{leaveProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}Supprimer</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SPLIT VIEW pour création: Formulaire + Calendrier semaine cliquable
+// SPLIT VIEW pour création: Formulaire + TimeGridView calendrier semaine
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const HOUR_HEIGHT = 48;
-const START_HOUR = 7;
-const END_HOUR = 18;
-const TOTAL_HOURS = END_HOUR - START_HOUR;
-const LUNCH_START = 12;
-const LUNCH_END_HOUR = 13;
-const LUNCH_END_MIN = 30;
 
 function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [calendarWeek, setCalendarWeek] = useState(new Date());
-  const [calendarInterventions, setCalendarInterventions] = useState<CalendarBlock[]>([]);
+  const [calendarInterventions, setCalendarInterventions] = useState<Intervention[]>([]);
+  const [calendarLeaves, setCalendarLeaves] = useState<LeaveEntry[]>([]);
+  const [calendarBirthdays, setCalendarBirthdays] = useState<BirthdayEntry[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [regies, setRegies] = useState<Regie[]>([]);
   const [formData, setFormData] = useState({
@@ -285,14 +378,38 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
 
   const weekStart = useMemo(() => startOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
   const weekEnd = useMemo(() => endOfWeek(calendarWeek, { weekStartsOn: 1 }), [calendarWeek]);
-  const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
 
   const fetchCalendarData = useCallback(async () => {
-    let q = supabase.from('interventions').select('id, title, date_planned, estimated_duration_minutes, status, technician_id, intervention_type, work_order_number').gte('date_planned', weekStart.toISOString()).lte('date_planned', weekEnd.toISOString()).not('status', 'eq', 'annule');
+    const sd = format(weekStart, 'yyyy-MM-dd');
+    const ed = format(weekEnd, 'yyyy-MM-dd');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q = (supabase as any).from('interventions')
+      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)')
+      .gte('date_planned', weekStart.toISOString()).lte('date_planned', weekEnd.toISOString()).not('status', 'eq', 'annule');
     if (formData.technician_id) q = q.eq('technician_id', formData.technician_id);
-    const { data } = await q;
-    if (data) setCalendarInterventions(data as CalendarBlock[]);
-  }, [weekStart, weekEnd, formData.technician_id]);
+    if (formData.intervention_type) q = q.eq('intervention_type', formData.intervention_type);
+
+    const [{ data: ivData }, leavesData, { data: usersData }] = await Promise.all([
+      q,
+      getApprovedLeaves(sd, ed),
+      supabase.from('users').select('id, first_name, last_name, birth_date').not('birth_date', 'is', null).eq('is_active', true),
+    ]);
+
+    if (ivData) setCalendarInterventions(ivData as Intervention[]);
+    setCalendarLeaves(leavesData || []);
+
+    if (usersData) {
+      const year = new Date().getFullYear();
+      const bdays: BirthdayEntry[] = usersData
+        .filter((u: { birth_date: string | null }) => u.birth_date)
+        .map((u: { id: string; first_name: string; last_name: string; birth_date: string }) => {
+          const [, m, d] = u.birth_date.split('-');
+          return { user_id: u.id, first_name: u.first_name || '', last_name: u.last_name || '', date: `${year}-${m}-${d}` };
+        });
+      setCalendarBirthdays(bdays);
+    }
+  }, [weekStart, weekEnd, formData.technician_id, formData.intervention_type]);
 
   useEffect(() => { fetchCalendarData(); }, [fetchCalendarData]);
 
@@ -302,7 +419,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
   };
 
   const handleSlotClick = (day: Date, hour: number) => {
-    if (hour >= LUNCH_START && hour < 13.5) return;
+    if (hour >= 12 && hour < 13.5) return;
     setFormData((prev) => ({ ...prev, date_planned: format(day, 'yyyy-MM-dd'), time_planned: `${String(Math.floor(hour)).padStart(2, '0')}:${hour % 1 === 0.5 ? '30' : '00'}` }));
   };
 
@@ -337,15 +454,14 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     } finally { setIsLoading(false); }
   };
 
-  const getTechName = (t: Technician) => { if (t.first_name && t.last_name) return `${t.first_name} ${t.last_name}`; return t.first_name || t.last_name || t.email; };
-  const selectedTechName = formData.technician_id ? getTechName(technicians.find(t => t.id === formData.technician_id)!) : 'Tous les techniciens';
+  const getTechNameLocal = (t: Technician) => { if (t.first_name && t.last_name) return `${t.first_name} ${t.last_name}`; return t.first_name || t.last_name || t.email; };
+  const selectedTechName = formData.technician_id ? getTechNameLocal(technicians.find(t => t.id === formData.technician_id)!) : 'Tous les techniciens';
   const ic = 'w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
   const sc = `${ic} bg-white`;
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
-  const getDayIvs = (day: Date) => calendarInterventions.filter(iv => iv.date_planned && isSameDay(new Date(iv.date_planned), day));
-  const getBlockStyle = (iv: CalendarBlock) => { const d = new Date(iv.date_planned); const h = d.getHours(); const m = d.getMinutes(); const sm = Math.max((h - START_HOUR) * 60 + m, 0); const dur = Math.max(iv.estimated_duration_minutes || 30, 15); const em = Math.min(sm + dur, TOTAL_HOURS * 60); return { top: (sm / 60) * HOUR_HEIGHT, height: Math.max(((em - sm) / 60) * HOUR_HEIGHT, 16) }; };
-  const lunchTop = (LUNCH_START - START_HOUR) * HOUR_HEIGHT;
-  const lunchHeight = ((LUNCH_END_HOUR - LUNCH_START) * 60 + LUNCH_END_MIN) / 60 * HOUR_HEIGHT;
+
+  const calendarSelectedSlot: SelectedSlot | null = formData.date_planned && formData.time_planned
+    ? { date: formData.date_planned, time: formData.time_planned, durationMinutes: formData.estimated_duration_minutes || 60, title: formData.title || 'Nouvelle' }
+    : null;
 
   return (
     <div className="flex gap-0 max-h-[85vh]">
@@ -356,7 +472,21 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea name="description" rows={3} value={formData.description} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Détails..." /></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Adresse *</label><input type="text" name="address" required value={formData.address} onChange={handleChange} className={ic} placeholder="Adresse complète" /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Technicien</label><select name="technician_id" value={formData.technician_id} onChange={handleChange} className={sc}><option value="">-- Non assigné --</option>{technicians.map((t) => <option key={t.id} value={t.id}>{getTechName(t)}</option>)}</select></div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Technicien</label>
+              <select name="technician_id" value={formData.technician_id} onChange={handleChange} className={sc}>
+                <option value="">-- Non assigné --</option>
+                {technicians.map((t) => {
+                  const techLeave = formData.date_planned
+                    ? calendarLeaves.find(l => l.technician_id === t.id && l.start_date <= formData.date_planned && l.end_date >= formData.date_planned)
+                    : null;
+                  const leaveLabel = techLeave
+                    ? ` (En congé du ${format(new Date(techLeave.start_date + 'T00:00:00'), 'd MMM', { locale: fr })} au ${format(new Date(techLeave.end_date + 'T00:00:00'), 'd MMM', { locale: fr })})`
+                    : '';
+                  return <option key={t.id} value={t.id} disabled={!!techLeave}>{getTechNameLocal(t)}{leaveLabel}</option>;
+                })}
+              </select>
+            </div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Type</label><select name="intervention_type" value={formData.intervention_type} onChange={handleChange} className={sc}><option value="depannage">🔧 Dépannage</option><option value="chantier">🏗️ Chantier</option></select></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -386,9 +516,9 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         </form>
       </div>
 
-      {/* ═══ RIGHT: Mini calendrier semaine ═══ */}
+      {/* ═══ RIGHT: TimeGridView calendrier semaine ═══ */}
       <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-        <div className="flex items-center justify-between mb-3 px-3 pt-3 flex-shrink-0">
+        <div className="flex items-center justify-between mb-2 px-3 pt-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <button onClick={() => setCalendarWeek(subWeeks(calendarWeek, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-medium text-gray-700">{format(weekStart, 'd MMM', { locale: fr })} – {format(weekEnd, 'd MMM yyyy', { locale: fr })}</span>
@@ -398,44 +528,17 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{selectedTechName}</span>
         </div>
 
-        <div className="flex-1 overflow-auto border border-gray-200 rounded-lg mx-3 mb-3">
-          <div className="flex min-w-[500px]">
-            <div className="flex-shrink-0 w-12 border-r border-gray-200">
-              <div className="h-8 border-b border-gray-200" />
-              <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
-                {hours.map((h) => (<div key={h} className="absolute w-full text-right pr-1.5 text-[10px] text-gray-400 -translate-y-1/2" style={{ top: (h - START_HOUR) * HOUR_HEIGHT }}>{`${String(h).padStart(2, '0')}:00`}</div>))}
-              </div>
-            </div>
-            <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
-              {weekDays.map((day, ci2) => {
-                const dayIvs = getDayIvs(day); const td = isToday(day);
-                const isSel = formData.date_planned && isSameDay(new Date(formData.date_planned + 'T00:00:00'), day);
-                return (
-                  <div key={ci2} className="border-r border-gray-100 last:border-r-0">
-                    <div className={`h-8 flex items-center justify-center border-b border-gray-200 text-xs font-medium ${td ? 'bg-blue-50 text-blue-600' : isSel ? 'bg-green-50 text-green-700' : 'text-gray-500'}`}>{format(day, 'EEE d', { locale: fr })}</div>
-                    <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
-                      {hours.map((h) => (<div key={h} className="absolute w-full border-t border-gray-50" style={{ top: (h - START_HOUR) * HOUR_HEIGHT }} />))}
-                      {hours.map((h) => [0, 0.5].map((half) => {
-                        const sh = h + half; if (sh >= LUNCH_START && sh < 13.5) return null;
-                        return (<div key={`${h}-${half}`} className="absolute left-0 right-0 cursor-pointer hover:bg-blue-50 transition-colors z-[1]" style={{ top: (sh - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT / 2 }} onClick={() => handleSlotClick(day, sh)} title={`${String(Math.floor(sh)).padStart(2, '0')}:${half ? '30' : '00'}`} />);
-                      }))}
-                      <div className="absolute left-0 right-0 z-[2] pointer-events-none" style={{ top: lunchTop, height: lunchHeight }}><div className="w-full h-full bg-gray-100 border-y border-dashed border-gray-300 flex items-center justify-center"><span className="text-[10px] text-gray-400">🍽️</span></div></div>
-                      {td && (() => { const now = new Date(); const nm = (now.getHours() - START_HOUR) * 60 + now.getMinutes(); if (nm < 0 || nm > TOTAL_HOURS * 60) return null; return <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: (nm / 60) * HOUR_HEIGHT }}><div className="h-px bg-red-500 w-full" /><div className="w-1.5 h-1.5 rounded-full bg-red-500 -mt-[3px] -ml-0.5" /></div>; })()}
-                      {isSel && formData.time_planned && (() => { const [hh, mm] = formData.time_planned.split(':').map(Number); const sm2 = (hh - START_HOUR) * 60 + mm; const dur = formData.estimated_duration_minutes || 60; const t2 = (sm2 / 60) * HOUR_HEIGHT; const h2 = (dur / 60) * HOUR_HEIGHT; return (<div className="absolute left-0.5 right-0.5 rounded border-2 border-dashed border-green-500 bg-green-100/50 z-[8] pointer-events-none" style={{ top: t2, height: Math.max(h2, 16) }}><div className="px-1 py-0.5 text-[10px] font-medium text-green-700 truncate">📌 {formData.title || 'Nouvelle'}</div></div>); })()}
-                      {dayIvs.map((iv) => { const { top, height } = getBlockStyle(iv); const isDep = iv.intervention_type !== 'chantier'; const col = isDep ? 'bg-red-400 border-red-600' : 'bg-blue-400 border-blue-600'; const st = format(new Date(iv.date_planned), 'HH:mm'); const et = format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm'); return (<div key={iv.id} className={`absolute left-0.5 right-0.5 rounded border-l-2 text-white text-[10px] overflow-hidden z-[5] ${col}`} style={{ top, height: Math.max(height, 16) }} title={`${iv.work_order_number || iv.title} (${st}-${et})`}><div className="px-1 py-0.5 truncate font-medium">{iv.work_order_number || iv.title}</div>{height >= 28 && <div className="px-1 text-white/70">{st}-{et}</div>}</div>); })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 px-3 pb-2 text-[10px] text-gray-500 flex-shrink-0">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-400" />Dépannage</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400" />Chantier</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-100 border border-dashed border-green-500" />Nouveau RDV</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-gray-100" />Pause midi</span>
+        <div className="flex-1 overflow-hidden mx-3 mb-3">
+          <TimeGridView
+            mode="week"
+            currentDate={calendarWeek}
+            interventions={calendarInterventions}
+            leaves={calendarLeaves}
+            birthdays={calendarBirthdays}
+            onInterventionClick={() => {}}
+            onSlotClick={handleSlotClick}
+            selectedSlot={calendarSelectedSlot}
+          />
         </div>
       </div>
     </div>
