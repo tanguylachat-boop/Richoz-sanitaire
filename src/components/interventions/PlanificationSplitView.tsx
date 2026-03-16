@@ -157,6 +157,11 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       query = query.eq('technician_id', formData.technician_id);
     }
 
+    // Filter by intervention type (dépannage/chantier)
+    if (formData.intervention_type) {
+      query = query.eq('intervention_type', formData.intervention_type);
+    }
+
     const [{ data: ivData }, leavesData, { data: usersData }] = await Promise.all([
       query,
       getApprovedLeaves(sd, ed),
@@ -178,7 +183,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         });
       setBirthdays(bdays);
     }
-  }, [weekStart, weekEnd, formData.technician_id]);
+  }, [weekStart, weekEnd, formData.technician_id, formData.intervention_type]);
 
   useEffect(() => { fetchCalendarData(); }, [fetchCalendarData]);
 
