@@ -44,29 +44,51 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function TechnicianWeekPage() {
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => 
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
 
   const supabase = createClient();
 
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
 
+  // Fetch user preference
+  useEffect(() => {
+    const fetchPref = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
+        if (data?.intervention_type_preference) {
+          setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
+        }
+      }
+    };
+    fetchPref();
+  }, []);
+
   // Fetch week's interventions
   const fetchInterventions = async () => {
     setIsLoading(true);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('interventions')
       .select('id, title, address, date_planned, estimated_duration_minutes, status, intervention_type')
       .gte('date_planned', currentWeekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
       .neq('status', 'annule')
       .order('date_planned', { ascending: true });
+
+    // Filter by technician type preference
+    if (typePreference) {
+      query = query.eq('intervention_type', typePreference);
+    }
+
+    const { data, error } = await query;
 
     if (!error && data) {
       setInterventions(data);
@@ -76,7 +98,7 @@ export default function TechnicianWeekPage() {
 
   useEffect(() => {
     fetchInterventions();
-  }, [currentWeekStart]);
+  }, [currentWeekStart, typePreference]);
 
   // Group interventions by day
   const getInterventionsForDay = (day: Date) => {

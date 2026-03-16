@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat } from 'lucide-react';
@@ -13,44 +13,70 @@ interface TechnicianLayoutProps {
 export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
   const pathname = usePathname();
   const supabase = createClient();
+  const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
+
+  useEffect(() => {
+    const fetchPreference = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
+        if (data?.intervention_type_preference) {
+          setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
+        }
+      }
+    };
+    fetchPreference();
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
   };
 
-  const navItems = [
-    {
-      href: '/technician/today',
-      icon: Calendar,
-      label: "Aujourd'hui",
-      isActive: pathname === '/technician/today',
-    },
-    {
-      href: '/technician/week',
-      icon: CalendarDays,
-      label: 'Semaine',
-      isActive: pathname === '/technician/week',
-    },
-    {
-      href: '/technician/chantier',
-      icon: HardHat,
-      label: 'Chantiers',
-      isActive: pathname.startsWith('/technician/chantier'),
-    },
-    {
-      href: '/technician/leave',
-      icon: Palmtree,
-      label: 'Congés',
-      isActive: pathname === '/technician/leave',
-    },
-    {
-      href: '/technician/profile',
-      icon: UserCircle,
-      label: 'Profil',
-      isActive: pathname === '/technician/profile',
-    },
-  ];
+  const navItems = useMemo(() => {
+    const items = [
+      {
+        href: '/technician/today',
+        icon: Calendar,
+        label: "Aujourd'hui",
+        isActive: pathname === '/technician/today',
+        showFor: null as 'depannage' | 'chantier' | null, // show for all
+      },
+      {
+        href: '/technician/week',
+        icon: CalendarDays,
+        label: 'Semaine',
+        isActive: pathname === '/technician/week',
+        showFor: null,
+      },
+      {
+        href: '/technician/chantier',
+        icon: HardHat,
+        label: 'Chantiers',
+        isActive: pathname.startsWith('/technician/chantier'),
+        showFor: 'chantier' as const,
+      },
+      {
+        href: '/technician/leave',
+        icon: Palmtree,
+        label: 'Congés',
+        isActive: pathname === '/technician/leave',
+        showFor: null,
+      },
+      {
+        href: '/technician/profile',
+        icon: UserCircle,
+        label: 'Profil',
+        isActive: pathname === '/technician/profile',
+        showFor: null,
+      },
+    ];
+    // Filter nav: if depannage tech, hide chantiers; if chantier tech, show all
+    if (typePreference === 'depannage') {
+      return items.filter(i => i.showFor !== 'chantier');
+    }
+    return items;
+  }, [pathname, typePreference]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

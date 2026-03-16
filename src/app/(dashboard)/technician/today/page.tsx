@@ -55,6 +55,7 @@ export default function TechnicianTodayPage() {
   const [revisionReports, setRevisionReports] = useState<RevisionReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
 
   const supabase = createClient();
 
@@ -62,6 +63,20 @@ export default function TechnicianTodayPage() {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch user preference
+  useEffect(() => {
+    const fetchPref = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
+        if (data?.intervention_type_preference) {
+          setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
+        }
+      }
+    };
+    fetchPref();
   }, []);
 
   // Fetch today's interventions
@@ -72,13 +87,20 @@ export default function TechnicianTodayPage() {
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString();
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('interventions')
       .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, client_info, intervention_type')
       .gte('date_planned', startOfDay)
       .lte('date_planned', endOfDay)
       .neq('status', 'annule')
       .order('date_planned', { ascending: true });
+
+    // Filter by technician type preference
+    if (typePreference) {
+      query = query.eq('intervention_type', typePreference);
+    }
+
+    const { data, error } = await query;
 
     if (!error && data) {
       setInterventions(data);
@@ -99,7 +121,7 @@ export default function TechnicianTodayPage() {
 
   useEffect(() => {
     fetchInterventions();
-  }, []);
+  }, [typePreference]);
 
   // Get greeting based on time
   const getGreeting = () => {
