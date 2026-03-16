@@ -53,6 +53,7 @@ export const ADMIN_ROUTES = [
   { href: '/inbox', label: 'Boîte de réception', icon: 'inbox' },
   { href: '/calendar', label: 'Calendrier', icon: 'calendar' },
   { href: '/interventions', label: 'Interventions', icon: 'wrench' },
+  { href: '/chantiers', label: 'Chantiers', icon: 'hard-hat' },
   { href: '/reports/validate', label: 'Validation rapports', icon: 'clipboard-check' },
   { href: '/invoices', label: 'Factures', icon: 'file-text' },
   { href: '/quotes', label: 'Devis', icon: 'file-plus' },

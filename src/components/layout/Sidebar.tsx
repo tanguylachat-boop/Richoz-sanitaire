@@ -18,6 +18,7 @@ import {
   Settings,
   CalendarCheck,
   History,
+  HardHat,
   LogOut,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -38,6 +39,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   'building': Building,
   'settings': Settings,
   'calendar-check': CalendarCheck,
+  'hard-hat': HardHat,
   'history': History,
 };
 
