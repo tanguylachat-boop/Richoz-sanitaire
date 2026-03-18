@@ -28,9 +28,9 @@ interface PhotoAnnotatorProps {
 }
 
 const STROKE_WIDTHS: Record<StrokeWidth, number> = {
-  fin: 2,
-  moyen: 4,
-  epais: 8,
+  fin: 3,
+  moyen: 5,
+  epais: 9,
 };
 
 const STROKE_LABELS: Record<StrokeWidth, string> = {
@@ -39,8 +39,12 @@ const STROKE_LABELS: Record<StrokeWidth, string> = {
   epais: 'Épais',
 };
 
-const COLOR = '#ef4444';
+const COLOR = '#2563EB';
 const ERASER_RADIUS = 20;
+const LABEL_PADDING_X = 10;
+const LABEL_PADDING_Y = 6;
+const LABEL_FONT_SIZE = 14;
+const LABEL_BORDER_RADIUS = 6;
 
 export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath }: PhotoAnnotatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -54,16 +58,22 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
   const [currentAction, setCurrentAction] = useState<DrawAction | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+
+  // Text input state (for standalone text tool)
   const [showTextInput, setShowTextInput] = useState(false);
   const [textInputPos, setTextInputPos] = useState({ x: 0, y: 0 });
   const [textValue, setTextValue] = useState('');
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-  // Store natural image dimensions for export
-  const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+
+  // Arrow label input state — after drawing an arrow, prompt for label
+  const [pendingArrow, setPendingArrow] = useState<DrawAction | null>(null);
+  const [arrowLabelValue, setArrowLabelValue] = useState('');
+  const [arrowLabelPos, setArrowLabelPos] = useState({ x: 0, y: 0 });
 
   const strokeWidth = STROKE_WIDTHS[strokeWidthKey];
 
-  // Load image and set canvas size
+  // Load image
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -79,7 +89,7 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
     img.src = photoUrl;
   }, [photoUrl, onCancel]);
 
-  // Resize canvas to fit container while maintaining aspect ratio
+  // Resize canvas to fit container
   const updateCanvasSize = useCallback(() => {
     if (!imageRef.current || !containerRef.current) return;
     const container = containerRef.current;
@@ -116,21 +126,29 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    const allActions = currentAction ? [...actions, currentAction] : actions;
+    const allActions = [
+      ...actions,
+      ...(pendingArrow ? [pendingArrow] : []),
+      ...(currentAction ? [currentAction] : []),
+    ];
     for (const action of allActions) {
       if (action.tool === 'eraser') continue;
-      drawAction(ctx, action);
+      drawAction(ctx, action, 1);
     }
-  }, [actions, currentAction]);
+  }, [actions, currentAction, pendingArrow]);
 
   useEffect(() => {
     if (canvasSize.width > 0) redraw();
   }, [canvasSize, redraw]);
 
-  function drawAction(ctx: CanvasRenderingContext2D, action: DrawAction) {
+  /**
+   * Draw a single action on a canvas context.
+   * `scale` is used for high-res export (multiply positions/sizes).
+   */
+  function drawAction(ctx: CanvasRenderingContext2D, action: DrawAction, scale: number) {
     ctx.strokeStyle = action.color;
     ctx.fillStyle = action.color;
-    ctx.lineWidth = action.strokeWidth;
+    ctx.lineWidth = action.strokeWidth * scale;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -141,62 +159,107 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
       case 'line': {
         if (pts.length < 2) return;
         ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.moveTo(pts[0].x * scale, pts[0].y * scale);
+        ctx.lineTo(pts[pts.length - 1].x * scale, pts[pts.length - 1].y * scale);
         ctx.stroke();
         break;
       }
       case 'arrow': {
         if (pts.length < 2) return;
-        const start = pts[0];
-        const end = pts[pts.length - 1];
+        const start = { x: pts[0].x * scale, y: pts[0].y * scale };
+        const end = { x: pts[pts.length - 1].x * scale, y: pts[pts.length - 1].y * scale };
+
         // Shaft
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(end.x, end.y);
         ctx.stroke();
-        // Arrowhead
+
+        // Filled arrowhead
         const angle = Math.atan2(end.y - start.y, end.x - start.x);
-        const headLen = Math.max(15, action.strokeWidth * 4);
+        const headLen = Math.max(18 * scale, action.strokeWidth * scale * 4);
         ctx.beginPath();
         ctx.moveTo(end.x, end.y);
         ctx.lineTo(
           end.x - headLen * Math.cos(angle - Math.PI / 6),
           end.y - headLen * Math.sin(angle - Math.PI / 6)
         );
-        ctx.moveTo(end.x, end.y);
         ctx.lineTo(
           end.x - headLen * Math.cos(angle + Math.PI / 6),
           end.y - headLen * Math.sin(angle + Math.PI / 6)
         );
-        ctx.stroke();
+        ctx.closePath();
+        ctx.fill();
+
+        // Label (blue rect + white text) at the start/base of the arrow
+        if (action.text) {
+          const fontSize = (action.fontSize || LABEL_FONT_SIZE) * scale;
+          const padX = LABEL_PADDING_X * scale;
+          const padY = LABEL_PADDING_Y * scale;
+          const radius = LABEL_BORDER_RADIUS * scale;
+
+          ctx.font = `bold ${fontSize}px sans-serif`;
+          const textMetrics = ctx.measureText(action.text);
+          const textW = textMetrics.width;
+          const textH = fontSize;
+
+          // Position the label above the arrow start
+          const labelX = start.x - textW / 2 - padX;
+          const labelY = start.y - textH - padY * 3;
+          const labelW = textW + padX * 2;
+          const labelH = textH + padY * 2;
+
+          // Blue rounded rectangle background
+          ctx.fillStyle = action.color;
+          ctx.beginPath();
+          ctx.moveTo(labelX + radius, labelY);
+          ctx.lineTo(labelX + labelW - radius, labelY);
+          ctx.quadraticCurveTo(labelX + labelW, labelY, labelX + labelW, labelY + radius);
+          ctx.lineTo(labelX + labelW, labelY + labelH - radius);
+          ctx.quadraticCurveTo(labelX + labelW, labelY + labelH, labelX + labelW - radius, labelY + labelH);
+          ctx.lineTo(labelX + radius, labelY + labelH);
+          ctx.quadraticCurveTo(labelX, labelY + labelH, labelX, labelY + labelH - radius);
+          ctx.lineTo(labelX, labelY + radius);
+          ctx.quadraticCurveTo(labelX, labelY, labelX + radius, labelY);
+          ctx.closePath();
+          ctx.fill();
+
+          // White text
+          ctx.fillStyle = '#FFFFFF';
+          ctx.textBaseline = 'top';
+          ctx.fillText(action.text, labelX + padX, labelY + padY);
+          ctx.textBaseline = 'alphabetic';
+
+          // Reset fillStyle
+          ctx.fillStyle = action.color;
+        }
         break;
       }
       case 'circle': {
         if (pts.length < 2) return;
-        const cx = (pts[0].x + pts[pts.length - 1].x) / 2;
-        const cy = (pts[0].y + pts[pts.length - 1].y) / 2;
-        const rx = Math.abs(pts[pts.length - 1].x - pts[0].x) / 2;
-        const ry = Math.abs(pts[pts.length - 1].y - pts[0].y) / 2;
+        const cx = ((pts[0].x + pts[pts.length - 1].x) / 2) * scale;
+        const cy = ((pts[0].y + pts[pts.length - 1].y) / 2) * scale;
+        const rx = (Math.abs(pts[pts.length - 1].x - pts[0].x) / 2) * scale;
+        const ry = (Math.abs(pts[pts.length - 1].y - pts[0].y) / 2) * scale;
         ctx.beginPath();
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
         ctx.stroke();
         break;
       }
       case 'rectangle': {
         if (pts.length < 2) return;
-        const x = Math.min(pts[0].x, pts[pts.length - 1].x);
-        const y = Math.min(pts[0].y, pts[pts.length - 1].y);
-        const w = Math.abs(pts[pts.length - 1].x - pts[0].x);
-        const h = Math.abs(pts[pts.length - 1].y - pts[0].y);
+        const x = Math.min(pts[0].x, pts[pts.length - 1].x) * scale;
+        const y = Math.min(pts[0].y, pts[pts.length - 1].y) * scale;
+        const w = Math.abs(pts[pts.length - 1].x - pts[0].x) * scale;
+        const h = Math.abs(pts[pts.length - 1].y - pts[0].y) * scale;
         ctx.strokeRect(x, y, w, h);
         break;
       }
       case 'text': {
         if (!action.text) return;
-        const fontSize = action.fontSize || 20;
+        const fontSize = (action.fontSize || 20) * scale;
         ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillText(action.text, pts[0].x, pts[0].y);
+        ctx.fillText(action.text, pts[0].x * scale, pts[0].y * scale);
         break;
       }
     }
@@ -222,7 +285,7 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
   }
 
   function handlePointerDown(e: React.MouseEvent | React.TouchEvent) {
-    if (showTextInput) return;
+    if (showTextInput || pendingArrow) return;
     const pos = getCanvasPos(e);
 
     if (tool === 'text') {
@@ -233,13 +296,10 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
     }
 
     if (tool === 'eraser') {
-      // Remove any action whose points are near the click
       setActions((prev) =>
-        prev.filter((a) => {
-          return !a.points.some(
-            (p) => Math.hypot(p.x - pos.x, p.y - pos.y) < ERASER_RADIUS
-          );
-        })
+        prev.filter((a) =>
+          !a.points.some((p) => Math.hypot(p.x - pos.x, p.y - pos.y) < ERASER_RADIUS)
+        )
       );
       setIsDrawing(true);
       return;
@@ -260,11 +320,9 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
 
     if (tool === 'eraser') {
       setActions((prev) =>
-        prev.filter((a) => {
-          return !a.points.some(
-            (p) => Math.hypot(p.x - pos.x, p.y - pos.y) < ERASER_RADIUS
-          );
-        })
+        prev.filter((a) =>
+          !a.points.some((p) => Math.hypot(p.x - pos.x, p.y - pos.y) < ERASER_RADIUS)
+        )
       );
       return;
     }
@@ -279,10 +337,46 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
   function handlePointerUp() {
     if (!isDrawing) return;
     setIsDrawing(false);
+
     if (currentAction && currentAction.points.length >= 2) {
-      setActions((prev) => [...prev, currentAction]);
+      if (currentAction.tool === 'arrow') {
+        // Arrow drawn — show label input at the arrow start (base)
+        const start = currentAction.points[0];
+        setPendingArrow(currentAction);
+        setArrowLabelValue('');
+        setArrowLabelPos({
+          x: Math.max(10, Math.min(start.x, canvasSize.width - 260)),
+          y: Math.max(10, start.y - 50),
+        });
+      } else {
+        setActions((prev) => [...prev, currentAction]);
+      }
     }
     setCurrentAction(null);
+  }
+
+  function handleArrowLabelConfirm() {
+    if (pendingArrow) {
+      setActions((prev) => [
+        ...prev,
+        {
+          ...pendingArrow,
+          text: arrowLabelValue.trim() || undefined,
+          fontSize: LABEL_FONT_SIZE,
+        },
+      ]);
+    }
+    setPendingArrow(null);
+    setArrowLabelValue('');
+  }
+
+  function handleArrowLabelCancel() {
+    // Add arrow without label
+    if (pendingArrow) {
+      setActions((prev) => [...prev, pendingArrow]);
+    }
+    setPendingArrow(null);
+    setArrowLabelValue('');
   }
 
   function handleTextConfirm() {
@@ -317,35 +411,31 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
     setIsSaving(true);
 
     try {
-      // Create an export canvas at the natural image resolution
       const exportCanvas = document.createElement('canvas');
       exportCanvas.width = naturalSize.width;
       exportCanvas.height = naturalSize.height;
       const ctx = exportCanvas.getContext('2d')!;
 
-      // Draw the original image at full resolution
       ctx.drawImage(imageRef.current, 0, 0, naturalSize.width, naturalSize.height);
 
-      // Scale factor from display to natural
       const scaleX = naturalSize.width / canvasSize.width;
       const scaleY = naturalSize.height / canvasSize.height;
+      // Use uniform scale (average) to keep proportions
+      const scale = (scaleX + scaleY) / 2;
 
-      // Redraw all actions scaled up
       for (const action of actions) {
         if (action.tool === 'eraser') continue;
+        // Scale points individually for x/y
         const scaledAction: DrawAction = {
           ...action,
-          strokeWidth: action.strokeWidth * scaleX,
-          fontSize: action.fontSize ? action.fontSize * scaleX : undefined,
           points: action.points.map((p) => ({
-            x: p.x * scaleX,
-            y: p.y * scaleY,
+            x: p.x * (scaleX / scale),
+            y: p.y * (scaleY / scale),
           })),
         };
-        drawAction(ctx, scaledAction);
+        drawAction(ctx, scaledAction, scale);
       }
 
-      // Convert to blob
       const blob = await new Promise<Blob>((resolve, reject) => {
         exportCanvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error('Canvas blob failed'))),
@@ -354,7 +444,6 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
         );
       });
 
-      // Upload to Supabase Storage
       const supabase = createClient();
       const timestamp = Date.now();
       const path = storagePath
@@ -363,21 +452,13 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
-        .upload(path, blob, {
-          contentType: 'image/jpeg',
-          upsert: false,
-        });
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
 
       if (uploadError) {
-        // Fallback to photos bucket
         const { error: fallbackError } = await supabase.storage
           .from('photos')
-          .upload(path, blob, {
-            contentType: 'image/jpeg',
-            upsert: false,
-          });
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
         if (fallbackError) throw fallbackError;
-
         const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
         onSave(urlData.publicUrl);
       } else {
@@ -394,12 +475,12 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
     }
   }
 
-  const tools: { id: Tool; icon: React.ReactNode; label: string }[] = [
-    { id: 'arrow', icon: <MoveRight className="w-5 h-5" />, label: 'Flèche' },
+  const toolDefs: { id: Tool; icon: React.ReactNode; label: string }[] = [
+    { id: 'arrow', icon: <MoveRight className="w-5 h-5" />, label: 'Flèche + Texte' },
     { id: 'circle', icon: <Circle className="w-5 h-5" />, label: 'Cercle' },
     { id: 'rectangle', icon: <Square className="w-5 h-5" />, label: 'Rectangle' },
     { id: 'line', icon: <Minus className="w-5 h-5" />, label: 'Trait' },
-    { id: 'text', icon: <Type className="w-5 h-5" />, label: 'Texte' },
+    { id: 'text', icon: <Type className="w-5 h-5" />, label: 'Texte libre' },
     { id: 'eraser', icon: <Eraser className="w-5 h-5" />, label: 'Gomme' },
   ];
 
@@ -408,14 +489,14 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
       {/* Top toolbar */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center gap-1">
-          {tools.map((t) => (
+          {toolDefs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTool(t.id)}
               title={t.label}
               className={`p-2.5 rounded-lg transition-colors ${
                 tool === t.id
-                  ? 'bg-red-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
@@ -444,7 +525,6 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
 
           <div className="w-px h-8 bg-gray-600 mx-2" />
 
-          {/* Undo / Clear */}
           <button
             onClick={handleUndo}
             disabled={actions.length === 0}
@@ -518,10 +598,46 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
               onTouchEnd={handlePointerUp}
             />
 
-            {/* Floating text input */}
+            {/* Arrow label input — appears after drawing an arrow */}
+            {pendingArrow && (
+              <div
+                className="absolute z-10"
+                style={{ left: arrowLabelPos.x, top: arrowLabelPos.y }}
+              >
+                <div className="flex items-center gap-1 bg-blue-600 rounded-lg shadow-xl p-1.5">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={arrowLabelValue}
+                    onChange={(e) => setArrowLabelValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleArrowLabelConfirm();
+                      if (e.key === 'Escape') handleArrowLabelCancel();
+                    }}
+                    placeholder="Légende de la flèche..."
+                    className="px-3 py-1.5 text-sm bg-white rounded focus:outline-none w-56"
+                  />
+                  <button
+                    onClick={handleArrowLabelConfirm}
+                    className="px-3 py-1.5 bg-white text-blue-600 text-xs rounded font-bold hover:bg-blue-50"
+                  >
+                    OK
+                  </button>
+                  <button
+                    onClick={handleArrowLabelCancel}
+                    className="px-2 py-1.5 text-white/70 text-xs hover:text-white"
+                    title="Sans texte"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Standalone text input */}
             {showTextInput && (
               <div
-                className="absolute"
+                className="absolute z-10"
                 style={{ left: textInputPos.x, top: textInputPos.y }}
               >
                 <div className="flex items-center gap-1 bg-white rounded-lg shadow-lg p-1">
@@ -542,7 +658,7 @@ export default function PhotoAnnotator({ photoUrl, onSave, onCancel, storagePath
                   />
                   <button
                     onClick={handleTextConfirm}
-                    className="px-2 py-1 bg-red-500 text-white text-xs rounded font-medium hover:bg-red-600"
+                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded font-medium hover:bg-blue-700"
                   >
                     OK
                   </button>
