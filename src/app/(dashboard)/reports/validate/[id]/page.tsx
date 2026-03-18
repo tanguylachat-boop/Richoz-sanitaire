@@ -11,9 +11,10 @@ import {
   ChevronLeft, User, MapPin, Building2, Clock, CheckCircle, XCircle,
   Phone, FileText, Image as ImageIcon, Package,
   CreditCard, Loader2, AlertTriangle, MessageSquare,
-  X, ZoomIn, Archive, PenTool, Download, FileDown,
+  X, Archive, PenTool, Download, FileDown,
 } from 'lucide-react';
 import { generateReportDocx } from '@/lib/generate-report-docx';
+import PhotoAnnotator from '@/components/reports/PhotoAnnotator';
 
 interface Report {
   id: string;
@@ -55,6 +56,7 @@ export default function ValidateReportDetailPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [showAnnotator, setShowAnnotator] = useState(false);
   const [isGeneratingDocx, setIsGeneratingDocx] = useState(false);
   // Editable fields for secretary
   const [editTextContent, setEditTextContent] = useState('');
@@ -263,6 +265,47 @@ export default function ValidateReportDetailPage() {
     }
   };
 
+  const handleAnnotationSave = async (newUrl: string) => {
+    if (!report || !selectedPhoto) return;
+    // Replace the photo in the report's photos array
+    const updatedPhotos = report.photos.map((photo) => {
+      if (typeof photo === 'string') {
+        const fullUrl = getPhotoUrl(photo);
+        if (fullUrl === selectedPhoto || photo === selectedPhoto) {
+          return newUrl;
+        }
+        return photo;
+      }
+      const fullUrl = getPhotoUrl(photo.url);
+      if (fullUrl === selectedPhoto || photo.url === selectedPhoto) {
+        return { ...photo, url: newUrl };
+      }
+      return photo;
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('reports')
+      .update({ photos: updatedPhotos })
+      .eq('id', report.id);
+
+    if (error) {
+      console.error('Erreur mise à jour photos:', error);
+      toast.error('Erreur lors de la mise à jour de la photo');
+    } else {
+      setReport({ ...report, photos: updatedPhotos });
+    }
+    setShowAnnotator(false);
+    setSelectedPhoto(null);
+  };
+
+  // Helper used before report is loaded — declared as function for hoisting
+  function getPhotoUrl(path: string): string {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photos/${path}`;
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -285,12 +328,6 @@ export default function ValidateReportDetailPage() {
   const intervention = report.intervention;
   const technician = report.technician;
   const clientInfo = intervention?.client_info as { name?: string; phone?: string } | null;
-
-  const getPhotoUrl = (path: string): string => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photos/${path}`;
-  };
 
   const rawPhotos = report.photos || [];
   const photosBefore: { url: string; caption?: string }[] = [];
@@ -315,17 +352,25 @@ export default function ValidateReportDetailPage() {
 
   const hourlyRate = 110;
 
+  const handlePhotoClick = (url: string) => {
+    setSelectedPhoto(url);
+    if (report.status !== 'validated') {
+      setShowAnnotator(true);
+    }
+  };
+
   const PhotoGallery = ({ photos, title, emptyText }: { photos: { url: string; caption?: string }[]; title: string; emptyText: string }) => (
     <div>
       <h3 className="text-sm font-medium text-gray-700 mb-3">{title}</h3>
       {photos.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
           {photos.map((photo, index) => (
-            <button key={index} onClick={() => setSelectedPhoto(photo.url)} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 group">
+            <button key={index} onClick={() => handlePhotoClick(photo.url)} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 group">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={photo.url} alt={photo.caption || `Photo ${index + 1}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                <PenTool className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                <span className="absolute bottom-2 left-0 right-0 text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg font-medium">Annoter</span>
               </div>
             </button>
           ))}
@@ -570,8 +615,18 @@ export default function ValidateReportDetailPage() {
         </div>
       </div>
 
-      {/* Photo Lightbox */}
-      {selectedPhoto && (
+      {/* Photo Annotator */}
+      {selectedPhoto && showAnnotator && report.status !== 'validated' && (
+        <PhotoAnnotator
+          photoUrl={selectedPhoto}
+          onSave={handleAnnotationSave}
+          onCancel={() => { setShowAnnotator(false); setSelectedPhoto(null); }}
+          storagePath={`reports/${report.id}`}
+        />
+      )}
+
+      {/* Photo Lightbox (for validated reports or fallback) */}
+      {selectedPhoto && !showAnnotator && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setSelectedPhoto(null)}>
           <button onClick={() => setSelectedPhoto(null)} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors">
             <X className="w-6 h-6 text-white" />
