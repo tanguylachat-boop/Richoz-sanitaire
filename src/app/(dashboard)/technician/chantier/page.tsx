@@ -9,6 +9,7 @@ import {
   Loader2,
   Building2,
   BarChart3,
+  AlertTriangle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { format } from 'date-fns';
@@ -25,6 +26,8 @@ interface ChantierIntervention {
     id: string;
     progress_percent: number;
   }[] | null;
+  has_pending_revision?: boolean;
+  revision_message?: string | null;
 }
 
 const COMPLETED_STATUSES = ['termine', 'completed', 'terminated', 'ready_to_bill', 'billed'];
@@ -52,9 +55,9 @@ export default function ChantierListPage() {
         .not('status', 'eq', 'annule')
         .order('date_planned', { ascending: false });
 
+      let chantierList: ChantierIntervention[] = [];
       if (error) {
         console.error('Error fetching chantiers:', error);
-        // If chantier_details table doesn't exist yet, retry without it
         const { data: fallbackData } = await supabase
           .from('interventions')
           .select('id, title, address, date_planned, status, regie:regies(id, name)')
@@ -62,10 +65,33 @@ export default function ChantierListPage() {
           .eq('intervention_type', 'chantier')
           .not('status', 'eq', 'annule')
           .order('date_planned', { ascending: false });
-        if (fallbackData) setChantiers(fallbackData as ChantierIntervention[]);
+        if (fallbackData) chantierList = fallbackData as ChantierIntervention[];
       } else {
-        setChantiers((data || []) as ChantierIntervention[]);
+        chantierList = (data || []) as ChantierIntervention[];
       }
+
+      // Fetch reports with pending revision for this technician's chantiers
+      if (chantierList.length > 0) {
+        const chantierIds = chantierList.map(c => c.id);
+        const { data: revReports } = await supabase
+          .from('reports')
+          .select('intervention_id, revision_message')
+          .eq('technician_id', user.id)
+          .eq('revision_requested', true)
+          .in('status', ['rejected'])
+          .in('intervention_id', chantierIds);
+
+        if (revReports && revReports.length > 0) {
+          const revMap = new Map(revReports.map(r => [r.intervention_id, r.revision_message]));
+          chantierList = chantierList.map(c => ({
+            ...c,
+            has_pending_revision: revMap.has(c.id),
+            revision_message: revMap.get(c.id) || null,
+          }));
+        }
+      }
+
+      setChantiers(chantierList);
       setIsLoading(false);
     };
     fetchChantiers();
@@ -79,8 +105,9 @@ export default function ChantierListPage() {
     );
   }
 
-  const activeChantiers = chantiers.filter((c) => !COMPLETED_STATUSES.includes(c.status));
-  const completedChantiers = chantiers.filter((c) => COMPLETED_STATUSES.includes(c.status));
+  // Chantiers with pending revision go to "En cours" even if status is completed
+  const activeChantiers = chantiers.filter((c) => !COMPLETED_STATUSES.includes(c.status) || c.has_pending_revision);
+  const completedChantiers = chantiers.filter((c) => COMPLETED_STATUSES.includes(c.status) && !c.has_pending_revision);
   const displayedChantiers = showCompleted ? completedChantiers : activeChantiers;
 
   return (
@@ -128,8 +155,20 @@ export default function ChantierListPage() {
               <Link
                 key={chantier.id}
                 href={`/technician/chantier/${chantier.id}`}
-                className="block bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
+                className={`block bg-white rounded-2xl border ${chantier.has_pending_revision ? 'border-orange-300' : 'border-gray-200'} p-4 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]`}
               >
+                {/* Revision banner */}
+                {chantier.has_pending_revision && (
+                  <div className="flex items-start gap-2 mb-3 p-3 bg-orange-50 rounded-xl border border-orange-200">
+                    <AlertTriangle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-orange-800">Révision demandée</p>
+                      {chantier.revision_message && (
+                        <p className="text-xs text-orange-700 mt-0.5 line-clamp-2">{chantier.revision_message}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">

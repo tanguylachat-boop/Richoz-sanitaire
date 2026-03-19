@@ -20,26 +20,59 @@ interface NotificationRow {
 export default function TechnicianNotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchNotifications = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
+      // Fetch type preference for navigation
+      const { data: prefData } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
+      if (prefData?.intervention_type_preference) {
+        setTypePreference(prefData.intervention_type_preference as 'depannage' | 'chantier');
+      }
+
+      // Fetch notifications
+      const { data, error } = await supabase
         .from('notifications')
-        .select('*, intervention:interventions!notifications_intervention_id_fkey(intervention_type)')
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (data) {
-        setNotifications(data.map((n: Record<string, unknown>) => ({
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        setIsLoading(false);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        // Fetch intervention types for notifications that have intervention_id
+        const interventionIds = data
+          .filter((n: NotificationRow) => n.intervention_id)
+          .map((n: NotificationRow) => n.intervention_id as string);
+
+        let typeMap = new Map<string, string>();
+        if (interventionIds.length > 0) {
+          const uniqueIds = Array.from(new Set(interventionIds));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: ivData } = await (supabase as any)
+            .from('interventions')
+            .select('id, intervention_type')
+            .in('id', uniqueIds);
+          if (ivData) {
+            typeMap = new Map(ivData.map((iv: { id: string; intervention_type: string }) => [iv.id, iv.intervention_type]));
+          }
+        }
+
+        setNotifications(data.map((n: NotificationRow) => ({
           ...n,
-          intervention_type: (n.intervention as { intervention_type?: string } | null)?.intervention_type || null,
+          intervention_type: n.intervention_id ? typeMap.get(n.intervention_id) || null : null,
         })) as NotificationRow[]);
+      } else {
+        setNotifications([]);
       }
 
       // Mark all as read
@@ -51,7 +84,7 @@ export default function TechnicianNotificationsPage() {
 
       setIsLoading(false);
     };
-    fetch();
+    fetchNotifications();
   }, []);
 
   const getNotificationLink = (n: NotificationRow) => {
@@ -67,7 +100,7 @@ export default function TechnicianNotificationsPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="bg-white border-b border-gray-200 px-5 py-4 flex items-center gap-3 sticky top-0 z-10">
-        <Link href="/technician/today" className="p-2 -ml-2 hover:bg-gray-100 rounded-lg">
+        <Link href={typePreference === 'chantier' ? '/technician/chantier' : '/technician/today'} className="p-2 -ml-2 hover:bg-gray-100 rounded-lg">
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </Link>
         <Bell className="w-5 h-5 text-gray-600" />
