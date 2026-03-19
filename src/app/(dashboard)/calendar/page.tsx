@@ -172,8 +172,9 @@ export default function CalendarPage() {
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   const filteredInterventions = useMemo(() => {
-    if (typeFilter === 'all') return interventions;
-    return interventions.filter((iv) => iv.intervention_type === typeFilter);
+    let result = interventions.filter(iv => iv.status !== 'cancelled' && iv.status !== 'annule');
+    if (typeFilter !== 'all') result = result.filter(iv => iv.intervention_type === typeFilter);
+    return result;
   }, [interventions, typeFilter]);
 
   // Technician color map for month view
