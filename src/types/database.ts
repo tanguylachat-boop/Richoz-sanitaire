@@ -523,6 +523,38 @@ export interface Database {
           updated_at?: string;
         };
       };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          message: string | null;
+          type: string;
+          intervention_id: string | null;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          message?: string | null;
+          type?: string;
+          intervention_id?: string | null;
+          is_read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          message?: string | null;
+          type?: string;
+          intervention_id?: string | null;
+          is_read?: boolean;
+          created_at?: string;
+        };
+      };
       audit_log: {
         Row: {
           id: string;
@@ -606,6 +638,7 @@ export type Invoice = Tables<'invoices'>;
 export type Quote = Tables<'quotes'>;
 export type Product = Tables<'products'>;
 export type EmailInbox = Tables<'email_inbox'>;
+export type Notification = Tables<'notifications'>;
 export type AuditLog = Tables<'audit_log'>;
 export type CompanySettings = Tables<'company_settings'>;
 

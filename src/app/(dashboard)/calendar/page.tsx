@@ -446,6 +446,18 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         source_type: 'manual', intervention_type: formData.intervention_type,
       });
       if (error) throw new Error(error.message);
+
+      // Insert notification if technician is assigned
+      if (formData.technician_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('notifications').insert({
+          user_id: formData.technician_id,
+          title: 'Nouvelle intervention assignée',
+          message: `${formData.title} — ${formData.address}`,
+          type: 'intervention_assigned',
+        });
+      }
+
       toast.success('Intervention créée avec succès');
       onSuccess();
     } catch (err) {

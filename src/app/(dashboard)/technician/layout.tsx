@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat } from 'lucide-react';
+import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat, Bell } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface TechnicianLayoutProps {
@@ -14,15 +14,20 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
   const pathname = usePathname();
   const supabase = createClient();
   const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const fetchPreference = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
+        const [{ data }, { count }] = await Promise.all([
+          supabase.from('users').select('intervention_type_preference').eq('id', user.id).single(),
+          supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+        ]);
         if (data?.intervention_type_preference) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
         }
+        setUnreadCount(count || 0);
       }
     };
     fetchPreference();
@@ -83,6 +88,21 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Top notification bar */}
+      <div className="fixed top-0 right-0 z-50 p-3">
+        <Link
+          href="/technician/notifications"
+          className="relative p-2.5 bg-white rounded-full shadow-md border border-gray-200 block"
+        >
+          <Bell className="w-5 h-5 text-gray-600" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </Link>
+      </div>
+
       {/* Main content - No sidebar, full width */}
       <main className="flex-1 overflow-y-auto pb-20">
         {children}

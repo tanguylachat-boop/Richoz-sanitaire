@@ -249,6 +249,17 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
 
       if (error) throw new Error(error.message);
 
+      // Insert notification if technician is assigned
+      if (formData.technician_id && data?.[0]?.id) {
+        await supabase.from('notifications').insert({
+          user_id: formData.technician_id,
+          title: 'Nouvelle intervention assignée',
+          message: `${formData.title} — ${formData.address}${formData.date_planned ? ` le ${format(new Date(formData.date_planned), 'd MMM', { locale: fr })}` : ''}`,
+          type: 'intervention_assigned',
+          intervention_id: data[0].id,
+        });
+      }
+
       toast.success('Intervention planifiée avec succès');
 
       // Show confirmation modal to choose email recipients
