@@ -126,6 +126,7 @@ export interface Database {
           priority: number;
           notes: string | null;
           work_order_number: string | null;
+          keys_info: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -147,6 +148,7 @@ export interface Database {
           priority?: number;
           notes?: string | null;
           work_order_number?: string | null;
+          keys_info?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -168,6 +170,7 @@ export interface Database {
           priority?: number;
           notes?: string | null;
           work_order_number?: string | null;
+          keys_info?: string | null;
           created_at?: string;
           updated_at?: string;
         };

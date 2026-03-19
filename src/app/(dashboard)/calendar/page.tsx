@@ -362,7 +362,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '',
-    intervention_type: 'depannage',
+    intervention_type: 'depannage', keys_info: '',
   });
   const supabase = createClient();
 
@@ -444,6 +444,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         work_order_number: formData.work_order_number || null,
         client_info: Object.keys(ci).length > 0 ? ci : null,
         source_type: 'manual', intervention_type: formData.intervention_type,
+        keys_info: formData.keys_info || null,
       });
       if (error) throw new Error(error.message);
 
@@ -521,6 +522,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Nom client</label><input type="text" name="client_name" value={formData.client_name} onChange={handleChange} className={ic} placeholder="Nom du locataire" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label><input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={ic} placeholder="+41 XX XXX XX XX" /></div>
           </div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">🔑 Clés & Accès</label><textarea name="keys_info" rows={2} value={formData.keys_info} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ex: Clés dans la boîte aux lettres, code 1234..." /></div>
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
             <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Annuler</button>
             <button type="submit" disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm">{isLoading && <Loader2 className="w-4 h-4 animate-spin" />}{isLoading ? 'Création...' : "Créer l'intervention"}</button>

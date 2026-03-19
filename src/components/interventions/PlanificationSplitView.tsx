@@ -112,7 +112,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '', client_email: '',
-    intervention_type: 'depannage',
+    intervention_type: 'depannage', keys_info: '',
   });
 
   const supabase = createClient();
@@ -132,6 +132,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         client_phone: ed?.tenant_phone || '',
         client_email: ed?.tenant_email || '',
         priority: ed?.priority === 'urgent' ? 1 : 0,
+        keys_info: ed?.keys_info || '',
       }));
     }
   }, [email]);
@@ -245,6 +246,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         source_type: email ? 'email' : 'manual',
         source_email_id: email?.id || null,
         intervention_type: formData.intervention_type,
+        keys_info: formData.keys_info || null,
       }).select('id');
 
       if (error) throw new Error(error.message);
@@ -508,6 +510,11 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email client</label>
             <input type="email" name="client_email" value={formData.client_email} onChange={handleChange} className={inputClass} placeholder="email@locataire.ch" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">🔑 Clés & Accès</label>
+            <textarea name="keys_info" rows={2} value={formData.keys_info} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ex: Clés dans la boîte aux lettres, code 1234, gardien au RDC..." />
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
