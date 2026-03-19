@@ -41,6 +41,7 @@ interface ChantierIntervention {
   date_planned: string | null;
   status: string;
   client_info: { name?: string; phone?: string; email?: string } | null;
+  keys_info: string | null;
   regie?: { id: string; name: string; phone?: string; email_contact?: string } | null;
   technician?: { id: string; first_name: string | null; last_name: string | null; phone?: string | null; email?: string } | null;
 }
@@ -149,7 +150,7 @@ export default function ChantierDetailAdminPage() {
       supabase
         .from('interventions')
         .select(`
-          id, title, description, address, date_planned, status, client_info,
+          id, title, description, address, date_planned, status, client_info, keys_info,
           regie:regies(id, name, phone, email_contact),
           technician:users!interventions_technician_id_fkey(id, first_name, last_name, phone, email)
         `)
@@ -666,12 +667,19 @@ export default function ChantierDetailAdminPage() {
               </div>
             ) : (
               <>
-                {details?.keys_location ? (
+                {details?.keys_location || intervention?.keys_info ? (
                   <div className="space-y-2">
-                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                      <p className="text-sm font-medium text-amber-800">{details.keys_location}</p>
-                    </div>
-                    {details.access_notes && (
+                    {details?.keys_location && (
+                      <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="text-sm font-medium text-amber-800">{details.keys_location}</p>
+                      </div>
+                    )}
+                    {intervention?.keys_info && (
+                      <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="text-sm font-medium text-amber-800">{intervention.keys_info}</p>
+                      </div>
+                    )}
+                    {details?.access_notes && (
                       <p className="text-sm text-gray-600">{details.access_notes}</p>
                     )}
                   </div>
