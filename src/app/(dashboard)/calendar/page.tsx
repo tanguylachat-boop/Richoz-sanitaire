@@ -412,8 +412,9 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase as any).from('interventions')
-      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)')
-      .gte('date_planned', weekStart.toISOString()).lte('date_planned', weekEnd.toISOString()).not('status', 'eq', 'annule');
+      .select('id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)')
+      .or(`and(date_planned.gte.${weekStart.toISOString()},date_planned.lte.${weekEnd.toISOString()}),and(date_planned.lte.${weekEnd.toISOString()},date_end.gte.${weekStart.toISOString()})`)
+      .not('status', 'eq', 'annule');
     if (formData.technician_id) q = q.eq('technician_id', formData.technician_id);
     if (formData.intervention_type) q = q.eq('intervention_type', formData.intervention_type);
 
