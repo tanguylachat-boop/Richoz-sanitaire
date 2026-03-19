@@ -17,9 +17,12 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
+    let userId: string | null = null;
+
     const fetchPreference = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        userId = user.id;
         const [{ data }, { count }] = await Promise.all([
           supabase.from('users').select('intervention_type_preference').eq('id', user.id).single(),
           supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
@@ -31,6 +34,19 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
       }
     };
     fetchPreference();
+
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(async () => {
+      if (!userId) return;
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_read', false);
+      setUnreadCount(count || 0);
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogout = async () => {
