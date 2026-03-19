@@ -246,11 +246,18 @@ export default function InboxPage() {
           {statusFilter !== 'ignored' && (
             <>
               {regies.some((r) => (emailsByRegie[r.id] || []).length > 0) && <h3 className="text-md font-medium text-gray-700">Demandes par régie</h3>}
-              {regies.map((regie) => {
-                const regieEmailsList = emailsByRegie[regie.id] || [];
-                if (regieEmailsList.length === 0) return null;
-                return <RegieSection key={regie.id} regie={regie} emails={regieEmailsList} onPlan={handlePlanIntervention} onView={handleViewDetail} onIgnore={(id) => updateEmailStatus(id, 'ignored')} onArchive={(id) => updateEmailStatus(id, 'processed')} showActions={statusFilter === 'new'} />;
-              })}
+              {[...regies]
+                .filter((r) => (emailsByRegie[r.id] || []).length > 0)
+                .sort((a, b) => {
+                  const aFirst = emailsByRegie[a.id]?.[0];
+                  const bFirst = emailsByRegie[b.id]?.[0];
+                  if (!aFirst) return 1;
+                  if (!bFirst) return -1;
+                  return new Date(bFirst.received_at).getTime() - new Date(aFirst.received_at).getTime();
+                })
+                .map((regie) => (
+                  <RegieSection key={regie.id} regie={regie} emails={emailsByRegie[regie.id]} onPlan={handlePlanIntervention} onView={handleViewDetail} onIgnore={(id) => updateEmailStatus(id, 'ignored')} onArchive={(id) => updateEmailStatus(id, 'processed')} showActions={statusFilter === 'new'} />
+                ))}
             </>
           )}
           {otherEmails.length > 0 && (
