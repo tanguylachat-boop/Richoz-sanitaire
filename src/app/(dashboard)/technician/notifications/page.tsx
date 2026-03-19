@@ -14,6 +14,7 @@ interface NotificationRow {
   intervention_id: string | null;
   is_read: boolean;
   created_at: string;
+  intervention_type?: string | null;
 }
 
 export default function TechnicianNotificationsPage() {
@@ -26,14 +27,20 @@ export default function TechnicianNotificationsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
         .from('notifications')
-        .select('*')
+        .select('*, intervention:interventions!notifications_intervention_id_fkey(intervention_type)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (data) setNotifications(data as NotificationRow[]);
+      if (data) {
+        setNotifications(data.map((n: Record<string, unknown>) => ({
+          ...n,
+          intervention_type: (n.intervention as { intervention_type?: string } | null)?.intervention_type || null,
+        })) as NotificationRow[]);
+      }
 
       // Mark all as read
       await supabase
@@ -49,8 +56,8 @@ export default function TechnicianNotificationsPage() {
 
   const getNotificationLink = (n: NotificationRow) => {
     if (n.intervention_id) {
-      if (n.type === 'revision_requested') {
-        return `/technician/report/${n.intervention_id}`;
+      if (n.intervention_type === 'chantier') {
+        return `/technician/chantier/${n.intervention_id}`;
       }
       return `/technician/report/${n.intervention_id}`;
     }

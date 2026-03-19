@@ -27,6 +27,7 @@ interface Technician {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  intervention_type_preference?: string | null;
 }
 
 interface Regie {
@@ -121,7 +122,7 @@ export function InterventionForm({
       // Fetch technicians (users with role 'technician')
       const { data: techData } = await supabase
         .from('users')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name, email, intervention_type_preference')
         .eq('role', 'technician')
         .order('last_name');
 
@@ -148,12 +149,22 @@ export function InterventionForm({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'priority' || name === 'estimated_duration_minutes' 
-        ? parseInt(value) 
-        : value,
-    }));
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: name === 'priority' || name === 'estimated_duration_minutes'
+          ? parseInt(value)
+          : value,
+      };
+      // Reset technician if type changes and current tech doesn't match
+      if (name === 'intervention_type' && prev.technician_id) {
+        const currentTech = technicians.find(t => t.id === prev.technician_id);
+        if (currentTech?.intervention_type_preference && currentTech.intervention_type_preference !== value) {
+          updated.technician_id = '';
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -340,7 +351,9 @@ export function InterventionForm({
           className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
         >
           <option value="">-- Non assigné --</option>
-          {technicians.map((tech) => (
+          {technicians
+            .filter(tech => !formData.intervention_type || !tech.intervention_type_preference || tech.intervention_type_preference === formData.intervention_type)
+            .map((tech) => (
             <option key={tech.id} value={tech.id}>
               {getTechnicianDisplayName(tech)}
             </option>

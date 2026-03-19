@@ -107,7 +107,7 @@ export default function InboxPage() {
     const { data: regiesData } = await supabase.from('regies').select('id, name, keyword, email_contact, email_domains').eq('is_active', true).order('name');
     if (regiesData) setRegies(regiesData);
 
-    const { data: techData } = await supabase.from('users').select('id, first_name, last_name, email').eq('role', 'technician').order('last_name');
+    const { data: techData } = await supabase.from('users').select('id, first_name, last_name, email, intervention_type_preference').eq('role', 'technician').order('last_name');
     if (techData) setTechnicians(techData);
 
     let query = supabase.from('email_inbox').select('id, received_at, from_email, from_name, subject, body_text, body_html, extracted_data, regie_id, work_order_number, status, category, email_type, attachment_urls').order('received_at', { ascending: false });

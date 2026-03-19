@@ -93,7 +93,7 @@ export default function InterventionsPage() {
   const fetchReferenceData = async () => {
     const { data: techData } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email')
+      .select('id, first_name, last_name, email, intervention_type_preference')
       .eq('role', 'technician')
       .order('last_name');
     if (techData) setTechnicians(techData);

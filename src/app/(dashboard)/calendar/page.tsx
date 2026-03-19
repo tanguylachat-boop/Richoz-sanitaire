@@ -29,7 +29,7 @@ interface Intervention {
   technician?: { id: string; first_name: string | null; last_name: string | null } | null;
 }
 
-interface Technician { id: string; first_name: string | null; last_name: string | null; email: string; }
+interface Technician { id: string; first_name: string | null; last_name: string | null; email: string; intervention_type_preference?: string | null; }
 interface Regie { id: string; name: string; }
 
 const UNASSIGNED_COLOR = '#9CA3AF';
@@ -392,7 +392,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
 
   useEffect(() => {
     const fetchRefs = async () => {
-      const { data: t } = await supabase.from('users').select('id, first_name, last_name, email').eq('role', 'technician').order('last_name');
+      const { data: t } = await supabase.from('users').select('id, first_name, last_name, email, intervention_type_preference').eq('role', 'technician').order('last_name');
       if (t) setTechnicians(t);
       const { data: r } = await supabase.from('regies').select('id, name').eq('is_active', true).order('name');
       if (r) setRegies(r);
@@ -439,7 +439,17 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: name === 'priority' || name === 'estimated_duration_minutes' ? parseInt(value) : value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: name === 'priority' || name === 'estimated_duration_minutes' ? parseInt(value) : value };
+      // Reset technician if type changes and current tech doesn't match
+      if (name === 'intervention_type' && prev.technician_id) {
+        const currentTech = technicians.find(t => t.id === prev.technician_id);
+        if (currentTech?.intervention_type_preference && currentTech.intervention_type_preference !== value) {
+          updated.technician_id = '';
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSlotClick = (day: Date, hour: number) => {
@@ -519,7 +529,9 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
               <label className="block text-sm font-medium text-gray-700 mb-1">Technicien</label>
               <select name="technician_id" value={formData.technician_id} onChange={handleChange} className={sc}>
                 <option value="">-- Non assigné --</option>
-                {technicians.map((t) => {
+                {technicians
+                  .filter(t => !formData.intervention_type || !t.intervention_type_preference || t.intervention_type_preference === formData.intervention_type)
+                  .map((t) => {
                   const techLeave = formData.date_planned
                     ? calendarLeaves.find(l => l.technician_id === t.id && l.start_date <= formData.date_planned && l.end_date >= formData.date_planned)
                     : null;

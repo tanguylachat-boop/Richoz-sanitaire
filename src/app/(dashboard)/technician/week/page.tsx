@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  MapPin, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
   Clock,
   ChevronDown,
   Loader2,
-  Calendar
+  Calendar,
+  MessageSquare,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { 
@@ -34,6 +35,16 @@ interface Intervention {
   intervention_type?: 'depannage' | 'chantier' | null;
 }
 
+interface RevisionReport {
+  id: string;
+  revision_message: string | null;
+  intervention: {
+    id: string;
+    title: string;
+    intervention_type?: string | null;
+  } | null;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   nouveau: 'bg-blue-500',
   planifie: 'bg-amber-500',
@@ -48,6 +59,7 @@ export default function TechnicianWeekPage() {
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
   const [interventions, setInterventions] = useState<Intervention[]>([]);
+  const [revisionReports, setRevisionReports] = useState<RevisionReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
@@ -97,6 +109,19 @@ export default function TechnicianWeekPage() {
     if (!error && data) {
       setInterventions(data);
     }
+
+    // Fetch reports with revision requested (only rejected, not yet resubmitted)
+    const { data: revData } = await supabase
+      .from('reports')
+      .select('id, revision_message, status, intervention:interventions(id, title, intervention_type)')
+      .eq('technician_id', userId)
+      .eq('revision_requested', true)
+      .in('status', ['rejected']);
+
+    if (revData) {
+      setRevisionReports(revData as RevisionReport[]);
+    }
+
     setIsLoading(false);
   };
 
@@ -167,6 +192,41 @@ export default function TechnicianWeekPage() {
           </button>
         </div>
       </div>
+
+      {/* Revision Alerts */}
+      {revisionReports.length > 0 && (
+        <div className="px-4 -mt-2 mb-2 space-y-2">
+          {revisionReports.map((rev) => {
+            const isChantier = rev.intervention?.intervention_type === 'chantier';
+            const href = rev.intervention
+              ? (isChantier ? `/technician/chantier/${rev.intervention.id}` : `/technician/report/${rev.intervention.id}`)
+              : '#';
+            return (
+              <Link
+                key={rev.id}
+                href={href}
+                className="block bg-amber-50 border border-amber-300 rounded-2xl p-4 active:scale-[0.98] transition-all"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-amber-800 text-sm">Demande d&apos;informations</p>
+                    <p className="text-sm text-amber-900 font-medium mt-0.5 truncate">
+                      {rev.intervention?.title || 'Intervention'}
+                    </p>
+                    {rev.revision_message && (
+                      <p className="text-sm text-amber-700 mt-1 line-clamp-2">{rev.revision_message}</p>
+                    )}
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-amber-400 flex-shrink-0 mt-2" />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Content */}
       <div className="px-4 -mt-4">

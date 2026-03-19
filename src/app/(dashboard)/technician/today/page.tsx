@@ -38,6 +38,7 @@ interface RevisionReport {
   intervention: {
     id: string;
     title: string;
+    intervention_type?: string | null;
   } | null;
 }
 
@@ -111,12 +112,13 @@ export default function TechnicianTodayPage() {
       setInterventions(data);
     }
 
-    // Fetch reports with revision requested for this technician
+    // Fetch reports with revision requested for this technician (only rejected, not already resubmitted)
     const { data: revData } = await supabase
       .from('reports')
-      .select('id, revision_message, intervention:interventions(id, title)')
+      .select('id, revision_message, status, intervention:interventions(id, title, intervention_type)')
       .eq('technician_id', userId)
-      .eq('revision_requested', true);
+      .eq('revision_requested', true)
+      .in('status', ['rejected']);
 
     if (revData) {
       setRevisionReports(revData as RevisionReport[]);
@@ -190,10 +192,15 @@ export default function TechnicianTodayPage() {
       {/* Revision Alerts */}
       {revisionReports.length > 0 && (
         <div className="px-4 -mt-2 mb-2 space-y-2">
-          {revisionReports.map((rev) => (
+          {revisionReports.map((rev) => {
+            const isChantier = rev.intervention?.intervention_type === 'chantier';
+            const href = rev.intervention
+              ? (isChantier ? `/technician/chantier/${rev.intervention.id}` : `/technician/report/${rev.intervention.id}`)
+              : '#';
+            return (
             <Link
               key={rev.id}
-              href={rev.intervention ? `/technician/report/${rev.intervention.id}` : '#'}
+              href={href}
               className="block bg-amber-50 border border-amber-300 rounded-2xl p-4 active:scale-[0.98] transition-all"
             >
               <div className="flex items-start gap-3">
@@ -212,7 +219,8 @@ export default function TechnicianTodayPage() {
                 <ChevronRight className="w-5 h-5 text-amber-400 flex-shrink-0 mt-2" />
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 

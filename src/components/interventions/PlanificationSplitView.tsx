@@ -57,6 +57,7 @@ export interface PlanificationTechnician {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  intervention_type_preference?: string | null;
 }
 
 export interface PlanificationRegie {
@@ -205,10 +206,20 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'priority' || name === 'estimated_duration_minutes' ? parseInt(value) : value,
-    }));
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: name === 'priority' || name === 'estimated_duration_minutes' ? parseInt(value) : value,
+      };
+      // Reset technician if type changes and current tech doesn't match
+      if (name === 'intervention_type' && prev.technician_id) {
+        const currentTech = technicians.find(t => t.id === prev.technician_id);
+        if (currentTech?.intervention_type_preference && currentTech.intervention_type_preference !== value) {
+          updated.technician_id = '';
+        }
+      }
+      return updated;
+    });
   };
 
   const handleSlotClick = (day: Date, hour: number) => {
@@ -423,7 +434,9 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
               <label className="block text-sm font-medium text-gray-700 mb-1">Technicien</label>
               <select name="technician_id" value={formData.technician_id} onChange={handleChange} className={selectClass}>
                 <option value="">-- Non assigné --</option>
-                {technicians.map((tech) => {
+                {technicians
+                  .filter(tech => !formData.intervention_type || !tech.intervention_type_preference || tech.intervention_type_preference === formData.intervention_type)
+                  .map((tech) => {
                   const techLeave = formData.date_planned
                     ? leaves.find(l => l.technician_id === tech.id && l.start_date <= formData.date_planned && l.end_date >= formData.date_planned)
                     : null;
