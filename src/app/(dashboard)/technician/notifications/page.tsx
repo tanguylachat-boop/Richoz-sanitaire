@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Bell, Check, Loader2 } from 'lucide-react';
+import { ChevronLeft, Bell, Check, Loader2, Wrench, MessageSquare, HardHat, Camera } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatRelativeTime } from '@/lib/utils';
 
@@ -133,10 +133,20 @@ export default function TechnicianNotificationsPage() {
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    n.type === 'revision_requested' ? 'bg-amber-100' : 'bg-blue-100'
+                    n.type === 'revision_requested' ? 'bg-amber-100'
+                    : n.type === 'chantier_message' ? 'bg-indigo-100'
+                    : n.type === 'chantier_reminder' ? 'bg-orange-100'
+                    : n.type === 'intervention_assigned' ? 'bg-emerald-100'
+                    : 'bg-blue-100'
                   }`}>
                     {n.type === 'revision_requested' ? (
                       <Bell className="w-5 h-5 text-amber-600" />
+                    ) : n.type === 'chantier_message' ? (
+                      <MessageSquare className="w-5 h-5 text-indigo-600" />
+                    ) : n.type === 'chantier_reminder' ? (
+                      <Bell className="w-5 h-5 text-orange-600" />
+                    ) : n.type === 'intervention_assigned' ? (
+                      n.intervention_type === 'chantier' ? <HardHat className="w-5 h-5 text-emerald-600" /> : <Wrench className="w-5 h-5 text-emerald-600" />
                     ) : (
                       <Check className="w-5 h-5 text-blue-600" />
                     )}

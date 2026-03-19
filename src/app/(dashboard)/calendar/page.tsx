@@ -476,7 +476,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
       if (formData.client_name) ci.name = formData.client_name;
       if (formData.client_phone) ci.phone = formData.client_phone;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).from('interventions').insert({
+      const { data: insertedData, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null, address: formData.address,
         date_planned: datePlanned, estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         status: formData.status, priority: formData.priority,
@@ -488,17 +488,20 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         date_end: formData.intervention_type === 'chantier' && formData.date_end
           ? new Date(`${formData.date_end}T18:00:00`).toISOString()
           : null,
-      });
+      }).select('id');
       if (error) throw new Error(error.message);
+
+      const newInterventionId = insertedData?.[0]?.id || null;
 
       // Insert notification if technician is assigned
       if (formData.technician_id) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('notifications').insert({
           user_id: formData.technician_id,
-          title: 'Nouvelle intervention assignée',
+          title: isChantier ? 'Nouveau chantier assigné' : 'Nouvelle intervention assignée',
           message: `${formData.title} — ${formData.address}`,
           type: 'intervention_assigned',
+          intervention_id: newInterventionId,
         });
       }
 
