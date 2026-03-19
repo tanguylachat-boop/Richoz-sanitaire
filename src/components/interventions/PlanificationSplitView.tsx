@@ -112,7 +112,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '', client_email: '',
-    intervention_type: 'depannage', keys_info: '',
+    intervention_type: 'depannage', keys_info: '', date_end: '',
   });
 
   const supabase = createClient();
@@ -247,6 +247,9 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         source_email_id: email?.id || null,
         intervention_type: formData.intervention_type,
         keys_info: formData.keys_info || null,
+        date_end: formData.intervention_type === 'chantier' && formData.date_end
+          ? new Date(`${formData.date_end}T18:00:00`).toISOString()
+          : null,
       }).select('id');
 
       if (error) throw new Error(error.message);
@@ -463,16 +466,29 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+          {formData.intervention_type === 'chantier' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date début</label>
+                <input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label>
+                <input type="date" name="date_end" value={formData.date_end} onChange={handleChange} className={inputClass} />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Heure</label>
-              <input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={inputClass} />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                <input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Heure</label>
+                <input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={inputClass} />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             <div>

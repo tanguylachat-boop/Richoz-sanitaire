@@ -117,6 +117,7 @@ export interface Database {
           description: string | null;
           address: string;
           date_planned: string | null;
+          date_end: string | null;
           date_completed: string | null;
           estimated_duration_minutes: number;
           google_calendar_event_id: string | null;
@@ -139,6 +140,7 @@ export interface Database {
           description?: string | null;
           address: string;
           date_planned?: string | null;
+          date_end?: string | null;
           date_completed?: string | null;
           estimated_duration_minutes?: number;
           google_calendar_event_id?: string | null;
@@ -161,6 +163,7 @@ export interface Database {
           description?: string | null;
           address?: string;
           date_planned?: string | null;
+          date_end?: string | null;
           date_completed?: string | null;
           estimated_duration_minutes?: number;
           google_calendar_event_id?: string | null;

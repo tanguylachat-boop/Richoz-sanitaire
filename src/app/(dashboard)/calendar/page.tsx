@@ -22,7 +22,7 @@ type InterventionTypeFilter = 'all' | 'depannage' | 'chantier';
 
 interface Intervention {
   id: string; title: string; description: string | null; address: string;
-  date_planned: string | null; estimated_duration_minutes: number; status: string;
+  date_planned: string | null; date_end: string | null; estimated_duration_minutes: number; status: string;
   priority: number; technician_id: string | null; regie_id: string | null;
   client_info: { name?: string; phone?: string } | null; work_order_number: string | null;
   intervention_type?: 'depannage' | 'chantier' | null;
@@ -72,7 +72,7 @@ export default function CalendarPage() {
   const fetchInterventions = useCallback(async () => {
     setIsLoading(true);
     const { start, end } = getDateRange();
-    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)`).gte('date_planned', start.toISOString()).lte('date_planned', end.toISOString()).order('date_planned', { ascending: true });
+    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)`).gte('date_planned', start.toISOString()).lte('date_planned', end.toISOString()).order('date_planned', { ascending: true });
     if (data) setInterventions(data as Intervention[]);
     const sd = format(start, 'yyyy-MM-dd'); const ed = format(end, 'yyyy-MM-dd');
     const { data: leavesData } = await supabase.from('leave_requests').select(`id, technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
@@ -190,7 +190,16 @@ export default function CalendarPage() {
     return Array.from(seen.values());
   }, [interventions, techColorMap]);
 
-  const getIvsForDay = (date: Date) => filteredInterventions.filter((iv) => iv.date_planned && isSameDay(new Date(iv.date_planned), date));
+  const getIvsForDay = (date: Date) => filteredInterventions.filter((iv) => {
+    if (!iv.date_planned) return false;
+    // Multi-day chantier: show on all days between date_planned and date_end
+    if (iv.date_end && iv.intervention_type === 'chantier') {
+      const start = new Date(iv.date_planned);
+      const end = new Date(iv.date_end);
+      return date >= startOfDay(start) && date <= endOfDay(end);
+    }
+    return isSameDay(new Date(iv.date_planned), date);
+  });
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
   const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
   const getTechInitials = (t: Intervention['technician']) => t ? ((t.first_name?.[0] || '') + (t.last_name?.[0] || '')).toUpperCase() || '?' : null;
@@ -362,7 +371,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, status: 'planifie', priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '',
-    intervention_type: 'depannage', keys_info: '',
+    intervention_type: 'depannage', keys_info: '', date_end: '',
   });
   const supabase = createClient();
 
@@ -445,6 +454,9 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         client_info: Object.keys(ci).length > 0 ? ci : null,
         source_type: 'manual', intervention_type: formData.intervention_type,
         keys_info: formData.keys_info || null,
+        date_end: formData.intervention_type === 'chantier' && formData.date_end
+          ? new Date(`${formData.date_end}T18:00:00`).toISOString()
+          : null,
       });
       if (error) throw new Error(error.message);
 
@@ -509,10 +521,17 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
           <div className={`p-3 rounded-lg border ${formData.date_planned ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
             {formData.date_planned ? (<p className="text-sm text-green-800">📅 <strong>{format(new Date(formData.date_planned), 'EEEE d MMMM', { locale: fr })}</strong> à <strong>{formData.time_planned || '09:00'}</strong></p>) : (<p className="text-sm text-amber-800">👆 Cliquez sur un créneau libre dans le calendrier →</p>)}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Heure</label><input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={ic} /></div>
-          </div>
+          {formData.intervention_type === 'chantier' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date début</label><input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label><input type="date" name="date_end" value={formData.date_end} onChange={handleChange} className={ic} /></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Heure</label><input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={ic} /></div>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label><input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={ic} /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Statut</label><select name="status" value={formData.status} onChange={handleChange} className={sc}><option value="nouveau">Nouveau</option><option value="planifie">Planifié</option><option value="en_cours">En cours</option></select></div>
