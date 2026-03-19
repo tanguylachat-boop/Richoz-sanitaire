@@ -23,6 +23,7 @@ import {
   Plus,
   X,
   Image as ImageIcon,
+  Bell,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -83,6 +84,14 @@ interface ChantierPhoto {
   user?: { id: string; first_name: string; last_name: string } | null;
 }
 
+interface InterventionReminder {
+  id: string;
+  reminder_date: string;
+  message: string;
+  completed: boolean;
+  created_at: string;
+}
+
 type TabType = 'overview' | 'journal' | 'cutoffs' | 'photos';
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -98,6 +107,7 @@ export default function ChantierDetailPage() {
   const [messages, setMessages] = useState<ChantierMessage[]>([]);
   const [cutoffs, setCutoffs] = useState<CutoffNotice[]>([]);
   const [chantierPhotos, setChantierPhotos] = useState<ChantierPhoto[]>([]);
+  const [reminders, setReminders] = useState<InterventionReminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
@@ -181,6 +191,18 @@ export default function ChantierDetailPage() {
         .eq('intervention_id', interventionId)
         .order('created_at', { ascending: false });
       if (cutoffData) setCutoffs(cutoffData as CutoffNotice[]);
+    } catch {
+      // Table may not exist yet
+    }
+
+    // Fetch intervention reminders
+    try {
+      const { data: reminderData } = await supabase
+        .from('intervention_reminders')
+        .select('id, reminder_date, message, completed, created_at')
+        .eq('intervention_id', interventionId)
+        .order('reminder_date', { ascending: true });
+      if (reminderData) setReminders(reminderData as InterventionReminder[]);
     } catch {
       // Table may not exist yet
     }
@@ -755,8 +777,30 @@ export default function ChantierDetailPage() {
             </div>
           )}
 
+          {/* Reminders from admin */}
+          {reminders.length > 0 && (
+            <div className="space-y-2 mb-4">
+              <h4 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                <Bell className="w-4 h-4 text-orange-500" />Rappels
+              </h4>
+              {reminders.map((reminder) => (
+                <div key={reminder.id} className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                  <div className="flex items-start gap-2">
+                    <Bell className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-orange-800">{reminder.message}</p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        {format(new Date(reminder.reminder_date), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Cutoffs list */}
-          {cutoffs.length === 0 && !showCutoffForm ? (
+          {cutoffs.length === 0 && reminders.length === 0 && !showCutoffForm ? (
             <div className="text-center py-12">
               <Droplets className="w-10 h-10 text-gray-300 mx-auto mb-2" />
               <p className="text-gray-500">Aucune coupure déclarée</p>
