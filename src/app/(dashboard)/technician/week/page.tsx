@@ -52,16 +52,18 @@ export default function TechnicianWeekPage() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
 
+  const [userId, setUserId] = useState<string | null>(null);
   const supabase = createClient();
 
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
 
-  // Fetch user preference
+  // Fetch user preference and id
   useEffect(() => {
     const fetchPref = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setUserId(user.id);
         const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
         if (data?.intervention_type_preference) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
@@ -73,11 +75,13 @@ export default function TechnicianWeekPage() {
 
   // Fetch week's interventions
   const fetchInterventions = async () => {
+    if (!userId) return;
     setIsLoading(true);
 
     let query = supabase
       .from('interventions')
       .select('id, title, address, date_planned, estimated_duration_minutes, status, intervention_type')
+      .eq('technician_id', userId)
       .gte('date_planned', currentWeekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
       .neq('status', 'annule')
@@ -97,8 +101,8 @@ export default function TechnicianWeekPage() {
   };
 
   useEffect(() => {
-    fetchInterventions();
-  }, [currentWeekStart, typePreference]);
+    if (userId) fetchInterventions();
+  }, [currentWeekStart, typePreference, userId]);
 
   // Group interventions by day
   const getInterventionsForDay = (day: Date) => {

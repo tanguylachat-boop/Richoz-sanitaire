@@ -6,12 +6,17 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { createUser } from '@/app/(dashboard)/admin/users/actions';
 import type { UserRole } from '@/types/database';
-import { Plus, Loader2, User, Mail, Lock, Shield, Cake } from 'lucide-react';
+import { Plus, Loader2, User, Mail, Lock, Shield, Cake, Wrench } from 'lucide-react';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
   { value: 'technician', label: 'Technicien', description: 'Accès mobile, rapports terrain' },
   { value: 'secretary', label: 'Secrétariat', description: 'Gestion des interventions et factures' },
   { value: 'admin', label: 'Administrateur', description: 'Accès complet à toutes les fonctionnalités' },
+];
+
+const TECH_TYPE_OPTIONS: { value: 'depannage' | 'chantier'; label: string; emoji: string }[] = [
+  { value: 'depannage', label: 'Dépannage', emoji: '🔧' },
+  { value: 'chantier', label: 'Chantier', emoji: '🏗️' },
 ];
 
 export function CreateUserDialog() {
@@ -26,12 +31,13 @@ export function CreateUserDialog() {
     password: '',
     birthDate: '',
     role: 'technician' as UserRole,
+    interventionTypePreference: 'depannage' as 'depannage' | 'chantier',
   });
 
   const [fieldError, setFieldError] = useState('');
 
   const resetForm = () => {
-    setForm({ firstName: '', lastName: '', email: '', password: '', birthDate: '', role: 'technician' });
+    setForm({ firstName: '', lastName: '', email: '', password: '', birthDate: '', role: 'technician', interventionTypePreference: 'depannage' });
     setFieldError('');
   };
 
@@ -239,6 +245,42 @@ export function CreateUserDialog() {
               ))}
             </div>
           </div>
+
+          {/* Tech Type (only for technicians) */}
+          {form.role === 'technician' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Wrench className="w-3.5 h-3.5" />
+                  Type de technicien
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {TECH_TYPE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
+                      form.interventionTypePreference === option.value
+                        ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="techType"
+                      value={option.value}
+                      checked={form.interventionTypePreference === option.value}
+                      onChange={(e) => setForm({ ...form, interventionTypePreference: e.target.value as 'depannage' | 'chantier' })}
+                      disabled={isPending}
+                      className="sr-only"
+                    />
+                    <span className="text-lg">{option.emoji}</span>
+                    <span className="text-sm font-medium text-gray-900">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Submit */}
           <div className="flex gap-3 pt-2">

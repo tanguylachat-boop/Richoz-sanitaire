@@ -65,11 +65,14 @@ export default function TechnicianTodayPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch user preference
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Fetch user preference and id
   useEffect(() => {
     const fetchPref = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setUserId(user.id);
         const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
         if (data?.intervention_type_preference) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
@@ -81,6 +84,7 @@ export default function TechnicianTodayPage() {
 
   // Fetch today's interventions
   const fetchInterventions = async () => {
+    if (!userId) return;
     setIsLoading(true);
 
     const today = new Date();
@@ -90,6 +94,7 @@ export default function TechnicianTodayPage() {
     let query = supabase
       .from('interventions')
       .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, client_info, intervention_type')
+      .eq('technician_id', userId)
       .gte('date_planned', startOfDay)
       .lte('date_planned', endOfDay)
       .neq('status', 'annule')
@@ -106,10 +111,11 @@ export default function TechnicianTodayPage() {
       setInterventions(data);
     }
 
-    // Fetch reports with revision requested
+    // Fetch reports with revision requested for this technician
     const { data: revData } = await supabase
       .from('reports')
       .select('id, revision_message, intervention:interventions(id, title)')
+      .eq('technician_id', userId)
       .eq('revision_requested', true);
 
     if (revData) {
@@ -120,8 +126,8 @@ export default function TechnicianTodayPage() {
   };
 
   useEffect(() => {
-    fetchInterventions();
-  }, [typePreference]);
+    if (userId) fetchInterventions();
+  }, [typePreference, userId]);
 
   // Get greeting based on time
   const getGreeting = () => {

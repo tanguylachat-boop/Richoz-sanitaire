@@ -40,14 +40,14 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
         icon: Calendar,
         label: "Aujourd'hui",
         isActive: pathname === '/technician/today',
-        showFor: null as 'depannage' | 'chantier' | null, // show for all
+        showFor: 'depannage' as const,
       },
       {
         href: '/technician/week',
         icon: CalendarDays,
         label: 'Semaine',
         isActive: pathname === '/technician/week',
-        showFor: null,
+        showFor: 'depannage' as const,
       },
       {
         href: '/technician/chantier',
@@ -61,7 +61,7 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
         icon: Palmtree,
         label: 'Congés',
         isActive: pathname === '/technician/leave',
-        showFor: null,
+        showFor: null as 'depannage' | 'chantier' | null,
       },
       {
         href: '/technician/profile',
@@ -71,9 +71,12 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
         showFor: null,
       },
     ];
-    // Filter nav: if depannage tech, hide chantiers; if chantier tech, show all
+    // Filter nav: depannage tech sees only depannage + common; chantier tech sees only chantier + common
     if (typePreference === 'depannage') {
-      return items.filter(i => i.showFor !== 'chantier');
+      return items.filter(i => i.showFor === 'depannage' || i.showFor === null);
+    }
+    if (typePreference === 'chantier') {
+      return items.filter(i => i.showFor === 'chantier' || i.showFor === null);
     }
     return items;
   }, [pathname, typePreference]);

@@ -175,6 +175,15 @@ export default async function UsersPage() {
                         )}>
                           {userItem.first_name} {userItem.last_name}
                         </h4>
+                        {userItem.role === 'technician' && userItem.intervention_type_preference && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            userItem.intervention_type_preference === 'chantier'
+                              ? 'bg-indigo-100 text-indigo-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {userItem.intervention_type_preference === 'chantier' ? '🏗️ Chantier' : '🔧 Dépannage'}
+                          </span>
+                        )}
                         {!userItem.is_active && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                             Inactif

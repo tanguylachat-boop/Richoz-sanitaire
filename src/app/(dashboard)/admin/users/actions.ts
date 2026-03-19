@@ -14,10 +14,11 @@ interface UpdateUserPayload {
   phone: string;
   birthDate: string;
   role: UserRole;
+  interventionTypePreference?: 'depannage' | 'chantier';
 }
 
 export async function updateUser(payload: UpdateUserPayload) {
-  const { id, firstName, lastName, email, phone, birthDate, role } = payload;
+  const { id, firstName, lastName, email, phone, birthDate, role, interventionTypePreference } = payload;
 
   if (!firstName?.trim() || !lastName?.trim()) {
     return { success: false, error: 'Le nom et le prénom sont requis.' };
@@ -43,6 +44,7 @@ export async function updateUser(payload: UpdateUserPayload) {
         phone: phone?.trim() || null,
         birth_date: birthDate?.trim() || null,
         role,
+        intervention_type_preference: role === 'technician' ? (interventionTypePreference || 'depannage') : null,
       })
       .eq('id', id);
 
@@ -80,10 +82,11 @@ interface CreateUserPayload {
   password: string;
   birthDate: string;
   role: UserRole;
+  interventionTypePreference?: 'depannage' | 'chantier';
 }
 
 export async function createUser(payload: CreateUserPayload) {
-  const { firstName, lastName, email, password, birthDate, role } = payload;
+  const { firstName, lastName, email, password, birthDate, role, interventionTypePreference } = payload;
 
   // Validation
   if (!firstName?.trim() || !lastName?.trim()) {
@@ -138,6 +141,7 @@ export async function createUser(payload: CreateUserPayload) {
         birth_date: birthDate?.trim() || null,
         role,
         is_active: true,
+        intervention_type_preference: role === 'technician' ? (interventionTypePreference || 'depannage') : null,
       });
 
     if (profileError) {
