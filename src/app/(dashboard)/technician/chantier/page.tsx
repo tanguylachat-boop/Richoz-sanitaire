@@ -27,9 +27,12 @@ interface ChantierIntervention {
   }[] | null;
 }
 
+const COMPLETED_STATUSES = ['termine', 'completed', 'terminated', 'ready_to_bill', 'billed'];
+
 export default function ChantierListPage() {
   const [chantiers, setChantiers] = useState<ChantierIntervention[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -76,6 +79,10 @@ export default function ChantierListPage() {
     );
   }
 
+  const activeChantiers = chantiers.filter((c) => !COMPLETED_STATUSES.includes(c.status));
+  const completedChantiers = chantiers.filter((c) => COMPLETED_STATUSES.includes(c.status));
+  const displayedChantiers = showCompleted ? completedChantiers : activeChantiers;
+
   return (
     <div className="px-4 py-6 max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -84,19 +91,35 @@ export default function ChantierListPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900">Mes chantiers</h1>
-          <p className="text-sm text-gray-500">{chantiers.length} chantier{chantiers.length !== 1 ? 's' : ''} en cours</p>
+          <p className="text-sm text-gray-500">{activeChantiers.length} chantier{activeChantiers.length !== 1 ? 's' : ''} en cours</p>
         </div>
       </div>
 
-      {chantiers.length === 0 ? (
+      {/* Tabs: En cours / Terminés */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
+        <button
+          onClick={() => setShowCompleted(false)}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${!showCompleted ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+        >
+          En cours ({activeChantiers.length})
+        </button>
+        <button
+          onClick={() => setShowCompleted(true)}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${showCompleted ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+        >
+          Terminés ({completedChantiers.length})
+        </button>
+      </div>
+
+      {displayedChantiers.length === 0 ? (
         <div className="text-center py-16">
           <HardHat className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">Aucun chantier assigné</p>
-          <p className="text-sm text-gray-400 mt-1">Les chantiers planifiés apparaîtront ici</p>
+          <p className="text-gray-500 font-medium">{showCompleted ? 'Aucun chantier terminé' : 'Aucun chantier en cours'}</p>
+          <p className="text-sm text-gray-400 mt-1">{showCompleted ? 'Les chantiers terminés apparaîtront ici' : 'Les chantiers planifiés apparaîtront ici'}</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {chantiers.map((chantier) => {
+          {displayedChantiers.map((chantier) => {
             const progress = chantier.chantier_details?.[0]?.progress_percent ?? 0;
             const statusLabel = chantier.status === 'planifie' ? 'Planifié' : chantier.status === 'en_cours' ? 'En cours' : chantier.status === 'termine' ? 'Terminé' : chantier.status;
             const statusColor = chantier.status === 'en_cours' ? 'bg-blue-100 text-blue-700' : chantier.status === 'termine' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
