@@ -98,7 +98,7 @@ export default function TechnicianTodayPage() {
       .eq('technician_id', userId)
       .gte('date_planned', startOfDay)
       .lte('date_planned', endOfDay)
-      .not('status', 'in', '("annule","cancelled")')
+      .neq('status', 'annule')
       .order('date_planned', { ascending: true });
 
     // Filter by technician type preference

@@ -96,7 +96,7 @@ export default function TechnicianWeekPage() {
       .eq('technician_id', userId)
       .gte('date_planned', currentWeekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
-      .not('status', 'in', '("annule","cancelled")')
+      .neq('status', 'annule')
       .order('date_planned', { ascending: true });
 
     // Filter by technician type preference

@@ -81,7 +81,7 @@ export default function ChantiersListPage() {
             chantier_details(id, progress_percent)
           `)
           .eq('intervention_type', 'chantier')
-          .not('status', 'in', '("annule","cancelled")')
+          .neq('status', 'annule')
           .order('date_planned', { ascending: false }),
 
         // Active cutoffs (end_date > now or end_date is null and start_date < now)
