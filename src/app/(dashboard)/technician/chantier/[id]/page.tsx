@@ -353,36 +353,42 @@ export default function ChantierDetailPage() {
         const path = `chantier-photos/${interventionId}/${timestamp}_${i}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('documents')
+          .from('photos')
           .upload(path, file, { upsert: true });
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
-          // Try photos bucket as fallback
-          const { error: fallbackError } = await supabase.storage
-            .from('photos')
-            .upload(path, file, { upsert: true });
-          if (fallbackError) throw fallbackError;
+          throw new Error(`Échec upload: ${uploadError.message}`);
+        }
 
-          const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
+        const { data: urlData } = supabase.storage.from('photos').getPublicUrl(path);
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any).from('chantier_photos').insert({
-            intervention_id: interventionId,
-            user_id: user.id,
-            photo_url: urlData.publicUrl,
-            caption: photoCaption || null,
-          });
-        } else {
-          const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: insertError } = await (supabase as any).from('chantier_photos').insert({
+          intervention_id: interventionId,
+          user_id: user.id,
+          photo_url: urlData.publicUrl,
+          caption: photoCaption || null,
+        });
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any).from('chantier_photos').insert({
-            intervention_id: interventionId,
-            user_id: user.id,
-            photo_url: urlData.publicUrl,
-            caption: photoCaption || null,
-          });
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw new Error(`Échec enregistrement: ${insertError.message}`);
+        }
+      }
+
+      // Notify admins
+      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      if (admins) {
+        const notifications = admins.filter(a => a.id !== user.id).map(a => ({
+          user_id: a.id,
+          title: 'Nouvelles photos chantier',
+          message: `${intervention?.title}: ${files.length} photo${files.length > 1 ? 's' : ''} ajoutée${files.length > 1 ? 's' : ''}`,
+          type: 'chantier_update',
+          intervention_id: interventionId,
+        }));
+        if (notifications.length > 0) {
+          await (supabase as any).from('notifications').insert(notifications);
         }
       }
 
@@ -391,7 +397,7 @@ export default function ChantierDetailPage() {
       fetchData();
     } catch (error) {
       console.error('Error uploading photos:', error);
-      toast.error('Erreur lors de l\'upload');
+      toast.error((error as Error).message || 'Erreur lors de l\'upload');
     } finally {
       setIsUploadingPhotos(false);
       // Reset the file input
