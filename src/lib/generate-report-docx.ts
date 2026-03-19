@@ -197,6 +197,84 @@ function parseStructuredContent(text: string): {
   return null;
 }
 
+/** Download an image and return as ArrayBuffer, or null on failure */
+async function downloadImage(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return await response.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
+/** Build photo paragraphs with embedded images */
+async function buildPhotoSection(
+  photos: { url: string; caption?: string }[],
+  emptyText: string,
+): Promise<(Paragraph | Table)[]> {
+  const result: (Paragraph | Table)[] = [];
+
+  if (!photos || photos.length === 0) {
+    result.push(placeholder(emptyText));
+    return result;
+  }
+
+  for (const photo of photos) {
+    const imageData = await downloadImage(photo.url);
+    if (imageData) {
+      result.push(
+        new Paragraph({
+          children: [
+            new ImageRun({
+              data: imageData,
+              transformation: { width: 450, height: 340 },
+              type: 'jpg',
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 80 },
+        })
+      );
+    }
+    if (photo.caption) {
+      result.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: photo.caption,
+              size: 18,
+              font: 'Calibri',
+              italics: true,
+              color: GRAY,
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 120 },
+        })
+      );
+    } else if (!imageData) {
+      // Fallback: show URL text if image couldn't be downloaded
+      result.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `[Image non disponible: ${photo.url.split('/').pop() || 'photo'}]`,
+              size: 18,
+              font: 'Calibri',
+              italics: true,
+              color: '999999',
+            }),
+          ],
+          spacing: { after: 80 },
+        })
+      );
+    }
+  }
+
+  return result;
+}
+
 // ─── Main generator ──────────────────────────────────────────────────────────
 
 export async function generateReportDocx(data: ReportData): Promise<Blob> {
@@ -373,77 +451,13 @@ export async function generateReportDocx(data: ReportData): Promise<Blob> {
 
   // ═══ 7. PHOTOS AVANT ═══
   children.push(blueBanner('Photos Avant'));
-
-  if (data.photosBefore && data.photosBefore.length > 0) {
-    for (const photo of data.photosBefore) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: photo.caption || `[Photo: ${photo.url.split('/').pop() || 'image'}]`,
-              size: 18,
-              font: 'Calibri',
-              color: BLUE,
-            }),
-          ],
-          spacing: { after: 40 },
-        })
-      );
-    }
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `(${data.photosBefore.length} photo${data.photosBefore.length > 1 ? 's' : ''} — les images sont visibles dans l'application)`,
-            size: 18,
-            font: 'Calibri',
-            italics: true,
-            color: '999999',
-          }),
-        ],
-        spacing: { after: 100 },
-      })
-    );
-  } else {
-    children.push(placeholder('Aucune photo avant'));
-  }
+  const beforePhotos = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant');
+  children.push(...beforePhotos);
 
   // ═══ 8. PHOTOS APRÈS ═══
   children.push(blueBanner('Photos Après'));
-
-  if (data.photosAfter && data.photosAfter.length > 0) {
-    for (const photo of data.photosAfter) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: photo.caption || `[Photo: ${photo.url.split('/').pop() || 'image'}]`,
-              size: 18,
-              font: 'Calibri',
-              color: BLUE,
-            }),
-          ],
-          spacing: { after: 40 },
-        })
-      );
-    }
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `(${data.photosAfter.length} photo${data.photosAfter.length > 1 ? 's' : ''} — les images sont visibles dans l'application)`,
-            size: 18,
-            font: 'Calibri',
-            italics: true,
-            color: '999999',
-          }),
-        ],
-        spacing: { after: 100 },
-      })
-    );
-  } else {
-    children.push(placeholder('Aucune photo après'));
-  }
+  const afterPhotos = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après');
+  children.push(...afterPhotos);
 
   // ═══ DOCUMENT ═══
   const doc = new Document({
