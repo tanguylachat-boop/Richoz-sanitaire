@@ -153,7 +153,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)')
       .gte('date_planned', weekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
-      .not('status', 'eq', 'annule');
+      .not('status', 'in', '("annule","cancelled")');
 
     if (formData.technician_id) {
       query = query.eq('technician_id', formData.technician_id);

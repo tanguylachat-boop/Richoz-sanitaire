@@ -74,7 +74,7 @@ export default function CalendarPage() {
     setIsLoading(true);
     const { start, end } = getDateRange();
     // Fetch interventions: date_planned in range OR date_end overlaps range (multi-day chantiers)
-    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)`).not('status', 'eq', 'annule').or(`and(date_planned.gte.${start.toISOString()},date_planned.lte.${end.toISOString()}),and(date_planned.lte.${end.toISOString()},date_end.gte.${start.toISOString()})`).order('date_planned', { ascending: true });
+    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)`).not('status', 'in', '("annule","cancelled")').or(`and(date_planned.gte.${start.toISOString()},date_planned.lte.${end.toISOString()}),and(date_planned.lte.${end.toISOString()},date_end.gte.${start.toISOString()})`).order('date_planned', { ascending: true });
     if (data) setInterventions(data as Intervention[]);
     const sd = format(start, 'yyyy-MM-dd'); const ed = format(end, 'yyyy-MM-dd');
     const { data: leavesData } = await supabase.from('leave_requests').select(`id, technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
@@ -410,7 +410,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (supabase as any).from('interventions')
       .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)')
-      .gte('date_planned', weekStart.toISOString()).lte('date_planned', weekEnd.toISOString()).not('status', 'eq', 'annule');
+      .gte('date_planned', weekStart.toISOString()).lte('date_planned', weekEnd.toISOString()).not('status', 'in', '("annule","cancelled")');
     if (formData.technician_id) q = q.eq('technician_id', formData.technician_id);
     if (formData.intervention_type) q = q.eq('intervention_type', formData.intervention_type);
 

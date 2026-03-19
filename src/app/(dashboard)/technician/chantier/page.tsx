@@ -52,7 +52,7 @@ export default function ChantierListPage() {
         `)
         .eq('technician_id', user.id)
         .eq('intervention_type', 'chantier')
-        .not('status', 'eq', 'annule')
+        .not('status', 'in', '("annule","cancelled")')
         .order('date_planned', { ascending: false });
 
       let chantierList: ChantierIntervention[] = [];
@@ -63,7 +63,7 @@ export default function ChantierListPage() {
           .select('id, title, address, date_planned, status, regie:regies(id, name)')
           .eq('technician_id', user.id)
           .eq('intervention_type', 'chantier')
-          .not('status', 'eq', 'annule')
+          .not('status', 'in', '("annule","cancelled")')
           .order('date_planned', { ascending: false });
         if (fallbackData) chantierList = fallbackData as ChantierIntervention[];
       } else {
