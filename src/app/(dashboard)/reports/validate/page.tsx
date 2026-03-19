@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { formatDate, formatTime, formatCHF, cn } from '@/lib/utils';
 import { REPORT_STATUS } from '@/lib/constants';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   ClipboardCheck,
   Clock,
@@ -21,6 +23,8 @@ import {
   Camera,
   Image as ImageIcon,
   Loader2,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 
 type InterventionTypeFilter = 'depannage' | 'chantier';
@@ -60,6 +64,52 @@ export default function ValidateReportsPage() {
   const [chantierExtras, setChantierExtras] = useState<Map<string, ChantierExtra>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('depannage');
+  const [rejectModalReport, setRejectModalReport] = useState<ReportRow | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
+  const router = useRouter();
+
+  const handleReject = async () => {
+    if (!rejectModalReport || !rejectReason.trim()) {
+      toast.error('Veuillez indiquer un motif de rejet');
+      return;
+    }
+    setIsRejecting(true);
+    try {
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'rejected',
+          revision_requested: true,
+          revision_message: rejectReason.trim(),
+        })
+        .eq('id', rejectModalReport.id);
+      if (error) throw error;
+
+      // Insert notification for the technician
+      if (rejectModalReport.technician?.id) {
+        await supabase.from('notifications').insert({
+          user_id: rejectModalReport.technician.id,
+          title: 'Rapport rejeté',
+          message: `Motif : ${rejectReason.trim()}`,
+          type: 'revision_requested',
+          intervention_id: rejectModalReport.intervention?.id || null,
+        });
+      }
+
+      toast.success('Rapport rejeté — technicien notifié');
+      setRejectModalReport(null);
+      setRejectReason('');
+      router.refresh();
+      // Re-fetch reports
+      setReports(prev => prev.filter(r => r.id !== rejectModalReport.id));
+    } catch (error) {
+      console.error('Rejection error:', error);
+      toast.error('Erreur lors du rejet');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -403,7 +453,10 @@ export default function ValidateReportsPage() {
                           <CheckCircle className="w-4 h-4" />
                           Voir et valider
                         </Link>
-                        <button className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors">
+                        <button
+                          onClick={() => { setRejectModalReport(report); setRejectReason(''); }}
+                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-lg transition-colors"
+                        >
                           <XCircle className="w-4 h-4" />
                           Rejeter
                         </button>
@@ -422,6 +475,52 @@ export default function ValidateReportsPage() {
           </div>
         )}
       </div>
+
+      {/* Reject Modal */}
+      {rejectModalReport && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Rejeter le rapport</h3>
+                  <p className="text-sm text-gray-500">{rejectModalReport.intervention?.title || 'Intervention'}</p>
+                </div>
+              </div>
+              <button onClick={() => setRejectModalReport(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Motif du rejet *</label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Expliquez pourquoi ce rapport est rejeté..."
+                className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRejectModalReport(null)}
+                className="flex-1 py-2.5 px-4 border border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={isRejecting || !rejectReason.trim()}
+                className="flex-1 py-2.5 px-4 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Rejeter'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

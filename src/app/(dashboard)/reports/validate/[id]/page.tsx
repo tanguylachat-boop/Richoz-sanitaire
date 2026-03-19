@@ -188,11 +188,25 @@ export default function ValidateReportDetailPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('reports').update({
+          status: 'rejected',
           revision_requested: true,
           revision_message: rejectReason.trim(),
         }).eq('id', report.id);
       if (error) throw error;
-      toast.success('Demande d\'informations envoyée au technicien');
+
+      // Notify the technician
+      if (report.technician_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('notifications').insert({
+          user_id: report.technician_id,
+          title: 'Rapport rejeté',
+          message: `Motif : ${rejectReason.trim()}`,
+          type: 'revision_requested',
+          intervention_id: report.intervention_id || null,
+        });
+      }
+
+      toast.success('Rapport rejeté — technicien notifié');
       setShowRejectModal(false);
       router.push('/reports/validate');
       router.refresh();
