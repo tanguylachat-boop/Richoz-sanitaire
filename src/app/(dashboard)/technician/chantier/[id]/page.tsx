@@ -120,6 +120,10 @@ export default function ChantierDetailPage() {
   const [photoCaption, setPhotoCaption] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
+  // Report revision state
+  const [revisionMessage, setRevisionMessage] = useState<string | null>(null);
+  const [reportStatus, setReportStatus] = useState<string | null>(null);
+
   // Progress
   const [editProgress, setEditProgress] = useState(0);
   const [isSavingProgress, setIsSavingProgress] = useState(false);
@@ -188,6 +192,25 @@ export default function ChantierDetailPage() {
         .eq('intervention_id', interventionId)
         .order('created_at', { ascending: false });
       if (photoData) setChantierPhotos(photoData as ChantierPhoto[]);
+    } catch {
+      // Table may not exist yet
+    }
+
+    // Fetch report status (check for revision requested)
+    try {
+      const { data: reportData } = await supabase
+        .from('reports')
+        .select('status, revision_requested, revision_message')
+        .eq('intervention_id', interventionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (reportData) {
+        setReportStatus(reportData.status);
+        if (reportData.revision_requested && reportData.revision_message) {
+          setRevisionMessage(reportData.revision_message);
+        }
+      }
     } catch {
       // Table may not exist yet
     }
@@ -385,6 +408,26 @@ export default function ChantierDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Revision requested banner */}
+      {revisionMessage && (reportStatus === 'rejected' || reportStatus === 'revision_requested') && (
+        <div className="bg-orange-50 border border-orange-300 rounded-2xl p-4 mb-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-orange-800">Révision demandée</p>
+              <p className="text-sm text-orange-700 mt-1">{revisionMessage}</p>
+              <Link
+                href={`/technician/report/${intervention.id}`}
+                className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Modifier et resoumettre le rapport
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress bar */}
       {details && (
