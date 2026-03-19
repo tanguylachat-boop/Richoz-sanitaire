@@ -450,9 +450,12 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     e.preventDefault();
     setIsLoading(true);
     try {
+      const isChantier = formData.intervention_type === 'chantier';
       let datePlanned = null;
       if (formData.date_planned) {
-        const ds = formData.time_planned ? `${formData.date_planned}T${formData.time_planned}:00` : `${formData.date_planned}T09:00:00`;
+        const ds = isChantier
+          ? `${formData.date_planned}T07:00:00`
+          : formData.time_planned ? `${formData.date_planned}T${formData.time_planned}:00` : `${formData.date_planned}T09:00:00`;
         datePlanned = new Date(ds).toISOString();
       }
       const ci: Record<string, string> = {};
@@ -461,7 +464,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null, address: formData.address,
-        date_planned: datePlanned, estimated_duration_minutes: formData.estimated_duration_minutes,
+        date_planned: datePlanned, estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         status: formData.status, priority: formData.priority,
         technician_id: formData.technician_id || null, regie_id: formData.regie_id || null,
         work_order_number: formData.work_order_number || null,
@@ -546,11 +549,18 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Heure</label><input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={ic} /></div>
             </div>
           )}
-          <div className="grid grid-cols-3 gap-3">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label><input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={ic} /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Statut</label><select name="status" value={formData.status} onChange={handleChange} className={sc}><option value="nouveau">Nouveau</option><option value="planifie">Planifié</option><option value="en_cours">En cours</option></select></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label><select name="priority" value={formData.priority} onChange={handleChange} className={sc}><option value={0}>Normal</option><option value={1}>Urgent</option><option value={2}>Urgence absolue</option></select></div>
-          </div>
+          {formData.intervention_type === 'chantier' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Statut</label><select name="status" value={formData.status} onChange={handleChange} className={sc}><option value="nouveau">Nouveau</option><option value="planifie">Planifié</option><option value="en_cours">En cours</option></select></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label><select name="priority" value={formData.priority} onChange={handleChange} className={sc}><option value={0}>Normal</option><option value={1}>Urgent</option><option value={2}>Urgence absolue</option></select></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label><input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={ic} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Statut</label><select name="status" value={formData.status} onChange={handleChange} className={sc}><option value="nouveau">Nouveau</option><option value="planifie">Planifié</option><option value="en_cours">En cours</option></select></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label><select name="priority" value={formData.priority} onChange={handleChange} className={sc}><option value={0}>Normal</option><option value={1}>Urgent</option><option value={2}>Urgence absolue</option></select></div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Nom client</label><input type="text" name="client_name" value={formData.client_name} onChange={handleChange} className={ic} placeholder="Nom du locataire" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label><input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={ic} placeholder="+41 XX XXX XX XX" /></div>

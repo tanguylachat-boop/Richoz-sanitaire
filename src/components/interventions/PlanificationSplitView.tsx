@@ -224,9 +224,12 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
     e.preventDefault();
     setIsLoading(true);
     try {
+      const isChantier = formData.intervention_type === 'chantier';
       let datePlanned = null;
       if (formData.date_planned) {
-        const dateStr = formData.time_planned ? `${formData.date_planned}T${formData.time_planned}:00` : `${formData.date_planned}T09:00:00`;
+        const dateStr = isChantier
+          ? `${formData.date_planned}T07:00:00`
+          : formData.time_planned ? `${formData.date_planned}T${formData.time_planned}:00` : `${formData.date_planned}T09:00:00`;
         datePlanned = new Date(dateStr).toISOString();
       }
       const clientInfo: Record<string, string> = {};
@@ -237,7 +240,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       const { data, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null,
         address: formData.address, date_planned: datePlanned,
-        estimated_duration_minutes: formData.estimated_duration_minutes,
+        estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         status: formData.status, priority: formData.priority,
         technician_id: formData.technician_id || null,
         regie_id: formData.regie_id || null,
@@ -490,28 +493,49 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label>
-              <input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={inputClass} />
+          {formData.intervention_type === 'chantier' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                <select name="status" value={formData.status} onChange={handleChange} className={selectClass}>
+                  <option value="nouveau">Nouveau</option>
+                  <option value="planifie">Planifié</option>
+                  <option value="en_cours">En cours</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>
+                <select name="priority" value={formData.priority} onChange={handleChange} className={selectClass}>
+                  <option value={0}>Normal</option>
+                  <option value={1}>Urgent</option>
+                  <option value={2}>Urgence absolue</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-              <select name="status" value={formData.status} onChange={handleChange} className={selectClass}>
-                <option value="nouveau">Nouveau</option>
-                <option value="planifie">Planifié</option>
-                <option value="en_cours">En cours</option>
-              </select>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label>
+                <input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+                <select name="status" value={formData.status} onChange={handleChange} className={selectClass}>
+                  <option value="nouveau">Nouveau</option>
+                  <option value="planifie">Planifié</option>
+                  <option value="en_cours">En cours</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>
+                <select name="priority" value={formData.priority} onChange={handleChange} className={selectClass}>
+                  <option value={0}>Normal</option>
+                  <option value={1}>Urgent</option>
+                  <option value={2}>Urgence absolue</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>
-              <select name="priority" value={formData.priority} onChange={handleChange} className={selectClass}>
-                <option value={0}>Normal</option>
-                <option value={1}>Urgent</option>
-                <option value={2}>Urgence absolue</option>
-              </select>
-            </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
