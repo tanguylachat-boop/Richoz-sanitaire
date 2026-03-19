@@ -243,32 +243,36 @@ export default function InboxPage() {
       {/* Content */}
       {isLoading ? <LoadingState /> : (
         <div className="space-y-6">
-          {regieFilter ? (
-            /* ── Régie-specific filter: flat list sorted by date ── */
+          {statusFilter !== 'ignored' && (
             <>
-              {filteredEmails.length > 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="divide-y divide-gray-100">
-                    {filteredEmails.sort(sortByDateDesc).map((email) => <EmailCard key={email.id} email={email} onPlan={() => handlePlanIntervention(email)} onView={() => handleViewDetail(email)} onIgnore={() => updateEmailStatus(email.id, 'ignored')} onArchive={() => updateEmailStatus(email.id, 'processed')} showActions={statusFilter === 'new'} />)}
-                  </div>
-                </div>
-              ) : <EmptyState statusFilter={statusFilter} />}
-            </>
-          ) : (
-            /* ── All régies: flat list sorted by received_at DESC ── */
-            <>
-              {filteredEmails.length > 0 ? (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="divide-y divide-gray-100">
-                    {filteredEmails.sort(sortByDateDesc).map((email) => {
-                      const emailRegie = regies.find(r => r.id === email.regie_id);
-                      return <EmailCard key={email.id} email={email} onPlan={() => handlePlanIntervention(email)} onView={() => handleViewDetail(email)} onIgnore={() => updateEmailStatus(email.id, 'ignored')} onArchive={() => updateEmailStatus(email.id, 'processed')} isOther={!email.regie_id} regieName={emailRegie?.name || null} showActions={statusFilter === 'new'} />;
-                    })}
-                  </div>
-                </div>
-              ) : <EmptyState statusFilter={statusFilter} />}
+              {regies.some((r) => (emailsByRegie[r.id] || []).length > 0) && <h3 className="text-md font-medium text-gray-700">Demandes par régie</h3>}
+              {regies.map((regie) => {
+                const regieEmailsList = emailsByRegie[regie.id] || [];
+                if (regieEmailsList.length === 0) return null;
+                return <RegieSection key={regie.id} regie={regie} emails={regieEmailsList} onPlan={handlePlanIntervention} onView={handleViewDetail} onIgnore={(id) => updateEmailStatus(id, 'ignored')} onArchive={(id) => updateEmailStatus(id, 'processed')} showActions={statusFilter === 'new'} />;
+              })}
             </>
           )}
+          {otherEmails.length > 0 && (
+            <div>
+              <h3 className="text-md font-medium text-gray-700 mb-4">Autres emails</h3>
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><MailOpen className="w-5 h-5 text-gray-600" /></div>
+                      <div><h3 className="font-semibold text-gray-900">Autres emails</h3><p className="text-xs text-gray-500">Clients, fournisseurs et autres contacts</p></div>
+                    </div>
+                    <span className="px-2.5 py-1 text-xs font-medium bg-gray-50 text-gray-700 rounded-full">{otherEmails.length} email{otherEmails.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {otherEmails.map((email) => <EmailCard key={email.id} email={email} onPlan={() => handlePlanIntervention(email)} onView={() => handleViewDetail(email)} onIgnore={() => updateEmailStatus(email.id, 'ignored')} onArchive={() => updateEmailStatus(email.id, 'processed')} isOther showActions={statusFilter === 'new'} />)}
+                </div>
+              </div>
+            </div>
+          )}
+          {emails.length === 0 && <EmptyState statusFilter={statusFilter} />}
         </div>
       )}
 
@@ -365,7 +369,7 @@ function RegieSection({ regie, emails, onPlan, onView, onIgnore, onArchive, show
 
 // ─── Email Card (simplifié — juste sujet + expéditeur + type) ─────────────────
 
-function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true, regieName = null }: { email: EmailInbox; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean; regieName?: string | null; }) {
+function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true }: { email: EmailInbox; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean; }) {
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
   const isUrgent = !isInfo && isEmailUrgent(email);
@@ -385,10 +389,7 @@ function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false
               {email.subject || 'Sans objet'}
             </h4>
           </div>
-          <p className="text-sm text-gray-500 mb-1.5">
-            De : {email.from_name || email.from_email}
-            {regieName && <span className="ml-2 text-xs text-blue-600 font-medium">({regieName})</span>}
-          </p>
+          <p className="text-sm text-gray-500 mb-1.5">De : {email.from_name || email.from_email}</p>
           {email.body_text && <p className="text-sm text-gray-400 truncate max-w-lg">{email.body_text.substring(0, 120)}...</p>}
           <div className="flex items-center gap-3 mt-2">
             <p className="text-xs text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeAgo}</p>
