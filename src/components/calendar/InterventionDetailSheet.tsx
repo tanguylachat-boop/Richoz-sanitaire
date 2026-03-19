@@ -81,15 +81,14 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
       if (error) throw error;
 
       // Notify technician (don't let notification failure break the flow)
-      try {
-        await (supabase as any).from('notifications').insert({
-          user_id: intervention.technician_id,
-          title: 'Nouveau rappel',
-          message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
-          type: 'chantier_reminder',
-          intervention_id: intervention.id,
-        });
-      } catch { /* notification insert failed silently */ }
+      const { error: notifError } = await (supabase as any).from('notifications').insert({
+        user_id: intervention.technician_id,
+        title: 'Nouveau rappel',
+        message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
+        type: 'chantier_reminder',
+        intervention_id: intervention.id,
+      });
+      if (notifError) console.error('Reminder notification insert error:', notifError);
 
       toast.success('Rappel créé pour le technicien');
       setShowReminderForm(false);

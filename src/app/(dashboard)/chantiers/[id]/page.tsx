@@ -302,17 +302,16 @@ export default function ChantierDetailAdminPage() {
       if (error) throw error;
 
       // Notify technician (don't break flow on failure)
-      try {
-        if (intervention?.technician?.id) {
-          await (supabase as any).from('notifications').insert({
-            user_id: intervention.technician.id,
-            title: 'Nouveau message chantier',
-            message: `${intervention.title}: ${newMessage.trim().substring(0, 100)}`,
-            type: 'chantier_message',
-            intervention_id: interventionId,
-          });
-        }
-      } catch { /* notification failed silently */ }
+      if (intervention?.technician?.id) {
+        const { error: notifError } = await (supabase as any).from('notifications').insert({
+          user_id: intervention.technician.id,
+          title: 'Nouveau message chantier',
+          message: `${intervention.title}: ${newMessage.trim().substring(0, 100)}`,
+          type: 'chantier_message',
+          intervention_id: interventionId,
+        });
+        if (notifError) console.error('Notification insert error:', notifError);
+      }
 
       toast.success('Message envoyé');
       setNewMessage('');
