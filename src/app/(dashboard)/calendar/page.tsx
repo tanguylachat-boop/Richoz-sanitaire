@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
 import { TimeGridView, TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
-import type { LeaveEntry, BirthdayEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
+import type { LeaveEntry, BirthdayEntry, ReminderEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import { getApprovedLeaves } from '@/lib/leave-utils';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -47,6 +47,7 @@ export default function CalendarPage() {
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
   const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([]);
+  const [reminders, setReminders] = useState<ReminderEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -96,6 +97,16 @@ export default function CalendarPage() {
       }
       setBirthdays(entries);
     }
+
+    // Fetch reminders
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: remindersData } = await (supabase as any)
+      .from('intervention_reminders')
+      .select('id, intervention_id, user_id, reminder_date, message, completed, technician:users!intervention_reminders_user_id_fkey(first_name, last_name)')
+      .gte('reminder_date', sd)
+      .lte('reminder_date', ed)
+      .eq('completed', false);
+    if (remindersData) setReminders(remindersData as ReminderEntry[]);
 
     setIsLoading(false);
   }, [view, currentDate]);
@@ -202,6 +213,7 @@ export default function CalendarPage() {
   });
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
   const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
+  const getRemindersForDay = (day: Date): ReminderEntry[] => reminders.filter((r) => isSameDay(new Date(r.reminder_date + 'T00:00:00'), day));
   const getTechInitials = (t: Intervention['technician']) => t ? ((t.first_name?.[0] || '') + (t.last_name?.[0] || '')).toUpperCase() || '?' : null;
   const getTypeEmoji = (iv: Intervention) => iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
   const getTechName = (t: LeaveEntry['technician']) => { if (!t) return '?'; if (t.first_name && t.last_name) return `${t.first_name} ${t.last_name}`; return t.first_name || t.last_name || '?'; };
@@ -246,13 +258,14 @@ export default function CalendarPage() {
               <div className="grid grid-cols-7 mb-2">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((d) => (<div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 uppercase">{d}</div>))}</div>
               <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
                 {calendarDays.map((day, idx) => {
-                  const dayIvs = getIvsForDay(day); const dayLeaves = getLeavesForDay(day); const dayBirthdays = getBirthdaysForDay(day);
+                  const dayIvs = getIvsForDay(day); const dayLeaves = getLeavesForDay(day); const dayBirthdays = getBirthdaysForDay(day); const dayReminders = getRemindersForDay(day);
                   const isCur = isSameMonth(day, currentDate); const isT = isToday(day);
                   const MAX = 2; const overflow = dayIvs.length - MAX;
                   return (<div key={idx} className={`bg-white min-h-[100px] p-2 ${!isCur ? 'bg-gray-50' : ''}`}>
                     <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${isT ? 'bg-blue-600 text-white' : isCur ? 'text-gray-900' : 'text-gray-400'}`}>{format(day, 'd')}</div>
                     {dayBirthdays.map((b) => (<div key={`b-${b.user_id}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-violet-200 text-violet-800 font-semibold mb-0.5 truncate border border-violet-300">🎂 {b.first_name}</div>))}
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-emerald-200 text-emerald-800 font-semibold mb-0.5 truncate border border-emerald-400">🌴 {getTechName(l.technician)}</div>))}
+                    {dayReminders.map((rem) => (<div key={`r-${rem.id}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-orange-200 text-orange-800 font-semibold mb-0.5 truncate border border-orange-400" title={rem.message}>🔔 {rem.message.length > 15 ? rem.message.slice(0, 15) + '…' : rem.message}</div>))}
                     <div className="space-y-1">
                       {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className="w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer hover:opacity-90" style={{ backgroundColor: getTechColor(iv.technician_id) }} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.work_order_number || iv.title}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{iv.work_order_number || iv.title}</span></div></button>))}
                       {overflow > 0 && (<button onClick={() => switchToDay(day)} className="w-full text-left text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-0.5 hover:bg-blue-50 rounded transition-colors">+ {overflow} autre{overflow > 1 ? 's' : ''}</button>)}
@@ -261,8 +274,8 @@ export default function CalendarPage() {
                 })}
               </div>
             </>)}
-            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
-            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
+            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={reminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
+            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={reminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
           </>)}
         </div>
 
@@ -278,6 +291,7 @@ export default function CalendarPage() {
             <div className="border-l border-gray-300 h-4" />
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /><span className="text-gray-600">🌴 Congé</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /><span className="text-gray-600">🎂 Anniversaire</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-300" /><span className="text-gray-600">🔔 Rappel</span></div>
             <div className="flex items-center gap-1.5"><span className="w-8 h-3 rounded bg-gray-100 border border-dashed border-gray-300" /><span className="text-gray-600">🍽️ Pause midi</span></div>
           </div>
         </div>

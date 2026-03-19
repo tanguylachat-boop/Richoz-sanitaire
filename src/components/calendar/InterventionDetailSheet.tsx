@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 import {
   X,
   MapPin,
@@ -15,6 +17,8 @@ import {
   ExternalLink,
   Pencil,
   AlertTriangle,
+  Bell,
+  Loader2,
 } from 'lucide-react';
 
 interface Intervention {
@@ -54,6 +58,39 @@ interface InterventionDetailSheetProps {
 }
 
 export function InterventionDetailSheet({ intervention, onClose, onEdit }: InterventionDetailSheetProps) {
+  const supabase = createClient();
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [reminderDate, setReminderDate] = useState('');
+  const [reminderMessage, setReminderMessage] = useState('');
+  const [isCreatingReminder, setIsCreatingReminder] = useState(false);
+
+  const handleCreateReminder = async () => {
+    if (!intervention || !reminderDate || !reminderMessage.trim() || !intervention.technician_id) {
+      toast.error('Date, message et technicien requis');
+      return;
+    }
+    setIsCreatingReminder(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).from('intervention_reminders').insert({
+        intervention_id: intervention.id,
+        user_id: intervention.technician_id,
+        reminder_date: reminderDate,
+        message: reminderMessage.trim(),
+      });
+      if (error) throw error;
+      toast.success('Rappel créé pour le technicien');
+      setShowReminderForm(false);
+      setReminderDate('');
+      setReminderMessage('');
+    } catch (err) {
+      console.error('Erreur rappel:', err);
+      toast.error('Erreur lors de la création du rappel');
+    } finally {
+      setIsCreatingReminder(false);
+    }
+  };
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -187,6 +224,45 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
           )}
         </div>
 
+        {/* Reminder form */}
+        {showReminderForm && (
+          <div className="px-6 py-4 border-t border-orange-200 bg-orange-50/50 space-y-3">
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-orange-600" />
+              <p className="text-sm font-semibold text-orange-800">Ajouter un rappel</p>
+            </div>
+            <input
+              type="date"
+              value={reminderDate}
+              onChange={(e) => setReminderDate(e.target.value)}
+              className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+            />
+            <textarea
+              value={reminderMessage}
+              onChange={(e) => setReminderMessage(e.target.value)}
+              placeholder="Ex: Aller annoncer la coupure d'eau..."
+              rows={2}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReminderForm(false)}
+                className="flex-1 py-2 px-3 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleCreateReminder}
+                disabled={isCreatingReminder || !reminderDate || !reminderMessage.trim()}
+                className="flex-1 py-2 px-3 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isCreatingReminder ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                Créer
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer actions */}
         <div className="p-6 border-t border-gray-100 space-y-2">
           <button
@@ -196,6 +272,15 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
             <Pencil className="w-4 h-4" />
             Modifier l&apos;intervention
           </button>
+          {intervention.technician_id && !showReminderForm && (
+            <button
+              onClick={() => setShowReminderForm(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-xl font-medium hover:bg-orange-100 transition-colors"
+            >
+              <Bell className="w-4 h-4" />
+              Ajouter un rappel
+            </button>
+          )}
           <Link
             href={`/interventions`}
             className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"

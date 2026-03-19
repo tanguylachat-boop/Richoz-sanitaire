@@ -529,6 +529,35 @@ export interface Database {
           updated_at?: string;
         };
       };
+      intervention_reminders: {
+        Row: {
+          id: string;
+          intervention_id: string;
+          user_id: string;
+          reminder_date: string;
+          message: string;
+          completed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          intervention_id: string;
+          user_id: string;
+          reminder_date: string;
+          message: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          intervention_id?: string;
+          user_id?: string;
+          reminder_date?: string;
+          message?: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+      };
       notifications: {
         Row: {
           id: string;

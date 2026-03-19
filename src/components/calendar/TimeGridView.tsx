@@ -51,6 +51,16 @@ export interface BirthdayEntry {
   date: string; // 'YYYY-MM-DD' in current year
 }
 
+export interface ReminderEntry {
+  id: string;
+  intervention_id: string;
+  user_id: string;
+  reminder_date: string; // 'YYYY-MM-DD'
+  message: string;
+  completed: boolean;
+  technician?: { first_name: string | null; last_name: string | null } | null;
+}
+
 // Palette de couleurs par technicien
 export const TECHNICIAN_COLORS = [
   '#3B82F6', '#EF4444', '#10B981', '#F59E0B',
@@ -72,13 +82,14 @@ interface TimeGridViewProps {
   interventions: Intervention[];
   leaves?: LeaveEntry[];
   birthdays?: BirthdayEntry[];
+  reminders?: ReminderEntry[];
   onInterventionClick: (intervention: Intervention) => void;
   onSlotClick?: (day: Date, hour: number) => void;
   onLeaveClick?: (leave: LeaveEntry) => void;
   selectedSlot?: SelectedSlot | null;
 }
 
-export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], onInterventionClick, onSlotClick, onLeaveClick, selectedSlot }: TimeGridViewProps) {
+export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], reminders = [], onInterventionClick, onSlotClick, onLeaveClick, selectedSlot }: TimeGridViewProps) {
   // Build technician → color map from unique technician IDs
   const techColorMap = useMemo(() => {
     const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
@@ -121,6 +132,17 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
     return birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
   };
 
+  // Rappels pour un jour donné
+  const getRemindersForDay = (day: Date): ReminderEntry[] => {
+    return reminders.filter((r) => isSameDay(new Date(r.reminder_date + 'T00:00:00'), day));
+  };
+
+  const getReminderTechName = (r: ReminderEntry) => {
+    if (!r.technician) return '';
+    const parts = [r.technician.first_name, r.technician.last_name].filter(Boolean);
+    return parts.length > 0 ? parts.join(' ') : '';
+  };
+
   const getBlockStyle = (iv: Intervention) => {
     if (!iv.date_planned) return { top: 0, height: 30 };
     const d = new Date(iv.date_planned);
@@ -160,7 +182,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
   const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
   // Check if any day has all-day items
-  const hasAnyAllDay = days.some((day) => getLeavesForDay(day).length > 0 || getBirthdaysForDay(day).length > 0);
+  const hasAnyAllDay = days.some((day) => getLeavesForDay(day).length > 0 || getBirthdaysForDay(day).length > 0 || getRemindersForDay(day).length > 0);
   const ALL_DAY_HEIGHT = 36;
 
   return (
@@ -206,30 +228,42 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                 </div>
 
                 {/* All-day row (fixed height) */}
-                {hasAnyAllDay && (
-                  <div
-                    className="border-b border-gray-200 flex items-center gap-1 px-1 overflow-hidden"
-                    style={{ minHeight: ALL_DAY_HEIGHT }}
-                  >
-                    {dayBirthdays.map((b) => (
-                      <span
-                        key={`b-${b.user_id}`}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-violet-200 text-violet-800 text-xs font-semibold whitespace-nowrap border border-violet-300"
-                      >
-                        🎂 {b.first_name}
-                      </span>
-                    ))}
-                    {dayLeaves.map((leave, i) => (
-                      <span
-                        key={`l-${leave.technician_id}-${i}`}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-200 text-emerald-800 text-xs font-semibold whitespace-nowrap border border-emerald-400 ${onLeaveClick ? 'cursor-pointer hover:bg-emerald-300 transition-colors' : ''}`}
-                        onClick={onLeaveClick ? () => onLeaveClick(leave) : undefined}
-                      >
-                        🌴 {getTechName(leave.technician)}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {hasAnyAllDay && (() => {
+                  const dayReminders = getRemindersForDay(day);
+                  return (
+                    <div
+                      className="border-b border-gray-200 flex items-center gap-1 px-1 overflow-hidden flex-wrap"
+                      style={{ minHeight: ALL_DAY_HEIGHT }}
+                    >
+                      {dayBirthdays.map((b) => (
+                        <span
+                          key={`b-${b.user_id}`}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-violet-200 text-violet-800 text-xs font-semibold whitespace-nowrap border border-violet-300"
+                        >
+                          🎂 {b.first_name}
+                        </span>
+                      ))}
+                      {dayLeaves.map((leave, i) => (
+                        <span
+                          key={`l-${leave.technician_id}-${i}`}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-200 text-emerald-800 text-xs font-semibold whitespace-nowrap border border-emerald-400 ${onLeaveClick ? 'cursor-pointer hover:bg-emerald-300 transition-colors' : ''}`}
+                          onClick={onLeaveClick ? () => onLeaveClick(leave) : undefined}
+                        >
+                          🌴 {getTechName(leave.technician)}
+                        </span>
+                      ))}
+                      {dayReminders.map((rem) => (
+                        <span
+                          key={`r-${rem.id}`}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-200 text-orange-800 text-xs font-semibold whitespace-nowrap border border-orange-400"
+                          title={`${rem.message}${getReminderTechName(rem) ? ` — ${getReminderTechName(rem)}` : ''}`}
+                        >
+                          🔔 {rem.message.length > 20 ? rem.message.slice(0, 20) + '…' : rem.message}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
