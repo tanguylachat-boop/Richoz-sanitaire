@@ -40,6 +40,7 @@ interface ChantierIntervention {
   date_planned: string | null;
   status: string;
   client_info: { name?: string; phone?: string; email?: string } | null;
+  keys_info: string | null;
   regie?: { id: string; name: string; phone?: string; email_contact?: string } | null;
 }
 
@@ -134,7 +135,7 @@ export default function ChantierDetailPage() {
     // Fetch intervention
     const { data: ivData } = await supabase
       .from('interventions')
-      .select('id, title, description, address, date_planned, status, client_info, regie:regies(id, name, phone, email_contact)')
+      .select('id, title, description, address, date_planned, status, client_info, keys_info, regie:regies(id, name, phone, email_contact)')
       .eq('id', interventionId)
       .single();
 
@@ -545,12 +546,19 @@ export default function ChantierDetailPage() {
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Key className="w-4 h-4 text-amber-600" />Clés & Accès
             </h3>
-            {details?.keys_location ? (
+            {details?.keys_location || intervention.keys_info ? (
               <div className="space-y-2">
-                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                  <p className="text-sm font-medium text-amber-800">{details.keys_location}</p>
-                </div>
-                {details.access_notes && (
+                {details?.keys_location && (
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <p className="text-sm font-medium text-amber-800">{details.keys_location}</p>
+                  </div>
+                )}
+                {intervention.keys_info && (
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <p className="text-sm font-medium text-amber-800">{intervention.keys_info}</p>
+                  </div>
+                )}
+                {details?.access_notes && (
                   <p className="text-sm text-gray-600">{details.access_notes}</p>
                 )}
               </div>
