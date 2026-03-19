@@ -79,6 +79,16 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
         message: reminderMessage.trim(),
       });
       if (error) throw error;
+
+      // Notify technician
+      await (supabase as any).from('notifications').insert({
+        user_id: intervention.technician_id,
+        title: 'Nouveau rappel',
+        message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
+        type: 'chantier_reminder',
+        intervention_id: intervention.id,
+      });
+
       toast.success('Rappel créé pour le technicien');
       setShowReminderForm(false);
       setReminderDate('');

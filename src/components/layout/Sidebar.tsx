@@ -65,6 +65,7 @@ export function Sidebar({ user, className }: SidebarProps) {
         '/inbox': counts.inbox,
         '/reports/validate': counts.reportsToValidate,
         '/leave': counts.pendingLeave,
+        '/chantiers': counts.chantierUpdates,
       }
     : {};
 

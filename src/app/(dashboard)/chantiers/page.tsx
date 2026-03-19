@@ -127,6 +127,16 @@ export default function ChantiersListPage() {
 
       setStatsMessagesToday(messagesTodayRes.count ?? 0);
       setIsLoading(false);
+
+      // Mark chantier_update notifications as read
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await (supabase as any).from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('type', 'chantier_update')
+          .eq('is_read', false);
+      }
     };
 
     fetchData();

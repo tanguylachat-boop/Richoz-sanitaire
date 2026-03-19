@@ -8,6 +8,7 @@ interface NotificationCounts {
   inbox: number;
   reportsToValidate: number;
   pendingLeave: number;
+  chantierUpdates: number;
 }
 
 export function useNotificationCounts() {
@@ -15,12 +16,16 @@ export function useNotificationCounts() {
     inbox: 0,
     reportsToValidate: 0,
     pendingLeave: 0,
+    chantierUpdates: 0,
   });
 
   const supabase = createClient();
 
   const fetchCounts = useCallback(async () => {
-    const [inboxRes, reportsRes, leaveRes] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+
+    const [inboxRes, reportsRes, leaveRes, chantierRes] = await Promise.all([
       supabase
         .from('email_inbox')
         .select('*', { count: 'exact', head: true })
@@ -33,12 +38,21 @@ export function useNotificationCounts() {
         .from('lx_leave')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending'),
+      userId
+        ? supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('type', 'chantier_update')
+            .eq('is_read', false)
+        : Promise.resolve({ count: 0 }),
     ]);
 
     setCounts({
       inbox: inboxRes.count ?? 0,
       reportsToValidate: reportsRes.count ?? 0,
       pendingLeave: leaveRes.count ?? 0,
+      chantierUpdates: chantierRes.count ?? 0,
     });
   }, []);
 
@@ -70,6 +84,14 @@ export function useNotificationCounts() {
       })
       .subscribe();
     channels.push(leaveChannel);
+
+    const notifChannel = supabase
+      .channel('notif-notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        fetchCounts();
+      })
+      .subscribe();
+    channels.push(notifChannel);
 
     return () => {
       channels.forEach((ch) => supabase.removeChannel(ch));

@@ -261,6 +261,22 @@ export default function ChantierDetailPage() {
         });
 
       if (error) throw error;
+
+      // Notify admins
+      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      if (admins) {
+        const notifications = admins.filter(a => a.id !== user.id).map(a => ({
+          user_id: a.id,
+          title: 'Message chantier',
+          message: `${intervention?.title}: ${newMessage.trim().substring(0, 100)}`,
+          type: 'chantier_update',
+          intervention_id: interventionId,
+        }));
+        if (notifications.length > 0) {
+          await (supabase as any).from('notifications').insert(notifications);
+        }
+      }
+
       toast.success('Message envoyé');
       setNewMessage('');
       fetchData();
@@ -293,6 +309,22 @@ export default function ChantierDetailPage() {
         });
 
       if (error) throw error;
+
+      // Notify admins
+      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      if (admins) {
+        const notifications = admins.filter(a => a.id !== user.id).map(a => ({
+          user_id: a.id,
+          title: 'Avis de coupure',
+          message: `${intervention?.title}: coupure ${cutoffForm.cutoff_type}`,
+          type: 'chantier_update',
+          intervention_id: interventionId,
+        }));
+        if (notifications.length > 0) {
+          await (supabase as any).from('notifications').insert(notifications);
+        }
+      }
+
       toast.success('Avis de coupure enregistré');
       setShowCutoffForm(false);
       setCutoffForm({ cutoff_type: 'eau', start_date: '', end_date_estimated: '', floors_affected: '', message: '' });

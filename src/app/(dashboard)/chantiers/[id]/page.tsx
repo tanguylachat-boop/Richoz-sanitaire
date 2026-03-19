@@ -299,6 +299,18 @@ export default function ChantierDetailAdminPage() {
         });
 
       if (error) throw error;
+
+      // Notify technician
+      if (intervention?.technician?.id) {
+        await (supabase as any).from('notifications').insert({
+          user_id: intervention.technician.id,
+          title: 'Nouveau message chantier',
+          message: `${intervention.title}: ${newMessage.trim().substring(0, 100)}`,
+          type: 'chantier_message',
+          intervention_id: interventionId,
+        });
+      }
+
       toast.success('Message envoyé');
       setNewMessage('');
       fetchData();
