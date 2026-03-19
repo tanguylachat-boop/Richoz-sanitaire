@@ -496,13 +496,16 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
 
       // Insert notification if technician is assigned
       if (formData.technician_id) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('notifications').insert({
-          user_id: formData.technician_id,
+          recipient_id: formData.technician_id,
+          sender_id: currentUser?.id || null,
           title: isChantier ? 'Nouveau chantier assigné' : 'Nouvelle intervention assignée',
           message: `${formData.title} — ${formData.address}`,
           type: 'intervention_assigned',
-          intervention_id: newInterventionId,
+          reference_id: newInterventionId,
+          reference_type: isChantier ? 'chantier' : 'intervention',
         });
       }
 

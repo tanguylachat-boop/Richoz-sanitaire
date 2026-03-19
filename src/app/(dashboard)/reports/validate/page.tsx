@@ -88,12 +88,15 @@ export default function ValidateReportsPage() {
 
       // Insert notification for the technician
       if (rejectModalReport.technician?.id) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         await supabase.from('notifications').insert({
-          user_id: rejectModalReport.technician.id,
+          recipient_id: rejectModalReport.technician.id,
+          sender_id: currentUser?.id || null,
           title: 'Rapport rejeté',
           message: `Motif : ${rejectReason.trim()}`,
           type: 'revision_requested',
-          intervention_id: rejectModalReport.intervention?.id || null,
+          reference_id: rejectModalReport.intervention?.id || null,
+          reference_type: 'report',
         });
       }
 

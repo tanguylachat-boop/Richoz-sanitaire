@@ -304,11 +304,13 @@ export default function ChantierDetailAdminPage() {
       // Notify technician (don't break flow on failure)
       if (intervention?.technician?.id) {
         const { error: notifError } = await (supabase as any).from('notifications').insert({
-          user_id: intervention.technician.id,
+          recipient_id: intervention.technician.id,
+          sender_id: user.id,
           title: 'Nouveau message chantier',
           message: `${intervention.title}: ${newMessage.trim().substring(0, 100)}`,
           type: 'chantier_message',
-          intervention_id: interventionId,
+          reference_id: interventionId,
+          reference_type: 'chantier',
         });
         if (notifError) console.error('Notification insert error:', notifError);
       }

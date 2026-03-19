@@ -267,11 +267,13 @@ export default function ChantierDetailPage() {
       if (adminsErr) console.error('Failed to fetch admins for notification:', adminsErr);
       if (admins && admins.length > 0) {
         const notifs = admins.filter(a => a.id !== user.id).map(a => ({
-          user_id: a.id,
+          recipient_id: a.id,
+          sender_id: user.id,
           title: 'Message chantier',
           message: `${intervention?.title}: ${newMessage.trim().substring(0, 100)}`,
           type: 'chantier_update',
-          intervention_id: interventionId,
+          reference_id: interventionId,
+          reference_type: 'chantier',
         }));
         if (notifs.length > 0) {
           const { error: notifError } = await (supabase as any).from('notifications').insert(notifs);
@@ -317,11 +319,13 @@ export default function ChantierDetailPage() {
       if (adminsErr2) console.error('Failed to fetch admins for notification:', adminsErr2);
       if (admins2 && admins2.length > 0) {
         const notifs = admins2.filter(a => a.id !== user.id).map(a => ({
-          user_id: a.id,
+          recipient_id: a.id,
+          sender_id: user.id,
           title: 'Avis de coupure',
           message: `${intervention?.title}: coupure ${cutoffForm.cutoff_type}`,
           type: 'chantier_update',
-          intervention_id: interventionId,
+          reference_id: interventionId,
+          reference_type: 'chantier',
         }));
         if (notifs.length > 0) {
           const { error: notifError } = await (supabase as any).from('notifications').insert(notifs);
@@ -386,11 +390,13 @@ export default function ChantierDetailPage() {
       if (adminsErr3) console.error('Failed to fetch admins for notification:', adminsErr3);
       if (admins3 && admins3.length > 0) {
         const notifs3 = admins3.filter(a => a.id !== user.id).map(a => ({
-          user_id: a.id,
+          recipient_id: a.id,
+          sender_id: user.id,
           title: 'Nouvelles photos chantier',
           message: `${intervention?.title}: ${files.length} photo${files.length > 1 ? 's' : ''} ajoutée${files.length > 1 ? 's' : ''}`,
           type: 'chantier_update',
-          intervention_id: interventionId,
+          reference_id: interventionId,
+          reference_type: 'chantier',
         }));
         if (notifs3.length > 0) {
           const { error: notifError3 } = await (supabase as any).from('notifications').insert(notifs3);

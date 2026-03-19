@@ -196,13 +196,16 @@ export default function ValidateReportDetailPage() {
 
       // Notify the technician
       if (report.technician_id) {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('notifications').insert({
-          user_id: report.technician_id,
+          recipient_id: report.technician_id,
+          sender_id: currentUser?.id || null,
           title: 'Rapport rejeté',
           message: `Motif : ${rejectReason.trim()}`,
           type: 'revision_requested',
-          intervention_id: report.intervention_id || null,
+          reference_id: report.intervention_id || null,
+          reference_type: 'report',
         });
       }
 

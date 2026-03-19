@@ -42,7 +42,7 @@ export function useNotificationCounts() {
         ? supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
+            .eq('recipient_id', userId)
             .eq('type', 'chantier_update')
             .eq('is_read', false)
         : Promise.resolve({ count: 0 }),

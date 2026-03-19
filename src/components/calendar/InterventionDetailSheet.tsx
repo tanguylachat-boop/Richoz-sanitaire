@@ -81,12 +81,15 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
       if (error) throw error;
 
       // Notify technician (don't let notification failure break the flow)
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       const { error: notifError } = await (supabase as any).from('notifications').insert({
-        user_id: intervention.technician_id,
+        recipient_id: intervention.technician_id,
+        sender_id: currentUser?.id || null,
         title: 'Nouveau rappel',
         message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
         type: 'chantier_reminder',
-        intervention_id: intervention.id,
+        reference_id: intervention.id,
+        reference_type: 'chantier',
       });
       if (notifError) console.error('Reminder notification insert error:', notifError);
 

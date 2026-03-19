@@ -11,7 +11,8 @@ interface NotificationRow {
   title: string;
   message: string | null;
   type: string;
-  intervention_id: string | null;
+  reference_id: string | null;
+  reference_type: string | null;
   is_read: boolean;
   created_at: string;
   intervention_type?: string | null;
@@ -38,7 +39,7 @@ export default function TechnicianNotificationsPage() {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('recipient_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -49,10 +50,10 @@ export default function TechnicianNotificationsPage() {
       }
 
       if (data && data.length > 0) {
-        // Fetch intervention types for notifications that have intervention_id
+        // Fetch intervention types for notifications that have reference_id
         const interventionIds = data
-          .filter((n: NotificationRow) => n.intervention_id)
-          .map((n: NotificationRow) => n.intervention_id as string);
+          .filter((n: NotificationRow) => n.reference_id)
+          .map((n: NotificationRow) => n.reference_id as string);
 
         let typeMap = new Map<string, string>();
         if (interventionIds.length > 0) {
@@ -69,7 +70,7 @@ export default function TechnicianNotificationsPage() {
 
         setNotifications(data.map((n: NotificationRow) => ({
           ...n,
-          intervention_type: n.intervention_id ? typeMap.get(n.intervention_id) || null : null,
+          intervention_type: n.reference_id ? typeMap.get(n.reference_id) || null : null,
         })) as NotificationRow[]);
       } else {
         setNotifications([]);
@@ -79,7 +80,7 @@ export default function TechnicianNotificationsPage() {
       await supabase
         .from('notifications')
         .update({ is_read: true })
-        .eq('user_id', user.id)
+        .eq('recipient_id', user.id)
         .eq('is_read', false);
 
       setIsLoading(false);
@@ -88,11 +89,11 @@ export default function TechnicianNotificationsPage() {
   }, []);
 
   const getNotificationLink = (n: NotificationRow) => {
-    if (n.intervention_id) {
+    if (n.reference_id) {
       if (n.intervention_type === 'chantier') {
-        return `/technician/chantier/${n.intervention_id}`;
+        return `/technician/chantier/${n.reference_id}`;
       }
-      return `/technician/report/${n.intervention_id}`;
+      return `/technician/report/${n.reference_id}`;
     }
     return '#';
   };

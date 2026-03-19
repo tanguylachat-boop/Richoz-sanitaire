@@ -25,7 +25,7 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
         userId = user.id;
         const [{ data }, { count }] = await Promise.all([
           supabase.from('users').select('intervention_type_preference').eq('id', user.id).single(),
-          supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false),
+          supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('recipient_id', user.id).eq('is_read', false),
         ]);
         if (data?.intervention_type_preference) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
@@ -41,7 +41,7 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
       const { count } = await supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
+        .eq('recipient_id', userId)
         .eq('is_read', false);
       setUnreadCount(count || 0);
     }, 30000);

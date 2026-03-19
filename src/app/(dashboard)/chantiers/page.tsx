@@ -133,7 +133,7 @@ export default function ChantiersListPage() {
       if (user) {
         await (supabase as any).from('notifications')
           .update({ is_read: true })
-          .eq('user_id', user.id)
+          .eq('recipient_id', user.id)
           .eq('type', 'chantier_update')
           .eq('is_read', false);
       }
