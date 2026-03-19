@@ -80,14 +80,16 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
       });
       if (error) throw error;
 
-      // Notify technician
-      await (supabase as any).from('notifications').insert({
-        user_id: intervention.technician_id,
-        title: 'Nouveau rappel',
-        message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
-        type: 'chantier_reminder',
-        intervention_id: intervention.id,
-      });
+      // Notify technician (don't let notification failure break the flow)
+      try {
+        await (supabase as any).from('notifications').insert({
+          user_id: intervention.technician_id,
+          title: 'Nouveau rappel',
+          message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
+          type: 'chantier_reminder',
+          intervention_id: intervention.id,
+        });
+      } catch { /* notification insert failed silently */ }
 
       toast.success('Rappel créé pour le technicien');
       setShowReminderForm(false);

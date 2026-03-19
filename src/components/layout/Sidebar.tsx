@@ -54,13 +54,15 @@ export function Sidebar({ user, className }: SidebarProps) {
   const supabase = createClient();
 
   const isAdmin = user.role === 'admin';
+  const isSecretary = user.role === 'secretary';
   const isTechnician = user.role === 'technician';
+  const isStaff = isAdmin || isSecretary;
   const counts = useNotificationCounts();
 
   const mainRoutes = isTechnician ? TECHNICIAN_ROUTES : ADMIN_ROUTES;
   const adminRoutes = isAdmin ? ADMIN_ONLY_ROUTES : [];
 
-  const badgeMap: Record<string, number> = isAdmin
+  const badgeMap: Record<string, number> = isStaff
     ? {
         '/inbox': counts.inbox,
         '/reports/validate': counts.reportsToValidate,

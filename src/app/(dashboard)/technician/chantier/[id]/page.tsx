@@ -262,20 +262,22 @@ export default function ChantierDetailPage() {
 
       if (error) throw error;
 
-      // Notify admins
-      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
-      if (admins) {
-        const notifications = admins.filter(a => a.id !== user.id).map(a => ({
-          user_id: a.id,
-          title: 'Message chantier',
-          message: `${intervention?.title}: ${newMessage.trim().substring(0, 100)}`,
-          type: 'chantier_update',
-          intervention_id: interventionId,
-        }));
-        if (notifications.length > 0) {
-          await (supabase as any).from('notifications').insert(notifications);
+      // Notify admins (don't break flow on failure)
+      try {
+        const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+        if (admins) {
+          const notifications = admins.filter(a => a.id !== user.id).map(a => ({
+            user_id: a.id,
+            title: 'Message chantier',
+            message: `${intervention?.title}: ${newMessage.trim().substring(0, 100)}`,
+            type: 'chantier_update',
+            intervention_id: interventionId,
+          }));
+          if (notifications.length > 0) {
+            await (supabase as any).from('notifications').insert(notifications);
+          }
         }
-      }
+      } catch { /* notification failed silently */ }
 
       toast.success('Message envoyé');
       setNewMessage('');
@@ -310,20 +312,22 @@ export default function ChantierDetailPage() {
 
       if (error) throw error;
 
-      // Notify admins
-      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
-      if (admins) {
-        const notifications = admins.filter(a => a.id !== user.id).map(a => ({
-          user_id: a.id,
-          title: 'Avis de coupure',
-          message: `${intervention?.title}: coupure ${cutoffForm.cutoff_type}`,
-          type: 'chantier_update',
-          intervention_id: interventionId,
-        }));
-        if (notifications.length > 0) {
-          await (supabase as any).from('notifications').insert(notifications);
+      // Notify admins (don't break flow on failure)
+      try {
+        const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+        if (admins) {
+          const notifications = admins.filter(a => a.id !== user.id).map(a => ({
+            user_id: a.id,
+            title: 'Avis de coupure',
+            message: `${intervention?.title}: coupure ${cutoffForm.cutoff_type}`,
+            type: 'chantier_update',
+            intervention_id: interventionId,
+          }));
+          if (notifications.length > 0) {
+            await (supabase as any).from('notifications').insert(notifications);
+          }
         }
-      }
+      } catch { /* notification failed silently */ }
 
       toast.success('Avis de coupure enregistré');
       setShowCutoffForm(false);
@@ -377,20 +381,22 @@ export default function ChantierDetailPage() {
         }
       }
 
-      // Notify admins
-      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
-      if (admins) {
-        const notifications = admins.filter(a => a.id !== user.id).map(a => ({
-          user_id: a.id,
-          title: 'Nouvelles photos chantier',
-          message: `${intervention?.title}: ${files.length} photo${files.length > 1 ? 's' : ''} ajoutée${files.length > 1 ? 's' : ''}`,
-          type: 'chantier_update',
-          intervention_id: interventionId,
-        }));
-        if (notifications.length > 0) {
-          await (supabase as any).from('notifications').insert(notifications);
+      // Notify admins (don't break flow on failure)
+      try {
+        const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+        if (admins) {
+          const notifications = admins.filter(a => a.id !== user.id).map(a => ({
+            user_id: a.id,
+            title: 'Nouvelles photos chantier',
+            message: `${intervention?.title}: ${files.length} photo${files.length > 1 ? 's' : ''} ajoutée${files.length > 1 ? 's' : ''}`,
+            type: 'chantier_update',
+            intervention_id: interventionId,
+          }));
+          if (notifications.length > 0) {
+            await (supabase as any).from('notifications').insert(notifications);
+          }
         }
-      }
+      } catch { /* notification failed silently */ }
 
       toast.success(`${files.length} photo${files.length > 1 ? 's' : ''} uploadée${files.length > 1 ? 's' : ''}`);
       setPhotoCaption('');
