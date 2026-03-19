@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday, addMinutes, isWithinInterval } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, eachDayOfInterval, isSameDay, isToday, addMinutes, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const START_HOUR = 7;
@@ -22,6 +22,7 @@ interface Intervention {
   description: string | null;
   address: string;
   date_planned: string | null;
+  date_end: string | null;
   estimated_duration_minutes: number;
   status: string;
   priority: number;
@@ -111,10 +112,28 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
     return eachDayOfInterval({ start: weekStart, end: weekEnd });
   }, [mode, currentDate]);
 
+  // Check if intervention is multi-day chantier
+  const isMultiDayChantier = (iv: Intervention) => {
+    if (!iv.date_end || !iv.date_planned || iv.intervention_type !== 'chantier') return false;
+    return !isSameDay(new Date(iv.date_planned), new Date(iv.date_end));
+  };
+
+  // Single-day interventions for the time grid
   const getInterventionsForDay = (day: Date) => {
     return interventions.filter((iv) => {
       if (!iv.date_planned) return false;
+      if (isMultiDayChantier(iv)) return false; // shown in all-day section
       return isSameDay(new Date(iv.date_planned), day);
+    });
+  };
+
+  // Multi-day chantiers for a given day (shown in all-day section)
+  const getMultiDayForDay = (day: Date) => {
+    return interventions.filter((iv) => {
+      if (!isMultiDayChantier(iv)) return false;
+      const start = startOfDay(new Date(iv.date_planned!));
+      const end = endOfDay(new Date(iv.date_end!));
+      return isWithinInterval(day, { start, end });
     });
   };
 
@@ -182,7 +201,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
   const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
   // Check if any day has all-day items
-  const hasAnyAllDay = days.some((day) => getLeavesForDay(day).length > 0 || getBirthdaysForDay(day).length > 0 || getRemindersForDay(day).length > 0);
+  const hasAnyAllDay = days.some((day) => getLeavesForDay(day).length > 0 || getBirthdaysForDay(day).length > 0 || getRemindersForDay(day).length > 0 || getMultiDayForDay(day).length > 0);
   const ALL_DAY_HEIGHT = 36;
 
   return (
@@ -230,6 +249,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                 {/* All-day row (fixed height) */}
                 {hasAnyAllDay && (() => {
                   const dayReminders = getRemindersForDay(day);
+                  const dayMultiDay = getMultiDayForDay(day);
                   return (
                     <div
                       className="border-b border-gray-200 flex items-center gap-1 px-1 overflow-hidden flex-wrap"
@@ -260,6 +280,17 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                         >
                           🔔 {rem.message.length > 20 ? rem.message.slice(0, 20) + '…' : rem.message}
                         </span>
+                      ))}
+                      {dayMultiDay.map((iv) => (
+                        <button
+                          key={`md-${iv.id}`}
+                          onClick={() => onInterventionClick(iv)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-white text-xs font-semibold whitespace-nowrap cursor-pointer hover:opacity-90 transition-opacity"
+                          style={{ backgroundColor: getTechColor(iv.technician_id) }}
+                          title={`[Chantier] ${iv.work_order_number || iv.title}`}
+                        >
+                          🏗️ {iv.work_order_number || iv.title}
+                        </button>
                       ))}
                     </div>
                   );

@@ -11,6 +11,7 @@ interface Intervention {
   description: string | null;
   address: string;
   date_planned: string | null;
+  date_end?: string | null;
   estimated_duration_minutes: number;
   status: string;
   priority: number;
@@ -18,6 +19,7 @@ interface Intervention {
   regie_id: string | null;
   work_order_number: string | null;
   client_info: { name?: string; phone?: string } | null;
+  intervention_type?: 'depannage' | 'chantier' | null;
 }
 
 interface Technician {
@@ -86,12 +88,18 @@ export function InterventionForm({
     return '';
   };
 
+  const getInitialDateEnd = () => {
+    if (intervention?.date_end) return intervention.date_end.split('T')[0];
+    return '';
+  };
+
   const [formData, setFormData] = useState({
     title: intervention?.title || '',
     description: intervention?.description || '',
     address: intervention?.address || '',
     date_planned: getInitialDate(),
     time_planned: getInitialTime(),
+    date_end: getInitialDateEnd(),
     estimated_duration_minutes: intervention?.estimated_duration_minutes || 60,
     status: intervention?.status || 'planifie',
     priority: intervention?.priority || 0,
@@ -100,7 +108,10 @@ export function InterventionForm({
     work_order_number: intervention?.work_order_number || '',
     client_name: (intervention?.client_info as { name?: string })?.name || '',
     client_phone: (intervention?.client_info as { phone?: string })?.phone || '',
+    intervention_type: intervention?.intervention_type || 'depannage',
   });
+
+  const isChantier = formData.intervention_type === 'chantier';
 
   const supabase = createClient();
 
@@ -153,9 +164,11 @@ export function InterventionForm({
       // Combine date and time
       let datePlanned = null;
       if (formData.date_planned) {
-        const dateStr = formData.time_planned
-          ? `${formData.date_planned}T${formData.time_planned}:00`
-          : `${formData.date_planned}T09:00:00`;
+        const dateStr = isChantier
+          ? `${formData.date_planned}T07:00:00`
+          : formData.time_planned
+            ? `${formData.date_planned}T${formData.time_planned}:00`
+            : `${formData.date_planned}T09:00:00`;
         datePlanned = new Date(dateStr).toISOString();
       }
 
@@ -169,7 +182,9 @@ export function InterventionForm({
         description: formData.description || null,
         address: formData.address,
         date_planned: datePlanned,
-        estimated_duration_minutes: formData.estimated_duration_minutes,
+        date_end: isChantier && formData.date_end ? new Date(`${formData.date_end}T18:00:00`).toISOString() : null,
+        estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
+        intervention_type: formData.intervention_type,
         status: formData.status as 'nouveau' | 'planifie' | 'en_cours' | 'termine' | 'ready_to_bill' | 'billed' | 'annule',
         priority: formData.priority,
         technician_id: formData.technician_id || null,
@@ -376,69 +391,56 @@ export function InterventionForm({
         <p className="mt-1 text-xs text-gray-500">Référence du bon de travail de la régie</p>
       </div>
 
-      {/* Date et Heure */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="date_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Date prévue
-          </label>
-          <input
-            type="date"
-            id="date_planned"
-            name="date_planned"
-            value={formData.date_planned}
-            onChange={handleChange}
-            className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      {/* Date et Heure / Date début + Date fin */}
+      {isChantier ? (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="date_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Date début
+            </label>
+            <input type="date" id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label htmlFor="date_end" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Date fin
+            </label>
+            <input type="date" id="date_end" name="date_end" value={formData.date_end} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
         </div>
-        <div>
-          <label htmlFor="time_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Heure
-          </label>
-          <input
-            type="time"
-            id="time_planned"
-            name="time_planned"
-            step="1800"
-            value={formData.time_planned}
-            onChange={handleChange}
-            className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="date_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Date prévue
+            </label>
+            <input type="date" id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label htmlFor="time_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Heure
+            </label>
+            <input type="time" id="time_planned" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Durée et Statut */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="estimated_duration_minutes" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Durée estimée (min)
-          </label>
-          <input
-            type="number"
-            id="estimated_duration_minutes"
-            name="estimated_duration_minutes"
-            min="15"
-            step="15"
-            value={formData.estimated_duration_minutes}
-            onChange={handleChange}
-            className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
+      <div className={`grid ${isChantier ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+        {!isChantier && (
+          <div>
+            <label htmlFor="estimated_duration_minutes" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Durée estimée (min)
+            </label>
+            <input type="number" id="estimated_duration_minutes" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          </div>
+        )}
         <div>
           <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1.5">
             Statut
           </label>
-          <select
-            id="status"
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-          >
+          <select id="status" name="status" value={formData.status} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
             {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+              <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </div>
