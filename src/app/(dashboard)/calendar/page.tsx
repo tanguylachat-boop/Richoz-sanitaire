@@ -215,7 +215,9 @@ export default function CalendarPage() {
   });
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
   const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
-  const getRemindersForDay = (day: Date): ReminderEntry[] => reminders.filter((r) => isSameDay(new Date(r.reminder_date + 'T00:00:00'), day));
+  const cancelledInterventionIds = useMemo(() => new Set(interventions.filter(iv => iv.status === 'cancelled' || iv.status === 'annule').map(iv => iv.id)), [interventions]);
+  const activeReminders = useMemo(() => reminders.filter(r => !cancelledInterventionIds.has(r.intervention_id)), [reminders, cancelledInterventionIds]);
+  const getRemindersForDay = (day: Date): ReminderEntry[] => activeReminders.filter((r) => isSameDay(new Date(r.reminder_date + 'T00:00:00'), day));
   const getTechInitials = (t: Intervention['technician']) => t ? ((t.first_name?.[0] || '') + (t.last_name?.[0] || '')).toUpperCase() || '?' : null;
   const getTypeEmoji = (iv: Intervention) => iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
   const getTechName = (t: LeaveEntry['technician']) => { if (!t) return '?'; if (t.first_name && t.last_name) return `${t.first_name} ${t.last_name}`; return t.first_name || t.last_name || '?'; };
@@ -276,8 +278,8 @@ export default function CalendarPage() {
                 })}
               </div>
             </>)}
-            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={reminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
-            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={reminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
+            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={activeReminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
+            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={activeReminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
           </>)}
         </div>
 

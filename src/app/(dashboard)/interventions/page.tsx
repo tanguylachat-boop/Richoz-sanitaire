@@ -65,6 +65,7 @@ export default function InterventionsPage() {
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [regies, setRegies] = useState<Regie[]>([]);
 
@@ -82,7 +83,7 @@ export default function InterventionsPage() {
         technician:users!interventions_technician_id_fkey(id, first_name, last_name)
       `)
       .order('date_planned', { ascending: false })
-      .limit(50);
+      .limit(200);
 
     if (!error && data) {
       setInterventions(data as Intervention[]);
@@ -127,8 +128,10 @@ export default function InterventionsPage() {
     setIsEditModalOpen(true);
   };
 
+  const HISTORY_STATUSES = ['termine', 'ready_to_bill', 'billed', 'annule', 'cancelled'];
+
   // Filter interventions by search query
-  const filteredInterventions = interventions.filter((intervention) => {
+  const searchFiltered = interventions.filter((intervention) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -139,6 +142,10 @@ export default function InterventionsPage() {
       (intervention.technician?.last_name?.toLowerCase().includes(query) ?? false)
     );
   });
+
+  const activeInterventions = searchFiltered.filter(iv => !HISTORY_STATUSES.includes(iv.status));
+  const historyInterventions = searchFiltered.filter(iv => HISTORY_STATUSES.includes(iv.status));
+  const filteredInterventions = showHistory ? historyInterventions : activeInterventions;
 
   const getTechnicianName = (tech: Intervention['technician']) => {
     if (!tech) return null;
@@ -178,6 +185,22 @@ export default function InterventionsPage() {
             <span className="hidden sm:inline">Nouvelle</span>
           </button>
         </div>
+      </div>
+
+      {/* Tabs: En cours / Historique */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        <button
+          onClick={() => setShowHistory(false)}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${!showHistory ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          En cours ({activeInterventions.length})
+        </button>
+        <button
+          onClick={() => setShowHistory(true)}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${showHistory ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Historique ({historyInterventions.length})
+        </button>
       </div>
 
       {/* Interventions List */}
