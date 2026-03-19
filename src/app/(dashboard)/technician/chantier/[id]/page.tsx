@@ -263,7 +263,8 @@ export default function ChantierDetailPage() {
       if (error) throw error;
 
       // Notify admins
-      const { data: admins } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      const { data: admins, error: adminsErr } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      if (adminsErr) console.error('Failed to fetch admins for notification:', adminsErr);
       if (admins && admins.length > 0) {
         const notifs = admins.filter(a => a.id !== user.id).map(a => ({
           user_id: a.id,
@@ -312,7 +313,8 @@ export default function ChantierDetailPage() {
       if (error) throw error;
 
       // Notify admins
-      const { data: admins2 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      const { data: admins2, error: adminsErr2 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      if (adminsErr2) console.error('Failed to fetch admins for notification:', adminsErr2);
       if (admins2 && admins2.length > 0) {
         const notifs = admins2.filter(a => a.id !== user.id).map(a => ({
           user_id: a.id,
@@ -380,7 +382,8 @@ export default function ChantierDetailPage() {
       }
 
       // Notify admins (don't break flow on failure)
-      const { data: admins3 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      const { data: admins3, error: adminsErr3 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      if (adminsErr3) console.error('Failed to fetch admins for notification:', adminsErr3);
       if (admins3 && admins3.length > 0) {
         const notifs3 = admins3.filter(a => a.id !== user.id).map(a => ({
           user_id: a.id,
