@@ -35,6 +35,7 @@ interface Intervention {
     id: string;
     first_name: string | null;
     last_name: string | null;
+    calendar_color?: string | null;
   } | null;
 }
 
@@ -91,12 +92,17 @@ interface TimeGridViewProps {
 }
 
 export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], reminders = [], onInterventionClick, onSlotClick, onLeaveClick, selectedSlot }: TimeGridViewProps) {
-  // Build technician → color map from unique technician IDs
+  // Build technician → color map — use stored calendar_color, fallback to palette
   const techColorMap = useMemo(() => {
     const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
-    uniqueIds.sort(); // stable ordering
+    uniqueIds.sort();
     const map: Record<string, string> = {};
-    uniqueIds.forEach((id, idx) => { map[id] = TECHNICIAN_COLORS[idx % TECHNICIAN_COLORS.length]; });
+    let fallbackIdx = 0;
+    uniqueIds.forEach((id) => {
+      const iv = interventions.find((i) => i.technician_id === id);
+      const storedColor = iv?.technician?.calendar_color;
+      map[id] = storedColor || TECHNICIAN_COLORS[fallbackIdx++ % TECHNICIAN_COLORS.length];
+    });
     return map;
   }, [interventions]);
 

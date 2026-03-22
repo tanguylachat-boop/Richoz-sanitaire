@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { updateUser } from '@/app/(dashboard)/admin/users/actions';
 import type { User, UserRole } from '@/types/database';
-import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake, Wrench } from 'lucide-react';
+import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake, Wrench, Palette } from 'lucide-react';
+import { TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
   { value: 'technician', label: 'Technicien', description: 'Accès mobile, rapports terrain' },
@@ -37,6 +38,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
     birthDate: user.birth_date || '',
     role: user.role as UserRole,
     interventionTypePreference: (user.intervention_type_preference || 'depannage') as 'depannage' | 'chantier',
+    calendarColor: (user as Record<string, unknown>).calendar_color as string || '',
   });
 
   const [fieldError, setFieldError] = useState('');
@@ -50,6 +52,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
       birthDate: user.birth_date || '',
       role: user.role,
       interventionTypePreference: (user.intervention_type_preference || 'depannage') as 'depannage' | 'chantier',
+      calendarColor: (user as Record<string, unknown>).calendar_color as string || '',
     });
     setFieldError('');
   };
@@ -89,6 +92,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
         birthDate: form.birthDate,
         role: form.role,
         interventionTypePreference: form.role === 'technician' ? form.interventionTypePreference : undefined,
+        calendarColor: form.role === 'technician' ? (form.calendarColor || null) : null,
       });
 
       if (result.success) {
@@ -280,6 +284,55 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
                     <span className="text-sm font-medium text-gray-900">{option.label}</span>
                   </label>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Calendar Color (only for technicians) */}
+          {form.role === 'technician' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5" />
+                  Couleur calendrier
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {TECHNICIAN_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setForm({ ...form, calendarColor: color })}
+                    disabled={isPending}
+                    className={`w-9 h-9 rounded-full border-2 transition-all disabled:opacity-50 ${
+                      form.calendarColor === color
+                        ? 'border-gray-900 scale-110 ring-2 ring-gray-300'
+                        : 'border-transparent hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+                <div className="relative">
+                  <input
+                    type="color"
+                    value={form.calendarColor || '#3B82F6'}
+                    onChange={(e) => setForm({ ...form, calendarColor: e.target.value })}
+                    disabled={isPending}
+                    className="absolute inset-0 w-9 h-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    title="Couleur personnalisée"
+                  />
+                  <div
+                    className={`w-9 h-9 rounded-full border-2 border-dashed flex items-center justify-center text-xs font-bold transition-all ${
+                      form.calendarColor && !TECHNICIAN_COLORS.includes(form.calendarColor)
+                        ? 'border-gray-900 scale-110 ring-2 ring-gray-300'
+                        : 'border-gray-300 text-gray-400'
+                    }`}
+                    style={form.calendarColor && !TECHNICIAN_COLORS.includes(form.calendarColor) ? { backgroundColor: form.calendarColor } : undefined}
+                  >
+                    {!(form.calendarColor && !TECHNICIAN_COLORS.includes(form.calendarColor)) && '+'}
+                  </div>
+                </div>
               </div>
             </div>
           )}

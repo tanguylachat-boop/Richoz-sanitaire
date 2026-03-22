@@ -175,6 +175,13 @@ export default async function UsersPage() {
                         )}>
                           {userItem.first_name} {userItem.last_name}
                         </h4>
+                        {userItem.role === 'technician' && (userItem as Record<string, unknown>).calendar_color && (
+                          <span
+                            className="w-4 h-4 rounded-full inline-block border border-gray-200"
+                            style={{ backgroundColor: (userItem as Record<string, unknown>).calendar_color as string }}
+                            title="Couleur calendrier"
+                          />
+                        )}
                         {userItem.role === 'technician' && userItem.intervention_type_preference && (
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                             userItem.intervention_type_preference === 'chantier'

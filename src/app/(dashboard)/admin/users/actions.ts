@@ -15,10 +15,11 @@ interface UpdateUserPayload {
   birthDate: string;
   role: UserRole;
   interventionTypePreference?: 'depannage' | 'chantier';
+  calendarColor?: string | null;
 }
 
 export async function updateUser(payload: UpdateUserPayload) {
-  const { id, firstName, lastName, email, phone, birthDate, role, interventionTypePreference } = payload;
+  const { id, firstName, lastName, email, phone, birthDate, role, interventionTypePreference, calendarColor } = payload;
 
   if (!firstName?.trim() || !lastName?.trim()) {
     return { success: false, error: 'Le nom et le prénom sont requis.' };
@@ -45,6 +46,7 @@ export async function updateUser(payload: UpdateUserPayload) {
         birth_date: birthDate?.trim() || null,
         role,
         intervention_type_preference: role === 'technician' ? (interventionTypePreference || 'depannage') : null,
+        calendar_color: role === 'technician' ? (calendarColor || null) : null,
       })
       .eq('id', id);
 

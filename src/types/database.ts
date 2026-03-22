@@ -32,6 +32,7 @@ export interface Database {
           avatar_url: string | null;
           birth_date: string | null;
           intervention_type_preference: 'depannage' | 'chantier' | null;
+          calendar_color: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -45,6 +46,7 @@ export interface Database {
           phone?: string | null;
           avatar_url?: string | null;
           intervention_type_preference?: 'depannage' | 'chantier' | null;
+          calendar_color?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -58,6 +60,7 @@ export interface Database {
           phone?: string | null;
           avatar_url?: string | null;
           intervention_type_preference?: 'depannage' | 'chantier' | null;
+          calendar_color?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;

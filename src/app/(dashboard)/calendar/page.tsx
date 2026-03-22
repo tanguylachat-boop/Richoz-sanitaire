@@ -26,7 +26,7 @@ interface Intervention {
   priority: number; technician_id: string | null; regie_id: string | null;
   client_info: { name?: string; phone?: string } | null; work_order_number: string | null;
   intervention_type?: 'depannage' | 'chantier' | null;
-  technician?: { id: string; first_name: string | null; last_name: string | null } | null;
+  technician?: { id: string; first_name: string | null; last_name: string | null; calendar_color?: string | null } | null;
 }
 
 interface Technician { id: string; first_name: string | null; last_name: string | null; email: string; intervention_type_preference?: string | null; }
@@ -74,7 +74,7 @@ export default function CalendarPage() {
     setIsLoading(true);
     const { start, end } = getDateRange();
     // Fetch interventions: date_planned in range OR date_end overlaps range (multi-day chantiers)
-    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name)`).or(`and(date_planned.gte.${start.toISOString()},date_planned.lte.${end.toISOString()}),and(date_planned.lte.${end.toISOString()},date_end.gte.${start.toISOString()})`).order('date_planned', { ascending: true });
+    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name, calendar_color)`).or(`and(date_planned.gte.${start.toISOString()},date_planned.lte.${end.toISOString()}),and(date_planned.lte.${end.toISOString()},date_end.gte.${start.toISOString()})`).order('date_planned', { ascending: true });
     if (data) setInterventions(data as Intervention[]);
     const sd = format(start, 'yyyy-MM-dd'); const ed = format(end, 'yyyy-MM-dd');
     const { data: leavesData } = await supabase.from('leave_requests').select(`id, technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
@@ -177,12 +177,17 @@ export default function CalendarPage() {
     return result;
   }, [interventions, typeFilter]);
 
-  // Technician color map for month view
+  // Technician color map for month view — use stored calendar_color, fallback to palette
   const techColorMap = useMemo(() => {
     const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
     uniqueIds.sort();
     const map: Record<string, string> = {};
-    uniqueIds.forEach((id, idx) => { map[id] = TECHNICIAN_COLORS[idx % TECHNICIAN_COLORS.length]; });
+    let fallbackIdx = 0;
+    uniqueIds.forEach((id) => {
+      const iv = interventions.find((i) => i.technician_id === id);
+      const storedColor = iv?.technician?.calendar_color;
+      map[id] = storedColor || TECHNICIAN_COLORS[fallbackIdx++ % TECHNICIAN_COLORS.length];
+    });
     return map;
   }, [interventions]);
 
