@@ -27,6 +27,7 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { normalizeImage } from '@/lib/normalize-image';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -357,10 +358,9 @@ export default function ChantierDetailPage() {
       if (!user) throw new Error('Non authentifié');
 
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+        const file = await normalizeImage(files[i]);
         const timestamp = Date.now();
-        const ext = file.name.split('.').pop() || 'jpg';
-        const path = `chantier-photos/${interventionId}/${timestamp}_${i}.${ext}`;
+        const path = `chantier-photos/${interventionId}/${timestamp}_${i}.jpg`;
 
         const { error: uploadError } = await supabase.storage
           .from('photos')

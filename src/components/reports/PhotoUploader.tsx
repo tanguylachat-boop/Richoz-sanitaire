@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useRef } from 'react';
 import { toast } from 'sonner';
 import { Camera, X, Plus } from 'lucide-react';
+import { normalizeImage } from '@/lib/normalize-image';
 
 interface Photo {
   url: string;
@@ -26,8 +27,8 @@ export function PhotoUploader({
   // Refs for file inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle file selection - ULTRA SIMPLE
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file selection - normalize EXIF orientation
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -38,16 +39,14 @@ export function PhotoUploader({
 
     const newPhotos: Photo[] = [];
 
-    // Process each file
+    // Process each file - normalize orientation via canvas
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Créer l'URL locale IMMÉDIATEMENT
-      const objectUrl = URL.createObjectURL(file);
-      
+      const normalized = await normalizeImage(files[i]);
+      const objectUrl = URL.createObjectURL(normalized);
+
       newPhotos.push({
         url: objectUrl,
-        file: file,
+        file: normalized,
         isLocal: true,
       });
     }
