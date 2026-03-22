@@ -27,7 +27,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-type InterventionTypeFilter = 'depannage' | 'chantier';
+type InterventionTypeFilter = 'all' | 'depannage' | 'chantier';
 
 interface ReportRow {
   id: string;
@@ -63,7 +63,7 @@ export default function ValidateReportsPage() {
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [chantierExtras, setChantierExtras] = useState<Map<string, ChantierExtra>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
-  const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('depannage');
+  const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('all');
   const [rejectModalReport, setRejectModalReport] = useState<ReportRow | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
@@ -206,6 +206,7 @@ export default function ValidateReportsPage() {
 
   // Filter reports by intervention type
   const filteredReports = reports.filter(r => {
+    if (typeFilter === 'all') return true;
     const type = r.intervention?.intervention_type;
     if (typeFilter === 'depannage') return type !== 'chantier';
     return type === 'chantier';
@@ -261,6 +262,26 @@ export default function ValidateReportsPage() {
       {/* Type filter tabs */}
       <div className="flex items-center gap-2">
         <button
+          onClick={() => setTypeFilter('all')}
+          className={cn(
+            'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+            typeFilter === 'all'
+              ? 'bg-blue-100 text-blue-700 border border-blue-200'
+              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          )}
+        >
+          <FileText className="w-4 h-4" />
+          Tous
+          {reports.length > 0 && (
+            <span className={cn(
+              'px-1.5 py-0.5 text-[10px] font-semibold rounded-full',
+              typeFilter === 'all' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600'
+            )}>
+              {reports.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setTypeFilter('depannage')}
           className={cn(
             'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -307,9 +328,11 @@ export default function ValidateReportsPage() {
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">Rapports a valider</h2>
           <p className="text-sm text-gray-500">
-            {typeFilter === 'depannage'
-              ? 'Rapports de dépannage des techniciens'
-              : 'Rapports de chantier des techniciens'}
+            {typeFilter === 'all'
+              ? 'Tous les rapports des techniciens'
+              : typeFilter === 'depannage'
+                ? 'Rapports de dépannage des techniciens'
+                : 'Rapports de chantier des techniciens'}
           </p>
         </div>
 
