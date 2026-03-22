@@ -120,7 +120,7 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
       </div>
 
       {/* Main content - No sidebar, full width */}
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}>
         {children}
       </main>
 
