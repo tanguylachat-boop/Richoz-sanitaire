@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import type { UserRole } from '@/types/database';
+import { requireAdminOrSecretary } from '@/lib/auth-guard';
 
 const VALID_ROLES: UserRole[] = ['admin', 'secretary', 'technician'];
 
@@ -19,6 +20,9 @@ interface UpdateUserPayload {
 }
 
 export async function updateUser(payload: UpdateUserPayload) {
+  const auth = await requireAdminOrSecretary();
+  if (!auth.authorized) return { success: false, error: auth.error };
+
   const { id, firstName, lastName, email, phone, birthDate, role, interventionTypePreference, calendarColor } = payload;
 
   if (!firstName?.trim() || !lastName?.trim()) {
@@ -88,6 +92,9 @@ interface CreateUserPayload {
 }
 
 export async function createUser(payload: CreateUserPayload) {
+  const auth = await requireAdminOrSecretary();
+  if (!auth.authorized) return { success: false, error: auth.error };
+
   const { firstName, lastName, email, password, birthDate, role, interventionTypePreference } = payload;
 
   // Validation

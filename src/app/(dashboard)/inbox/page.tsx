@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { useSearchParams } from 'next/navigation';
 import {
   Inbox,
@@ -491,7 +492,7 @@ function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActio
           {email.body_html ? (
             <div
               className="text-sm text-gray-700 prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: email.body_html }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html) }}
             />
           ) : (
             <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">

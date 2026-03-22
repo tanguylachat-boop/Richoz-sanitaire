@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import {
   ChevronLeft,
   ChevronRight,
@@ -383,7 +384,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
                 {email.body_html ? (
                   <div
                     className="text-sm text-gray-700 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: email.body_html }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.body_html) }}
                   />
                 ) : (
                   <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">

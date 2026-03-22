@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
+import { requireAdminOrSecretary } from '@/lib/auth-guard';
 
 export interface CompanySettingsPayload {
   company_name: string;
@@ -17,6 +18,9 @@ export interface CompanySettingsPayload {
  * Fetch current company settings (first row).
  */
 export async function getCompanySettings() {
+  const auth = await requireAdminOrSecretary();
+  if (!auth.authorized) return { success: false as const, error: auth.error, data: null };
+
   const supabase = createClient();
 
   const { data, error } = await supabase
@@ -37,6 +41,9 @@ export async function getCompanySettings() {
  * Upsert company settings (update the existing row, or insert if none).
  */
 export async function updateCompanySettings(payload: CompanySettingsPayload) {
+  const auth = await requireAdminOrSecretary();
+  if (!auth.authorized) return { success: false, error: auth.error };
+
   // Basic validation
   if (!payload.company_name?.trim()) {
     return { success: false, error: 'Le nom de l\'entreprise est requis.' };
