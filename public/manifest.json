@@ -1,0 +1,18 @@
+{
+  "name": "Richoz Sanitaire",
+  "short_name": "Richoz",
+  "description": "Gestion des interventions plomberie et chauffage",
+  "start_url": "/technician/today",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

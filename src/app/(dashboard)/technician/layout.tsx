@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat, Bell } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { registerPushSubscription } from '@/lib/push-notifications';
 
 interface TechnicianLayoutProps {
   children: ReactNode;
@@ -31,6 +32,9 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
         }
         setUnreadCount(count || 0);
+
+        // Register push notifications (non-blocking)
+        registerPushSubscription().catch(() => {});
       }
     };
     fetchPreference();
