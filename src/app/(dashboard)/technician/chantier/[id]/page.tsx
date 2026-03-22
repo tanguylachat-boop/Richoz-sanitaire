@@ -24,6 +24,7 @@ import {
   X,
   Image as ImageIcon,
   Bell,
+  CalendarDays,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -39,6 +40,7 @@ interface ChantierIntervention {
   description: string | null;
   address: string;
   date_planned: string | null;
+  date_end: string | null;
   status: string;
   client_info: { name?: string; phone?: string; email?: string } | null;
   keys_info: string | null;
@@ -145,7 +147,7 @@ export default function ChantierDetailPage() {
     // Fetch intervention
     const { data: ivData } = await supabase
       .from('interventions')
-      .select('id, title, description, address, date_planned, status, client_info, keys_info, regie:regies(id, name, phone, email_contact)')
+      .select('id, title, description, address, date_planned, date_end, status, client_info, keys_info, regie:regies(id, name, phone, email_contact)')
       .eq('id', interventionId)
       .single();
 
@@ -567,6 +569,33 @@ export default function ChantierDetailPage() {
       {/* ═══ TAB: Overview ═══ */}
       {activeTab === 'overview' && (
         <div className="space-y-4">
+          {/* Dates du chantier */}
+          {(intervention.date_planned || intervention.date_end) && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-blue-600" />Dates du chantier
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {intervention.date_planned && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs font-medium text-blue-600 mb-0.5">Début</p>
+                    <p className="text-sm font-semibold text-blue-900">
+                      {format(new Date(intervention.date_planned), 'd MMM yyyy', { locale: fr })}
+                    </p>
+                  </div>
+                )}
+                {intervention.date_end && (
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-xs font-medium text-blue-600 mb-0.5">Fin</p>
+                    <p className="text-sm font-semibold text-blue-900">
+                      {format(new Date(intervention.date_end), 'd MMM yyyy', { locale: fr })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Contacts */}
           <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
