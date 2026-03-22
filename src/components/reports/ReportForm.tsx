@@ -32,6 +32,7 @@ export function ReportForm({
 }: ReportFormProps) {
   const router = useRouter();
   const supabase = createClient();
+  const isChantier = (intervention as Record<string, unknown>).intervention_type === 'chantier';
 
   // Parse existing photos into before/after categories
   const parseExistingPhotos = () => {
@@ -184,7 +185,7 @@ export function ReportForm({
     checklist: [],
     is_billable: isBillable,
     billable_reason: !isBillable ? billableReason : null,
-    work_duration_minutes: workDuration,
+    work_duration_minutes: isChantier ? null : workDuration,
     materials_used: [],
     supplies_text: suppliesText || null,
     client_signature: signatureUrl,
@@ -405,15 +406,17 @@ export function ReportForm({
       {/* Progress summary */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold text-gray-900 mb-3">Résumé</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className={cn('grid gap-3', isChantier ? 'grid-cols-2' : 'grid-cols-3')}>
           <div className="text-center p-2 bg-blue-50 rounded-lg">
             <p className="text-lg font-bold text-blue-700">{totalPhotos}</p>
             <p className="text-xs text-blue-600">Photo{totalPhotos > 1 ? 's' : ''}</p>
           </div>
-          <div className="text-center p-2 bg-amber-50 rounded-lg">
-            <p className="text-lg font-bold text-amber-700">{workDuration}</p>
-            <p className="text-xs text-amber-600">Minutes</p>
-          </div>
+          {!isChantier && (
+            <div className="text-center p-2 bg-amber-50 rounded-lg">
+              <p className="text-lg font-bold text-amber-700">{workDuration}</p>
+              <p className="text-xs text-amber-600">Minutes</p>
+            </div>
+          )}
           <div className="text-center p-2 bg-emerald-50 rounded-lg">
             <p className="text-lg font-bold text-emerald-700">{isCompleted ? 'Oui' : 'Non'}</p>
             <p className="text-xs text-emerald-600">Terminée</p>
@@ -523,7 +526,8 @@ export function ReportForm({
         />
       </div>
 
-      {/* ===== DURÉE DU TRAVAIL ===== */}
+      {/* ===== DURÉE DU TRAVAIL (masqué pour chantiers) ===== */}
+      {!isChantier && (
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold text-gray-900 mb-3">
           ⏱️ Durée du travail
@@ -571,6 +575,7 @@ export function ReportForm({
           ))}
         </div>
       </div>
+      )}
 
       {/* ===== FACTURABLE ===== */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">

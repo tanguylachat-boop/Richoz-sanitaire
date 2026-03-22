@@ -451,7 +451,7 @@ export default function ValidateReportsPage() {
 
                       {/* Report metadata */}
                       <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-4">
-                        {report.work_duration_minutes && (
+                        {report.work_duration_minutes && !isChantier && (
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-4 h-4" />
                             <span>{report.work_duration_minutes} min</span>

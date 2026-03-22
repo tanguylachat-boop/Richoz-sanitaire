@@ -39,6 +39,7 @@ interface Report {
   intervention?: {
     id: string; title: string; description: string | null; address: string;
     date_planned: string | null; work_order_number?: string | null;
+    intervention_type: string | null;
     client_info: { name?: string; phone?: string } | null;
     regie?: { id: string; name: string } | null;
   } | null;
@@ -73,7 +74,7 @@ export default function ValidateReportDetailPage() {
         .from('reports')
         .select(`
           *, technician:users!reports_technician_id_fkey(id, first_name, last_name, phone),
-          intervention:interventions(id, title, description, address, date_planned, work_order_number, client_info, regie:regies(id, name))
+          intervention:interventions(id, title, description, address, date_planned, work_order_number, intervention_type, client_info, regie:regies(id, name))
         `)
         .eq('id', reportId)
         .single();
@@ -568,7 +569,8 @@ export default function ValidateReportDetailPage() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-600" />Récapitulatif</h2>
             <div className="space-y-4">
-              {/* Durée */}
+              {/* Durée (masqué pour chantiers) */}
+              {report.intervention?.intervention_type !== 'chantier' && (
               <div className="flex items-center justify-between p-4 bg-blue-50/50 border-2 border-blue-200 rounded-xl">
                 <div className="flex items-center gap-3">
                   <Clock className="w-5 h-5 text-blue-500" />
@@ -590,6 +592,7 @@ export default function ValidateReportDetailPage() {
                   <p className="text-sm text-gray-500 ml-2">≈ {((editWorkDuration / 60) * hourlyRate).toFixed(2)} CHF</p>
                 </div>
               </div>
+              )}
 
               {/* Terminée */}
               <div className={`p-4 rounded-xl ${report.is_completed !== false ? 'bg-emerald-50' : 'bg-amber-50'}`}>
