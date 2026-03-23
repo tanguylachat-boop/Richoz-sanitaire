@@ -13,6 +13,38 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+export async function unregisterPushSubscription(): Promise<boolean> {
+  try {
+    if (!('serviceWorker' in navigator)) return false;
+
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (!registration) return true;
+
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      const endpoint = subscription.endpoint;
+      await subscription.unsubscribe();
+
+      // Remove from database
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('endpoint', endpoint);
+      }
+    }
+
+    console.log('[Push] Unsubscribed');
+    return true;
+  } catch (err) {
+    console.error('[Push] Unsubscribe error:', err);
+    return false;
+  }
+}
+
 export async function registerPushSubscription(): Promise<boolean> {
   console.log('[Push] Starting registration...');
 

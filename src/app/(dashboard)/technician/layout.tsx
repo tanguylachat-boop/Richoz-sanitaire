@@ -36,10 +36,19 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
     };
     fetchPreference();
 
-    // Register push notifications independently with delay
-    // to let any server-side redirect settle first
-    const pushTimer = setTimeout(() => {
-      registerPushSubscription().catch(() => {});
+    // Silently refresh SW registration if user already has a push subscription
+    const pushTimer = setTimeout(async () => {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        if (Notification.permission !== 'granted') return;
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          // Subscription exists — silently re-register to keep token fresh
+          registerPushSubscription().catch(() => {});
+        }
+      } catch { /* ignore */ }
     }, 2000);
 
     // Poll for new notifications every 30 seconds
