@@ -12,13 +12,16 @@ export default async function HomePage() {
   // Get user role to redirect appropriately
   const { data: profileData } = await supabase
     .from('users')
-    .select('role')
+    .select('role, intervention_type_preference')
     .eq('id', user.id)
     .single();
 
-  const profile = profileData as { role: string } | null;
+  const profile = profileData as { role: string; intervention_type_preference: string | null } | null;
 
   if (profile?.role === 'technician') {
+    if (profile.intervention_type_preference === 'chantier') {
+      redirect('/technician/chantier');
+    }
     redirect('/technician/today');
   }
 
