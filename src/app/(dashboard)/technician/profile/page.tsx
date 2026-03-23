@@ -29,6 +29,7 @@ export default function TechnicianProfilePage() {
   const [phone, setPhone] = useState('');
   const [pushStatus, setPushStatus] = useState<'loading' | 'active' | 'inactive' | 'denied'>('loading');
   const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -117,19 +118,19 @@ export default function TechnicianProfilePage() {
 
   const handleEnablePush = async () => {
     setPushLoading(true);
+    setPushError(null);
     try {
-      const success = await registerPushSubscription();
-      if (success) {
-        setPushStatus('active');
-        toast.success('Notifications push activées');
-      } else if (Notification.permission === 'denied') {
+      await registerPushSubscription();
+      setPushStatus('active');
+      toast.success('Notifications push activées');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      console.error('[Push] Activation failed:', message);
+      setPushError(message);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
         setPushStatus('denied');
-        toast.error('Notifications bloquées par le navigateur');
-      } else {
-        toast.error('Impossible d\'activer les notifications');
       }
-    } catch {
-      toast.error('Erreur lors de l\'activation');
+      toast.error(message);
     } finally {
       setPushLoading(false);
     }
@@ -288,6 +289,11 @@ export default function TechnicianProfilePage() {
                   <><Bell className="w-4 h-4" />Activer les notifications</>
                 )}
               </button>
+              {pushError && (
+                <div className="p-3 bg-red-50 rounded-xl border border-red-200">
+                  <p className="text-xs font-medium text-red-800">{pushError}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
