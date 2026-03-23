@@ -32,12 +32,15 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
         }
         setUnreadCount(count || 0);
-
-        // Register push notifications (non-blocking)
-        registerPushSubscription().catch(() => {});
       }
     };
     fetchPreference();
+
+    // Register push notifications independently with delay
+    // to let any server-side redirect settle first
+    const pushTimer = setTimeout(() => {
+      registerPushSubscription().catch(() => {});
+    }, 2000);
 
     // Poll for new notifications every 30 seconds
     const interval = setInterval(async () => {
@@ -50,7 +53,7 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
       setUnreadCount(count || 0);
     }, 30000);
 
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); clearTimeout(pushTimer); };
   }, []);
 
   const handleLogout = async () => {

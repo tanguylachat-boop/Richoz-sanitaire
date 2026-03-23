@@ -14,44 +14,51 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export async function registerPushSubscription(): Promise<boolean> {
+  console.log('[Push] Starting registration...');
+
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log('Push notifications not supported');
+    console.log('[Push] Not supported in this browser');
     return false;
   }
 
   if (!VAPID_PUBLIC_KEY) {
-    console.warn('VAPID public key not configured');
+    console.warn('[Push] VAPID public key not configured');
     return false;
   }
 
   try {
     // Request permission
     const permission = await Notification.requestPermission();
+    console.log('[Push] Permission:', permission);
     if (permission !== 'granted') {
-      console.log('Notification permission denied');
       return false;
     }
 
     // Register service worker
+    console.log('[Push] Registering service worker...');
     const registration = await navigator.serviceWorker.register('/sw.js');
     await navigator.serviceWorker.ready;
+    console.log('[Push] Service worker ready');
 
     // Check for existing subscription
     let subscription = await registration.pushManager.getSubscription();
 
     // Subscribe if not already subscribed
     if (!subscription) {
+      console.log('[Push] Creating new subscription...');
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
+    } else {
+      console.log('[Push] Existing subscription found');
     }
 
     // Extract keys
     const key = subscription.getKey('p256dh');
     const auth = subscription.getKey('auth');
     if (!key || !auth) {
-      console.error('Missing subscription keys');
+      console.error('[Push] Missing subscription keys');
       return false;
     }
 
@@ -61,7 +68,10 @@ export async function registerPushSubscription(): Promise<boolean> {
     // Save to Supabase
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+    if (!user) {
+      console.error('[Push] No authenticated user');
+      return false;
+    }
 
     const { error } = await supabase
       .from('push_subscriptions')
@@ -76,13 +86,14 @@ export async function registerPushSubscription(): Promise<boolean> {
       );
 
     if (error) {
-      console.error('Failed to save push subscription:', error);
+      console.error('[Push] Failed to save subscription:', error);
       return false;
     }
 
+    console.log('[Push] Registration complete for user', user.id);
     return true;
   } catch (err) {
-    console.error('Push subscription error:', err);
+    console.error('[Push] Registration error:', err);
     return false;
   }
 }
