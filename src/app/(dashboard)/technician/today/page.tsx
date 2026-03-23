@@ -131,6 +131,21 @@ export default function TechnicianTodayPage() {
     if (userId) fetchInterventions();
   }, [typePreference, userId]);
 
+  // Realtime: listen for intervention and notification changes
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel('tech-today-' + userId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'interventions', filter: 'technician_id=eq.' + userId }, () => {
+        fetchInterventions();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reports', filter: 'technician_id=eq.' + userId }, () => {
+        fetchInterventions();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
+
   // Get greeting based on time
   const getGreeting = () => {
     const hour = currentTime.getHours();

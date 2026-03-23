@@ -15,6 +15,7 @@ self.addEventListener('push', function (event) {
     icon: '/apple-touch-icon.png',
     badge: '/apple-touch-icon.png',
     tag: data.tag || 'default',
+    renotify: true,
     data: {
       url: data.url || '/technician/notifications',
     },
@@ -26,19 +27,28 @@ self.addEventListener('push', function (event) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
 
-  const url = event.notification.data?.url || '/technician/notifications';
+  var targetPath = event.notification.data && event.notification.data.url
+    ? event.notification.data.url
+    : '/technician/notifications';
+
+  // Build absolute URL from the SW origin
+  var targetUrl = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-      // Focus existing window if available
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(url);
-          return client.focus();
+      // Try to focus an existing window and navigate it
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if ('focus' in client) {
+          return client.focus().then(function (focusedClient) {
+            if (focusedClient && 'navigate' in focusedClient) {
+              return focusedClient.navigate(targetUrl);
+            }
+          });
         }
       }
-      // Otherwise open new window
-      return clients.openWindow(url);
+      // No existing window — open a new one
+      return clients.openWindow(targetUrl);
     })
   );
 });

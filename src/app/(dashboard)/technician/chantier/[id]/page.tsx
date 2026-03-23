@@ -247,6 +247,26 @@ export default function ChantierDetailPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Realtime: listen for changes on this chantier
+  useEffect(() => {
+    const channel = supabase
+      .channel('chantier-detail-' + interventionId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'interventions', filter: 'id=eq.' + interventionId }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chantier_messages', filter: 'intervention_id=eq.' + interventionId }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chantier_photos', filter: 'intervention_id=eq.' + interventionId }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chantier_cutoff_notices', filter: 'intervention_id=eq.' + interventionId }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [interventionId, supabase, fetchData]);
+
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
     setIsSendingMessage(true);

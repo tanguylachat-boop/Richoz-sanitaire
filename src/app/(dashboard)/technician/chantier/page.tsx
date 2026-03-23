@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   HardHat,
@@ -36,14 +36,15 @@ export default function ChantierListPage() {
   const [chantiers, setChantiers] = useState<ChantierIntervention[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const supabase = createClient();
 
-  useEffect(() => {
-    const fetchChantiers = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  const fetchChantiers = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (!userId) setUserId(user.id);
 
-      const { data, error } = await supabase
+    const { data, error } = await supabase
         .from('interventions')
         .select(`
           id, title, address, date_planned, status,
@@ -91,11 +92,23 @@ export default function ChantierListPage() {
         }
       }
 
-      setChantiers(chantierList);
-      setIsLoading(false);
-    };
-    fetchChantiers();
-  }, []);
+    setChantiers(chantierList);
+    setIsLoading(false);
+  }, [supabase, userId]);
+
+  useEffect(() => { fetchChantiers(); }, [fetchChantiers]);
+
+  // Realtime: listen for intervention changes
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel('tech-chantiers-' + userId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'interventions', filter: 'technician_id=eq.' + userId }, () => {
+        fetchChantiers();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, supabase, fetchChantiers]);
 
   if (isLoading) {
     return (
