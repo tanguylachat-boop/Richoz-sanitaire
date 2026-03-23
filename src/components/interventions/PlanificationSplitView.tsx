@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import DOMPurify from 'dompurify';
+import { sendPush } from '@/lib/send-push';
 import {
   ChevronLeft,
   ChevronRight,
@@ -272,14 +273,21 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       // Insert notification if technician is assigned
       if (formData.technician_id && data?.[0]?.id) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
+        const notifMessage = `${formData.title} — ${formData.address}${formData.date_planned ? ` le ${format(new Date(formData.date_planned), 'd MMM', { locale: fr })}` : ''}`;
         await supabase.from('notifications').insert({
           recipient_id: formData.technician_id,
           sender_id: currentUser?.id || null,
           title: 'Nouvelle intervention assignée',
-          message: `${formData.title} — ${formData.address}${formData.date_planned ? ` le ${format(new Date(formData.date_planned), 'd MMM', { locale: fr })}` : ''}`,
+          message: notifMessage,
           type: 'intervention_assigned',
           reference_id: data[0].id,
           reference_type: 'intervention',
+        });
+        sendPush({
+          recipient_id: formData.technician_id,
+          title: 'Nouvelle intervention assignée',
+          message: notifMessage,
+          url: '/technician/today',
         });
       }
 

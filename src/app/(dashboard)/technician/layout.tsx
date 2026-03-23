@@ -107,9 +107,9 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
   }, [pathname, typePreference]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       {/* Top notification bar */}
-      <div className="fixed top-0 right-0 z-50 p-3">
+      <div className="fixed top-0 right-0 z-50 p-3" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <Link
           href="/technician/notifications"
           className="relative p-2.5 bg-white rounded-full shadow-md border border-gray-200 block"

@@ -10,6 +10,7 @@ import type { LeaveEntry, BirthdayEntry, ReminderEntry, SelectedSlot } from '@/c
 import { getApprovedLeaves } from '@/lib/leave-utils';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { sendPush } from '@/lib/send-push';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay,
   eachDayOfInterval, isSameMonth, isSameDay, isToday, addWeeks, subWeeks, addDays,
@@ -511,6 +512,12 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
           type: 'intervention_assigned',
           reference_id: newInterventionId,
           reference_type: isChantier ? 'chantier' : 'intervention',
+        });
+        sendPush({
+          recipient_id: formData.technician_id,
+          title: isChantier ? 'Nouveau chantier assigné' : 'Nouvelle intervention assignée',
+          message: `${formData.title} — ${formData.address}`,
+          url: isChantier ? `/technician/chantier/${newInterventionId}` : '/technician/today',
         });
       }
 

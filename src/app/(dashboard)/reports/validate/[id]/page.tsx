@@ -13,6 +13,7 @@ import {
   CreditCard, Loader2, AlertTriangle, MessageSquare,
   X, Archive, PenTool, Download, FileDown,
 } from 'lucide-react';
+import { sendPush } from '@/lib/send-push';
 import { generateReportDocx } from '@/lib/generate-report-docx';
 import PhotoAnnotator from '@/components/reports/PhotoAnnotator';
 
@@ -207,6 +208,12 @@ export default function ValidateReportDetailPage() {
           type: 'revision_requested',
           reference_id: report.intervention_id || null,
           reference_type: 'report',
+        });
+        sendPush({
+          recipient_id: report.technician_id,
+          title: 'Rapport rejeté',
+          message: `Motif : ${rejectReason.trim()}`,
+          url: `/technician/report/${report.intervention_id || ''}`,
         });
       }
 

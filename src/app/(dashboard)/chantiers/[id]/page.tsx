@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { sendPush } from '@/lib/send-push';
 import { format, isAfter, isBefore } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -313,6 +314,12 @@ export default function ChantierDetailAdminPage() {
           reference_type: 'chantier',
         });
         if (notifError) console.error('Notification insert error:', notifError);
+        sendPush({
+          recipient_id: intervention.technician.id,
+          title: 'Nouveau message chantier',
+          message: `${intervention.title}: ${newMessage.trim().substring(0, 100)}`,
+          url: `/technician/chantier/${interventionId}`,
+        });
       }
 
       toast.success('Message envoyé');

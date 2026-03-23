@@ -6,6 +6,7 @@ import { fr } from 'date-fns/locale';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { sendPush } from '@/lib/send-push';
 import {
   X,
   MapPin,
@@ -92,6 +93,14 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
         reference_type: 'chantier',
       });
       if (notifError) console.error('Reminder notification insert error:', notifError);
+      if (intervention.technician_id) {
+        sendPush({
+          recipient_id: intervention.technician_id,
+          title: 'Nouveau rappel',
+          message: `${intervention.title}: ${reminderMessage.trim().substring(0, 100)}`,
+          url: `/technician/chantier/${intervention.id}`,
+        });
+      }
 
       toast.success('Rappel créé pour le technicien');
       setShowReminderForm(false);

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { normalizeImage } from '@/lib/normalize-image';
+import { sendPush } from '@/lib/send-push';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -281,6 +282,7 @@ export default function ChantierDetailPage() {
         if (notifs.length > 0) {
           const { error: notifError } = await (supabase as any).from('notifications').insert(notifs);
           if (notifError) console.error('Notification insert error:', notifError);
+          notifs.forEach(n => sendPush({ recipient_id: n.recipient_id, title: n.title, message: n.message, url: `/chantiers/${interventionId}` }));
         }
       }
 
@@ -333,6 +335,7 @@ export default function ChantierDetailPage() {
         if (notifs.length > 0) {
           const { error: notifError } = await (supabase as any).from('notifications').insert(notifs);
           if (notifError) console.error('Notification insert error:', notifError);
+          notifs.forEach(n => sendPush({ recipient_id: n.recipient_id, title: n.title, message: n.message, url: `/chantiers/${interventionId}` }));
         }
       }
 
@@ -403,6 +406,7 @@ export default function ChantierDetailPage() {
         if (notifs3.length > 0) {
           const { error: notifError3 } = await (supabase as any).from('notifications').insert(notifs3);
           if (notifError3) console.error('Photo notification insert error:', notifError3);
+          notifs3.forEach(n => sendPush({ recipient_id: n.recipient_id, title: n.title, message: n.message, url: `/chantiers/${interventionId}` }));
         }
       }
 

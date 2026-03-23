@@ -7,6 +7,7 @@ import { REPORT_STATUS } from '@/lib/constants';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { sendPush } from '@/lib/send-push';
 import {
   ClipboardCheck,
   Clock,
@@ -97,6 +98,12 @@ export default function ValidateReportsPage() {
           type: 'revision_requested',
           reference_id: rejectModalReport.intervention?.id || null,
           reference_type: 'report',
+        });
+        sendPush({
+          recipient_id: rejectModalReport.technician.id,
+          title: 'Rapport rejeté',
+          message: `Motif : ${rejectReason.trim()}`,
+          url: `/technician/report/${rejectModalReport.intervention?.id || ''}`,
         });
       }
 
