@@ -12,6 +12,7 @@ import {
   Mail,
   Send,
   X,
+  Droplets,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -112,9 +113,13 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const [locataireEmail, setLocataireEmail] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+  // Cutoff notice state (chantier only)
+  const [cutoffEnabled, setCutoffEnabled] = useState(false);
+  const [cutoffDate, setCutoffDate] = useState('');
+
   const [formData, setFormData] = useState({
     title: '', description: '', address: '', date_planned: '', time_planned: '',
-    estimated_duration_minutes: 60, status: 'planifie', priority: 0,
+    estimated_duration_minutes: 60, priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '', client_email: '',
     intervention_type: 'depannage', keys_info: '', date_end: '',
   });
@@ -254,7 +259,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         title: formData.title, description: formData.description || null,
         address: formData.address, date_planned: datePlanned,
         estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
-        status: formData.status, priority: formData.priority,
+        status: 'planifie', priority: formData.priority,
         technician_id: formData.technician_id || null,
         regie_id: formData.regie_id || null,
         work_order_number: formData.work_order_number || null,
@@ -269,6 +274,18 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       }).select('id');
 
       if (error) throw new Error(error.message);
+
+      // Insert cutoff reminder if enabled for chantier
+      if (isChantier && cutoffEnabled && cutoffDate && data?.[0]?.id && formData.technician_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('intervention_reminders').insert({
+          intervention_id: data[0].id,
+          user_id: formData.technician_id,
+          reminder_date: cutoffDate,
+          message: 'Avis de coupure d eau',
+          reminder_type: 'cutoff',
+        });
+      }
 
       // Insert notification if technician is assigned
       if (formData.technician_id && data?.[0]?.id) {
@@ -519,15 +536,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
           )}
 
           {formData.intervention_type === 'chantier' ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-                <select name="status" value={formData.status} onChange={handleChange} className={selectClass}>
-                  <option value="nouveau">Nouveau</option>
-                  <option value="planifie">Planifié</option>
-                  <option value="en_cours">En cours</option>
-                </select>
-              </div>
+            <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>
                 <select name="priority" value={formData.priority} onChange={handleChange} className={selectClass}>
@@ -536,20 +545,38 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
                   <option value={2}>Urgence absolue</option>
                 </select>
               </div>
-            </div>
+              {/* Avis de coupure */}
+              <div className="p-3 rounded-lg border border-gray-200 bg-gray-50 space-y-2">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cutoffEnabled}
+                    onChange={(e) => setCutoffEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                    <Droplets className="w-4 h-4 text-blue-500" />
+                    Coupure d&apos;eau prévue
+                  </span>
+                </label>
+                {cutoffEnabled && (
+                  <div className="ml-6.5">
+                    <label className="block text-xs text-gray-500 mb-1">Date de la coupure</label>
+                    <input
+                      type="date"
+                      value={cutoffDate}
+                      onChange={(e) => setCutoffDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Durée (min)</label>
                 <input type="number" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className={inputClass} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-                <select name="status" value={formData.status} onChange={handleChange} className={selectClass}>
-                  <option value="nouveau">Nouveau</option>
-                  <option value="planifie">Planifié</option>
-                  <option value="en_cours">En cours</option>
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Priorité</label>

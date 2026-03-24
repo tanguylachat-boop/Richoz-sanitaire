@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { Loader2, Trash2, AlertTriangle, Droplets } from 'lucide-react';
 
 interface Intervention {
   id: string;
@@ -42,15 +42,6 @@ interface InterventionFormProps {
   onDelete?: () => void;
 }
 
-const STATUS_OPTIONS = [
-  { value: 'nouveau', label: 'Nouveau' },
-  { value: 'planifie', label: 'Planifié' },
-  { value: 'en_cours', label: 'En cours' },
-  { value: 'termine', label: 'Terminé' },
-  { value: 'ready_to_bill', label: 'Prêt à facturer' },
-  { value: 'billed', label: 'Facturé' },
-  { value: 'annule', label: 'Annulé' },
-];
 
 const PRIORITY_OPTIONS = [
   { value: 0, label: 'Normal' },
@@ -102,7 +93,6 @@ export function InterventionForm({
     time_planned: getInitialTime(),
     date_end: getInitialDateEnd(),
     estimated_duration_minutes: intervention?.estimated_duration_minutes || 60,
-    status: intervention?.status || 'planifie',
     priority: intervention?.priority || 0,
     technician_id: intervention?.technician_id || '',
     regie_id: intervention?.regie_id || '',
@@ -111,6 +101,10 @@ export function InterventionForm({
     client_phone: (intervention?.client_info as { phone?: string })?.phone || '',
     intervention_type: intervention?.intervention_type || 'depannage',
   });
+
+  // Cutoff notice state (chantier only)
+  const [cutoffEnabled, setCutoffEnabled] = useState(false);
+  const [cutoffDate, setCutoffDate] = useState('');
 
   const isChantier = formData.intervention_type === 'chantier';
 
@@ -196,7 +190,7 @@ export function InterventionForm({
         date_end: isChantier && formData.date_end ? new Date(`${formData.date_end}T18:00:00`).toISOString() : null,
         estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         intervention_type: formData.intervention_type,
-        status: formData.status as 'nouveau' | 'planifie' | 'en_cours' | 'termine' | 'ready_to_bill' | 'billed' | 'annule',
+        status: isEditMode ? (intervention?.status || 'planifie') : 'planifie',
         priority: formData.priority,
         technician_id: formData.technician_id || null,
         regie_id: formData.regie_id || null,
@@ -217,18 +211,45 @@ export function InterventionForm({
           throw new Error(error.message);
         }
 
+        // Insert cutoff reminder if enabled for chantier
+        if (isChantier && cutoffEnabled && cutoffDate) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('intervention_reminders').insert({
+            intervention_id: intervention.id,
+            user_id: formData.technician_id || intervention.technician_id,
+            reminder_date: cutoffDate,
+            message: 'Avis de coupure d eau',
+            reminder_type: 'cutoff',
+          });
+        }
+
         toast.success('Intervention modifiée avec succès');
       } else {
         // INSERT
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any).from('interventions').insert({
+        const { data, error } = await (supabase as any).from('interventions').insert({
           ...interventionData,
           source_type: 'manual',
-        });
+        }).select('id');
 
         if (error) {
           console.error('Supabase error:', error);
           throw new Error(error.message);
+        }
+
+        // Insert cutoff reminder if enabled for chantier
+        if (isChantier && cutoffEnabled && cutoffDate && data?.[0]?.id) {
+          const techId = formData.technician_id;
+          if (techId) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any).from('intervention_reminders').insert({
+              intervention_id: data[0].id,
+              user_id: techId,
+              reminder_date: cutoffDate,
+              message: 'Avis de coupure d eau',
+              reminder_type: 'cutoff',
+            });
+          }
         }
 
         toast.success('Intervention créée avec succès');
@@ -437,27 +458,47 @@ export function InterventionForm({
         </div>
       )}
 
-      {/* Durée et Statut */}
-      <div className={`grid ${isChantier ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
-        {!isChantier && (
-          <div>
-            <label htmlFor="estimated_duration_minutes" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Durée estimée (min)
-            </label>
-            <input type="number" id="estimated_duration_minutes" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-          </div>
-        )}
+      {/* Durée estimée (dépannage only) */}
+      {!isChantier && (
         <div>
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Statut
+          <label htmlFor="estimated_duration_minutes" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Durée estimée (min)
           </label>
-          <select id="status" name="status" value={formData.status} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <input type="number" id="estimated_duration_minutes" name="estimated_duration_minutes" min="15" step="15" value={formData.estimated_duration_minutes} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
         </div>
-      </div>
+      )}
+
+      {/* Avis de coupure (chantier only) */}
+      {isChantier && (
+        <div className="pt-4 border-t border-gray-100">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={cutoffEnabled}
+              onChange={(e) => setCutoffEnabled(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+              <Droplets className="w-4 h-4 text-blue-500" />
+              Coupure d&apos;eau prévue
+            </span>
+          </label>
+          {cutoffEnabled && (
+            <div className="mt-3 ml-7">
+              <label htmlFor="cutoff_date" className="block text-sm text-gray-600 mb-1.5">
+                Date de la coupure
+              </label>
+              <input
+                type="date"
+                id="cutoff_date"
+                value={cutoffDate}
+                onChange={(e) => setCutoffDate(e.target.value)}
+                className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Priorité */}
       <div>
