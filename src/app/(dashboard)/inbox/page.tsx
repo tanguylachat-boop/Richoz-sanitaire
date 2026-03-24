@@ -10,14 +10,10 @@ import {
   Building2,
   CalendarPlus,
   RefreshCw,
-  CheckCircle,
   AlertCircle,
-  MailOpen,
   Eye,
   Archive,
   XCircle,
-  ChevronDown,
-  ChevronUp,
   FileText,
   MessageSquare,
   Paperclip,
@@ -172,16 +168,10 @@ export default function InboxPage() {
     return true;
   });
 
-  const emailsByRegie = regies.reduce((acc, regie) => {
-    acc[regie.id] = filteredEmails
-      .filter((email) => email.regie_id === regie.id)
-      .sort(sortByDateDesc);
-    return acc;
-  }, {} as Record<string, EmailInbox[]>);
+  const chronologicalEmails = filteredEmails.sort(sortByDateDesc);
 
-  const otherEmails = filteredEmails
-    .filter((email) => !email.regie_id)
-    .sort(sortByDateDesc);
+  // Build a regie name lookup map for EmailCard badges
+  const regieNameMap = new Map(regies.map((r) => [r.id, r.name]));
 
   const totalEmails = enrichedEmails.length;
   const regieEmails = enrichedEmails.filter((e) => e.regie_id).length;
@@ -243,45 +233,24 @@ export default function InboxPage() {
 
       {/* Content */}
       {isLoading ? <LoadingState /> : (
-        <div className="space-y-6">
-          {statusFilter !== 'ignored' && (
-            <>
-              {regies.some((r) => (emailsByRegie[r.id] || []).length > 0) && <h3 className="text-md font-medium text-gray-700">Demandes par régie</h3>}
-              {[...regies]
-                .filter((r) => (emailsByRegie[r.id] || []).length > 0)
-                .sort((a, b) => {
-                  const aFirst = emailsByRegie[a.id]?.[0];
-                  const bFirst = emailsByRegie[b.id]?.[0];
-                  if (!aFirst) return 1;
-                  if (!bFirst) return -1;
-                  return new Date(bFirst.received_at).getTime() - new Date(aFirst.received_at).getTime();
-                })
-                .map((regie) => (
-                  <RegieSection key={regie.id} regie={regie} emails={emailsByRegie[regie.id]} onPlan={handlePlanIntervention} onView={handleViewDetail} onIgnore={(id) => updateEmailStatus(id, 'ignored')} onArchive={(id) => updateEmailStatus(id, 'processed')} showActions={statusFilter === 'new'} />
-                ))}
-            </>
-          )}
-          {otherEmails.length > 0 && (
-            <div>
-              <h3 className="text-md font-medium text-gray-700 mb-4">Autres emails</h3>
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><MailOpen className="w-5 h-5 text-gray-600" /></div>
-                      <div><h3 className="font-semibold text-gray-900">Autres emails</h3><p className="text-xs text-gray-500">Clients, fournisseurs et autres contacts</p></div>
-                    </div>
-                    <span className="px-2.5 py-1 text-xs font-medium bg-gray-50 text-gray-700 rounded-full">{otherEmails.length} email{otherEmails.length !== 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-100">
-                  {otherEmails.map((email) => <EmailCard key={email.id} email={email} onPlan={() => handlePlanIntervention(email)} onView={() => handleViewDetail(email)} onIgnore={() => updateEmailStatus(email.id, 'ignored')} onArchive={() => updateEmailStatus(email.id, 'processed')} isOther showActions={statusFilter === 'new'} />)}
-                </div>
-              </div>
+        chronologicalEmails.length === 0 ? <EmptyState statusFilter={statusFilter} /> : (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="divide-y divide-gray-100">
+              {chronologicalEmails.map((email) => (
+                <EmailCard
+                  key={email.id}
+                  email={email}
+                  regieName={email.regie_id ? regieNameMap.get(email.regie_id) || null : null}
+                  onPlan={() => handlePlanIntervention(email)}
+                  onView={() => handleViewDetail(email)}
+                  onIgnore={() => updateEmailStatus(email.id, 'ignored')}
+                  onArchive={() => updateEmailStatus(email.id, 'processed')}
+                  showActions={statusFilter === 'new'}
+                />
+              ))}
             </div>
-          )}
-          {emails.length === 0 && <EmptyState statusFilter={statusFilter} />}
-        </div>
+          </div>
+        )
       )}
 
       {/* Modal: Detail */}
@@ -340,44 +309,9 @@ function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
   );
 }
 
-// ─── Regie Section ────────────────────────────────────────────────────────────
+// ─── Email Card ──────────────────────────────────────────────────────────────
 
-function RegieSection({ regie, emails, onPlan, onView, onIgnore, onArchive, showActions }: { regie: Regie; emails: EmailInbox[]; onPlan: (email: EmailInbox) => void; onView: (email: EmailInbox) => void; onIgnore: (id: string) => void; onArchive: (id: string) => void; showActions: boolean; }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const interventionCount = emails.filter((e) => getEmailType(e) === 'intervention').length;
-  const infoCount = emails.filter((e) => getEmailType(e) === 'info').length;
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <button onClick={() => setIsCollapsed(!isCollapsed)} className="w-full px-5 py-4 border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition-colors">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><Building2 className="w-5 h-5 text-blue-600" /></div>
-            <div className="text-left"><h3 className="font-semibold text-gray-900">{regie.name}</h3><p className="text-xs text-gray-500">Mot-clé : {regie.keyword}</p></div>
-          </div>
-          <div className="flex items-center gap-2">
-            {interventionCount > 0 && <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">{interventionCount} intervention{interventionCount !== 1 ? 's' : ''}</span>}
-            {infoCount > 0 && <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">{infoCount} info{infoCount !== 1 ? 's' : ''}</span>}
-            {isCollapsed ? <ChevronDown className="w-4 h-4 text-gray-400 ml-1" /> : <ChevronUp className="w-4 h-4 text-gray-400 ml-1" />}
-          </div>
-        </div>
-      </button>
-      {!isCollapsed && (
-        emails.length === 0 ? (
-          <div className="px-5 py-8 text-center"><CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-2" /><p className="text-sm text-gray-500">Rien à traiter</p></div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {emails.map((email) => <EmailCard key={email.id} email={email} onPlan={() => onPlan(email)} onView={() => onView(email)} onIgnore={() => onIgnore(email.id)} onArchive={() => onArchive(email.id)} showActions={showActions} />)}
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-// ─── Email Card (simplifié — juste sujet + expéditeur + type) ─────────────────
-
-function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false, showActions = true }: { email: EmailInbox; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; isOther?: boolean; showActions?: boolean; }) {
+function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, showActions = true }: { email: EmailInbox; regieName?: string | null; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; showActions?: boolean; }) {
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
   const isUrgent = !isInfo && isEmailUrgent(email);
@@ -393,6 +327,7 @@ function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false
             {!isInfo && !isUrgent && email.regie_id && <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600 rounded flex-shrink-0">INTERVENTION</span>}
             {email.status === 'processed' && <span className="px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700 rounded flex-shrink-0">TRAITÉ</span>}
             {email.status === 'ignored' && <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded flex-shrink-0">IGNORÉ</span>}
+            {regieName && <span className="px-2 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded flex-shrink-0 flex items-center gap-1"><Building2 className="w-3 h-3" />{regieName}</span>}
             <h4 className={`font-medium truncate group-hover:text-blue-700 transition-colors ${isInfo ? 'text-gray-700' : 'text-gray-900'}`}>
               {email.subject || 'Sans objet'}
             </h4>
@@ -407,7 +342,7 @@ function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {showActions && !isOther && (
+          {showActions && (
             <>
               <button onClick={onIgnore} title="Ignorer" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><XCircle className="w-4 h-4" /></button>
               <button onClick={onArchive} title="Archiver" className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Archive className="w-4 h-4" /></button>
@@ -415,17 +350,6 @@ function EmailCard({ email, onPlan, onView, onIgnore, onArchive, isOther = false
                 <button onClick={onPlan} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"><CalendarPlus className="w-4 h-4" />Planifier</button>
               )}
             </>
-          )}
-          {isOther && (
-            <div className="flex items-center gap-2">
-              {showActions && (
-                <>
-                  <button onClick={onIgnore} title="Ignorer" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><XCircle className="w-4 h-4" /></button>
-                  <button onClick={onArchive} title="Archiver" className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Archive className="w-4 h-4" /></button>
-                </>
-              )}
-              <span className="px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg">{email.from_email?.split('@')[1] || 'inconnu'}</span>
-            </div>
           )}
           {!showActions && <button onClick={onView} title="Voir détail" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye className="w-4 h-4" /></button>}
         </div>
