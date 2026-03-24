@@ -13,8 +13,12 @@ import {
   Droplets,
   Zap,
   Flame,
+  Plus,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { Modal } from '@/components/ui/Modal';
+import { PlanificationSplitView } from '@/components/interventions/PlanificationSplitView';
+import type { PlanificationTechnician, PlanificationRegie } from '@/components/interventions/PlanificationSplitView';
 import { format, subHours, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -58,89 +62,114 @@ export default function ChantiersListPage() {
   const [recentMessages, setRecentMessages] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [technicians, setTechnicians] = useState<PlanificationTechnician[]>([]);
+  const [regies, setRegies] = useState<PlanificationRegie[]>([]);
 
   // Stats
   const [statsEnCours, setStatsEnCours] = useState(0);
   const [statsCutoffs, setStatsCutoffs] = useState(0);
   const [statsMessagesToday, setStatsMessagesToday] = useState(0);
 
+  const fetchReferenceData = async () => {
+    const { data: techData } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, email, intervention_type_preference')
+      .eq('role', 'technician')
+      .order('last_name');
+    if (techData) setTechnicians(techData);
+
+    const { data: regiesData } = await supabase
+      .from('regies')
+      .select('id, name, email_contact')
+      .eq('is_active', true)
+      .order('name');
+    if (regiesData) setRegies(regiesData);
+  };
+
+  const fetchChantiers = async () => {
+    setIsLoading(true);
+    const now = new Date().toISOString();
+    const twentyFourHoursAgo = subHours(new Date(), 24).toISOString();
+
+    // Fetch chantiers, active cutoffs, and recent messages in parallel
+    const [chantiersRes, cutoffsRes, messagesRes, messagesTodayRes] = await Promise.all([
+      supabase
+        .from('interventions')
+        .select(`
+          id, title, address, status, date_planned,
+          regie:regies(id, name),
+          technician:users!interventions_technician_id_fkey(id, first_name, last_name),
+          chantier_details(id, progress_percent)
+        `)
+        .eq('intervention_type', 'chantier')
+        .neq('status', 'annule')
+        .order('date_planned', { ascending: false }),
+
+      // Active cutoffs (end_date > now or end_date is null and start_date < now)
+      supabase
+        .from('chantier_cutoff_notices')
+        .select('intervention_id, end_date_estimated')
+        .or(`end_date_estimated.gt.${now},end_date_estimated.is.null`),
+
+      // Messages in last 24h
+      supabase
+        .from('chantier_messages')
+        .select('intervention_id, created_at')
+        .gte('created_at', twentyFourHoursAgo),
+
+      // Total messages today count
+      supabase
+        .from('chantier_messages')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', twentyFourHoursAgo),
+    ]);
+
+    if (chantiersRes.data) {
+      setChantiers(chantiersRes.data as ChantierRow[]);
+      setStatsEnCours(chantiersRes.data.filter((c) => c.status === 'en_cours').length);
+    }
+
+    // Build cutoff map: intervention_id → count of active cutoffs
+    if (cutoffsRes.data) {
+      const cutoffMap = new Map<string, number>();
+      (cutoffsRes.data as CutoffNotice[]).forEach((c) => {
+        cutoffMap.set(c.intervention_id, (cutoffMap.get(c.intervention_id) || 0) + 1);
+      });
+      setActiveCutoffs(cutoffMap);
+      setStatsCutoffs(cutoffsRes.data.length);
+    }
+
+    // Build recent messages set
+    if (messagesRes.data) {
+      const msgSet = new Set<string>();
+      (messagesRes.data as RecentMessage[]).forEach((m) => msgSet.add(m.intervention_id));
+      setRecentMessages(msgSet);
+    }
+
+    setStatsMessagesToday(messagesTodayRes.count ?? 0);
+    setIsLoading(false);
+
+    // Mark chantier_update notifications as read
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await (supabase as any).from('notifications')
+        .update({ is_read: true })
+        .eq('recipient_id', user.id)
+        .eq('type', 'chantier_update')
+        .eq('is_read', false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      const now = new Date().toISOString();
-      const twentyFourHoursAgo = subHours(new Date(), 24).toISOString();
-
-      // Fetch chantiers, active cutoffs, and recent messages in parallel
-      const [chantiersRes, cutoffsRes, messagesRes, messagesTodayRes] = await Promise.all([
-        supabase
-          .from('interventions')
-          .select(`
-            id, title, address, status, date_planned,
-            regie:regies(id, name),
-            technician:users!interventions_technician_id_fkey(id, first_name, last_name),
-            chantier_details(id, progress_percent)
-          `)
-          .eq('intervention_type', 'chantier')
-          .neq('status', 'annule')
-          .order('date_planned', { ascending: false }),
-
-        // Active cutoffs (end_date > now or end_date is null and start_date < now)
-        supabase
-          .from('chantier_cutoff_notices')
-          .select('intervention_id, end_date_estimated')
-          .or(`end_date_estimated.gt.${now},end_date_estimated.is.null`),
-
-        // Messages in last 24h
-        supabase
-          .from('chantier_messages')
-          .select('intervention_id, created_at')
-          .gte('created_at', twentyFourHoursAgo),
-
-        // Total messages today count
-        supabase
-          .from('chantier_messages')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', twentyFourHoursAgo),
-      ]);
-
-      if (chantiersRes.data) {
-        setChantiers(chantiersRes.data as ChantierRow[]);
-        setStatsEnCours(chantiersRes.data.filter((c) => c.status === 'en_cours').length);
-      }
-
-      // Build cutoff map: intervention_id → count of active cutoffs
-      if (cutoffsRes.data) {
-        const cutoffMap = new Map<string, number>();
-        (cutoffsRes.data as CutoffNotice[]).forEach((c) => {
-          cutoffMap.set(c.intervention_id, (cutoffMap.get(c.intervention_id) || 0) + 1);
-        });
-        setActiveCutoffs(cutoffMap);
-        setStatsCutoffs(cutoffsRes.data.length);
-      }
-
-      // Build recent messages set
-      if (messagesRes.data) {
-        const msgSet = new Set<string>();
-        (messagesRes.data as RecentMessage[]).forEach((m) => msgSet.add(m.intervention_id));
-        setRecentMessages(msgSet);
-      }
-
-      setStatsMessagesToday(messagesTodayRes.count ?? 0);
-      setIsLoading(false);
-
-      // Mark chantier_update notifications as read
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await (supabase as any).from('notifications')
-          .update({ is_read: true })
-          .eq('recipient_id', user.id)
-          .eq('type', 'chantier_update')
-          .eq('is_read', false);
-      }
-    };
-
-    fetchData();
+    fetchChantiers();
+    fetchReferenceData();
   }, []);
+
+  const handleCreateSuccess = () => {
+    setIsCreateModalOpen(false);
+    fetchChantiers();
+  };
 
   const filteredChantiers = chantiers.filter((c) => {
     if (!searchQuery) return true;
@@ -211,15 +240,24 @@ export default function ChantiersListPage() {
             {filteredChantiers.length} chantier{filteredChantiers.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="relative flex-1 sm:flex-none">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Rechercher un chantier..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full sm:w-72 h-10 pl-10 pr-4 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher un chantier..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full sm:w-72 h-10 pl-10 pr-4 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            Nouveau chantier
+          </button>
         </div>
       </div>
 
@@ -359,6 +397,22 @@ export default function ChantiersListPage() {
           </div>
         )}
       </div>
+
+      {/* Modal Nouveau Chantier */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Planifier un nouveau chantier"
+        size="full"
+      >
+        <PlanificationSplitView
+          technicians={technicians}
+          regies={regies}
+          onSuccess={handleCreateSuccess}
+          onCancel={() => setIsCreateModalOpen(false)}
+          forceInterventionType="chantier"
+        />
+      </Modal>
     </div>
   );
 }

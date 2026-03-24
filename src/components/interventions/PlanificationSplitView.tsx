@@ -95,9 +95,11 @@ interface PlanificationSplitViewProps {
   regies: PlanificationRegie[];
   onSuccess: () => void;
   onCancel: () => void;
+  /** Force intervention type and lock the selector */
+  forceInterventionType?: 'depannage' | 'chantier';
 }
 
-export function PlanificationSplitView({ email = null, technicians, regies, onSuccess, onCancel }: PlanificationSplitViewProps) {
+export function PlanificationSplitView({ email = null, technicians, regies, onSuccess, onCancel, forceInterventionType }: PlanificationSplitViewProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [calendarWeek, setCalendarWeek] = useState(new Date());
   const [calendarInterventions, setCalendarInterventions] = useState<CalendarIntervention[]>([]);
@@ -121,7 +123,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, priority: 0,
     technician_id: '', regie_id: '', work_order_number: '', client_name: '', client_phone: '', client_email: '',
-    intervention_type: 'depannage', keys_info: '', date_end: '',
+    intervention_type: forceInterventionType || 'depannage', keys_info: '', date_end: '',
   });
 
   const supabase = createClient();
@@ -482,7 +484,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select name="intervention_type" value={formData.intervention_type} onChange={handleChange} className={selectClass}>
+              <select name="intervention_type" value={formData.intervention_type} onChange={handleChange} className={selectClass} disabled={!!forceInterventionType}>
                 <option value="depannage">🔧 Dépannage</option>
                 <option value="chantier">🏗️ Chantier</option>
               </select>
