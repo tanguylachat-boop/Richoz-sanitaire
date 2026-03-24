@@ -19,6 +19,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { PlanificationSplitView } from '@/components/interventions/PlanificationSplitView';
 import type { PlanificationTechnician, PlanificationRegie } from '@/components/interventions/PlanificationSplitView';
+import { computeChantierProgress } from '@/lib/chantier-progress';
 import { format, subHours, isAfter } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -28,9 +29,9 @@ interface ChantierRow {
   address: string;
   status: string;
   date_planned: string | null;
+  date_end: string | null;
   regie?: { id: string; name: string } | null;
   technician?: { id: string; first_name: string | null; last_name: string | null } | null;
-  chantier_details?: { id: string; progress_percent: number }[] | null;
 }
 
 interface CutoffNotice {
@@ -97,10 +98,9 @@ export default function ChantiersListPage() {
       supabase
         .from('interventions')
         .select(`
-          id, title, address, status, date_planned,
+          id, title, address, status, date_planned, date_end,
           regie:regies(id, name),
-          technician:users!interventions_technician_id_fkey(id, first_name, last_name),
-          chantier_details(id, progress_percent)
+          technician:users!interventions_technician_id_fkey(id, first_name, last_name)
         `)
         .eq('intervention_type', 'chantier')
         .neq('status', 'annule')
@@ -294,7 +294,7 @@ export default function ChantiersListPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredChantiers.map((chantier) => {
-                  const progress = chantier.chantier_details?.[0]?.progress_percent ?? 0;
+                  const progress = computeChantierProgress(chantier.date_planned, chantier.date_end);
                   const status = statusConfig[chantier.status] || statusConfig.nouveau;
                   const techName = getTechName(chantier.technician);
                   const hasActiveCutoff = activeCutoffs.has(chantier.id);

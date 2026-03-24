@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { computeChantierProgress } from '@/lib/chantier-progress';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -20,12 +21,9 @@ interface ChantierIntervention {
   title: string;
   address: string;
   date_planned: string | null;
+  date_end: string | null;
   status: string;
   regie?: { id: string; name: string } | null;
-  chantier_details?: {
-    id: string;
-    progress_percent: number;
-  }[] | null;
   has_pending_revision?: boolean;
   revision_message?: string | null;
 }
@@ -47,9 +45,8 @@ export default function ChantierListPage() {
     const { data, error } = await supabase
         .from('interventions')
         .select(`
-          id, title, address, date_planned, status,
-          regie:regies(id, name),
-          chantier_details(id, progress_percent)
+          id, title, address, date_planned, date_end, status,
+          regie:regies(id, name)
         `)
         .eq('technician_id', user.id)
         .eq('intervention_type', 'chantier')
@@ -59,14 +56,6 @@ export default function ChantierListPage() {
       let chantierList: ChantierIntervention[] = [];
       if (error) {
         console.error('Error fetching chantiers:', error);
-        const { data: fallbackData } = await supabase
-          .from('interventions')
-          .select('id, title, address, date_planned, status, regie:regies(id, name)')
-          .eq('technician_id', user.id)
-          .eq('intervention_type', 'chantier')
-          .not('status', 'eq', 'annule')
-          .order('date_planned', { ascending: false });
-        if (fallbackData) chantierList = fallbackData as ChantierIntervention[];
       } else {
         chantierList = (data || []) as ChantierIntervention[];
       }
@@ -160,7 +149,7 @@ export default function ChantierListPage() {
       ) : (
         <div className="space-y-3">
           {displayedChantiers.map((chantier) => {
-            const progress = chantier.chantier_details?.[0]?.progress_percent ?? 0;
+            const progress = computeChantierProgress(chantier.date_planned, chantier.date_end);
             const statusLabel = chantier.status === 'planifie' ? 'Planifié' : chantier.status === 'en_cours' ? 'En cours' : chantier.status === 'termine' ? 'Terminé' : chantier.status;
             const statusColor = chantier.status === 'en_cours' ? 'bg-blue-100 text-blue-700' : chantier.status === 'termine' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
 

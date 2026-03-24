@@ -29,6 +29,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { normalizeImage } from '@/lib/normalize-image';
 import { sendPush } from '@/lib/send-push';
+import { computeChantierProgress } from '@/lib/chantier-progress';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -139,9 +140,6 @@ export default function ChantierDetailPage() {
   const [revisionMessage, setRevisionMessage] = useState<string | null>(null);
   const [reportStatus, setReportStatus] = useState<string | null>(null);
 
-  // Progress
-  const [editProgress, setEditProgress] = useState(0);
-  const [isSavingProgress, setIsSavingProgress] = useState(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -169,7 +167,6 @@ export default function ChantierDetailPage() {
         .maybeSingle();
       if (detailsData) {
         setDetails(detailsData as ChantierDetails);
-        setEditProgress(detailsData.progress_percent || 0);
       }
     } catch {
       // Table may not exist yet
@@ -443,25 +440,6 @@ export default function ChantierDetailPage() {
     }
   };
 
-  const handleUpdateProgress = async () => {
-    if (!details?.id) return;
-    setIsSavingProgress(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from('chantier_details')
-        .update({ progress_percent: editProgress })
-        .eq('id', details.id);
-      if (error) throw error;
-      toast.success('Progression mise à jour');
-    } catch (error) {
-      console.error('Error updating progress:', error);
-      toast.error('Erreur lors de la mise à jour');
-    } finally {
-      setIsSavingProgress(false);
-    }
-  };
-
   const getCutoffIcon = (type: string) => {
     switch (type) {
       case 'eau': return <Droplets className="w-5 h-5 text-blue-500" />;
@@ -529,39 +507,26 @@ export default function ChantierDetailPage() {
       )}
 
       {/* Progress bar */}
-      {details && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">Progression</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                value={editProgress}
-                onChange={(e) => setEditProgress(Number(e.target.value))}
-                className="w-24 h-2 accent-blue-600"
-              />
-              <span className="text-sm font-bold text-blue-600 w-10 text-right">{editProgress}%</span>
-              {editProgress !== (details.progress_percent || 0) && (
-                <button
-                  onClick={handleUpdateProgress}
-                  disabled={isSavingProgress}
-                  className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSavingProgress ? '...' : 'OK'}
-                </button>
-              )}
+      {intervention && (
+        (() => {
+          const progress = computeChantierProgress(intervention.date_planned, intervention.date_end);
+          return (
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Progression</span>
+                <span className="text-sm font-bold text-blue-600">{progress}%</span>
+              </div>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    progress >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                  }`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
-          </div>
-          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-300"
-              style={{ width: `${editProgress}%` }}
-            />
-          </div>
-        </div>
+          );
+        })()
       )}
 
       {/* Tabs */}

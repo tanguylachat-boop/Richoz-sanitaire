@@ -29,6 +29,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { sendPush } from '@/lib/send-push';
+import { computeChantierProgress } from '@/lib/chantier-progress';
 import { format, isAfter, isBefore } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -40,6 +41,7 @@ interface ChantierIntervention {
   description: string | null;
   address: string;
   date_planned: string | null;
+  date_end: string | null;
   status: string;
   client_info: { name?: string; phone?: string; email?: string } | null;
   keys_info: string | null;
@@ -151,7 +153,7 @@ export default function ChantierDetailAdminPage() {
       supabase
         .from('interventions')
         .select(`
-          id, title, description, address, date_planned, status, client_info, keys_info,
+          id, title, description, address, date_planned, date_end, status, client_info, keys_info,
           regie:regies(id, name, phone, email_contact),
           technician:users!interventions_technician_id_fkey(id, first_name, last_name, phone, email)
         `)
@@ -467,7 +469,7 @@ export default function ChantierDetailAdminPage() {
   if (!intervention) return null;
 
   const status = statusConfig[intervention.status] || statusConfig.nouveau;
-  const progress = details?.progress_percent ?? 0;
+  const progress = computeChantierProgress(intervention.date_planned, intervention.date_end);
   const techName = intervention.technician
     ? [intervention.technician.first_name, intervention.technician.last_name].filter(Boolean).join(' ')
     : null;
