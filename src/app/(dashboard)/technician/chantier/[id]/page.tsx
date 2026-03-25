@@ -94,6 +94,7 @@ interface InterventionReminder {
   reminder_date: string;
   message: string;
   completed: boolean;
+  reminder_type: string | null;
   created_at: string;
 }
 
@@ -200,7 +201,7 @@ export default function ChantierDetailPage() {
     try {
       const { data: reminderData } = await supabase
         .from('intervention_reminders')
-        .select('id, reminder_date, message, completed, created_at')
+        .select('id, reminder_date, message, completed, reminder_type, created_at')
         .eq('intervention_id', interventionId)
         .order('reminder_date', { ascending: true });
       if (reminderData) setReminders(reminderData as InterventionReminder[]);
@@ -845,20 +846,40 @@ export default function ChantierDetailPage() {
             </div>
           )}
 
-          {/* Reminders from admin */}
-          {reminders.length > 0 && (
+          {/* Cutoff reminders (from admin creation form) */}
+          {reminders.filter(r => r.reminder_type === 'cutoff').length > 0 && (
+            <div className="space-y-3 mb-4">
+              {reminders.filter(r => r.reminder_type === 'cutoff').map((reminder) => (
+                <div key={reminder.id} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Droplets className="w-5 h-5 text-blue-500" />
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">Coupure d&apos;eau</h4>
+                      <p className="text-xs text-gray-500">
+                        {format(new Date(reminder.reminder_date + 'T00:00:00'), 'd MMM yyyy', { locale: fr })}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-700 bg-blue-50 rounded-lg p-2">{reminder.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Regular reminders from admin */}
+          {reminders.filter(r => r.reminder_type !== 'cutoff').length > 0 && (
             <div className="space-y-2 mb-4">
               <h4 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
                 <Bell className="w-4 h-4 text-orange-500" />Rappels
               </h4>
-              {reminders.map((reminder) => (
+              {reminders.filter(r => r.reminder_type !== 'cutoff').map((reminder) => (
                 <div key={reminder.id} className="bg-orange-50 border border-orange-200 rounded-xl p-3">
                   <div className="flex items-start gap-2">
                     <Bell className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-orange-800">{reminder.message}</p>
                       <p className="text-xs text-orange-600 mt-1">
-                        {format(new Date(reminder.reminder_date), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                        {format(new Date(reminder.reminder_date + 'T00:00:00'), 'd MMM yyyy', { locale: fr })}
                       </p>
                     </div>
                   </div>
