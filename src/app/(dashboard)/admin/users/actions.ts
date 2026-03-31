@@ -69,9 +69,7 @@ export async function updateUser(payload: UpdateUserPayload) {
       },
     });
 
-    if (authError) {
-      console.warn('Auth update warning (non-blocking):', authError);
-    }
+    // Auth update errors are non-blocking (profile was already updated)
 
     revalidatePath('/admin/users');
     return { success: true };

@@ -66,11 +66,7 @@ export function useRealtime<T extends { id: string }>({
         },
         handleChange
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`[Realtime] Subscribed to ${table}`);
-        }
-      });
+      .subscribe();
 
     return () => {
       if (channelRef.current) {

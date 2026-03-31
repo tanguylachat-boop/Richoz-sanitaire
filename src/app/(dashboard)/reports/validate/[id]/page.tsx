@@ -106,7 +106,6 @@ export default function ValidateReportDetailPage() {
     setIsValidating(true);
     try {
       // ÉTAPE 0: SAUVEGARDER LES MODIFICATIONS DE LA SECRÉTAIRE
-      console.log('[VALIDATE] Étape 0: Sauvegarde des modifications...');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: saveError } = await (supabase as any)
         .from('reports')
@@ -120,7 +119,6 @@ export default function ValidateReportDetailPage() {
       if (saveError) throw saveError;
 
       // ÉTAPE 1: GÉNÉRER LE PDF RAPPORT
-      console.log('[VALIDATE] Étape 1: Génération du PDF rapport...');
       try {
         const pdfResponse = await fetch(
           'https://primary-production-66b7.up.railway.app/webhook/report-pdf',
@@ -131,17 +129,13 @@ export default function ValidateReportDetailPage() {
           }
         );
         if (pdfResponse.ok) {
-          const pdfResult = await pdfResponse.json();
-          console.log('[VALIDATE] PDF généré:', pdfResult.pdf_url);
-        } else {
-          console.warn('[VALIDATE] PDF non généré:', pdfResponse.status);
+          await pdfResponse.json();
         }
-      } catch (pdfError) {
-        console.warn('[VALIDATE] Erreur PDF (non bloquant):', pdfError);
+      } catch {
+        // PDF generation is non-blocking
       }
 
       // ÉTAPE 2: VALIDER LE RAPPORT
-      console.log('[VALIDATE] Étape 2: Validation du rapport...');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: reportError } = await (supabase as any)
         .from('reports')
@@ -154,7 +148,6 @@ export default function ValidateReportDetailPage() {
         throw new Error('intervention_id manquant sur le rapport');
       }
       if (report.is_billable) {
-        console.log('[VALIDATE] Étape 3: Intervention → ready_to_bill...');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: interventionError } = await (supabase as any)
           .from('interventions')
@@ -162,7 +155,6 @@ export default function ValidateReportDetailPage() {
           .eq('id', report.intervention_id);
         if (interventionError) throw interventionError;
       } else {
-        console.log('[VALIDATE] Non facturable → Intervention → archived');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error: interventionError } = await (supabase as any)
           .from('interventions')

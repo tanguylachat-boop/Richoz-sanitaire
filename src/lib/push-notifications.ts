@@ -37,7 +37,6 @@ export async function unregisterPushSubscription(): Promise<boolean> {
       }
     }
 
-    console.log('[Push] Unsubscribed');
     return true;
   } catch (err) {
     console.error('[Push] Unsubscribe error:', err);
@@ -49,8 +48,6 @@ export async function unregisterPushSubscription(): Promise<boolean> {
  * Register push subscription. Throws on failure with a descriptive message.
  */
 export async function registerPushSubscription(): Promise<void> {
-  console.log('[Push] Starting registration...');
-
   if (!('serviceWorker' in navigator)) {
     throw new Error('Service Worker non supporté par ce navigateur');
   }
@@ -66,7 +63,6 @@ export async function registerPushSubscription(): Promise<void> {
 
   // Request permission
   const permission = await Notification.requestPermission();
-  console.log('[Push] Permission:', permission);
   if (permission === 'denied') {
     throw new Error('Notifications bloquées — activez-les dans Réglages > Safari > Notifications');
   }
@@ -75,7 +71,6 @@ export async function registerPushSubscription(): Promise<void> {
   }
 
   // Register service worker
-  console.log('[Push] Registering service worker...');
   let registration;
   try {
     registration = await navigator.serviceWorker.register('/sw.js');
@@ -90,14 +85,11 @@ export async function registerPushSubscription(): Promise<void> {
     console.error('[Push] SW ready failed:', err);
     throw new Error(`Service Worker non prêt: ${(err as Error).message}`);
   }
-  console.log('[Push] Service worker ready, scope:', registration.scope);
-
   // Check for existing subscription
   let subscription = await registration.pushManager.getSubscription();
 
   // Subscribe if not already subscribed
   if (!subscription) {
-    console.log('[Push] Creating new subscription...');
     try {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -107,8 +99,6 @@ export async function registerPushSubscription(): Promise<void> {
       console.error('[Push] Subscribe failed:', err);
       throw new Error(`Échec souscription push: ${(err as Error).message}`);
     }
-  } else {
-    console.log('[Push] Existing subscription found');
   }
 
   // Extract keys
@@ -145,5 +135,4 @@ export async function registerPushSubscription(): Promise<void> {
     throw new Error(`Échec sauvegarde: ${error.message}`);
   }
 
-  console.log('[Push] Registration complete for user', user.id);
 }
