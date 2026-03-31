@@ -35,7 +35,7 @@ export function useNotificationCounts() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'submitted'),
       supabase
-        .from('lx_leave')
+        .from('leave_requests')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending'),
       userId
@@ -78,8 +78,8 @@ export function useNotificationCounts() {
     channels.push(reportsChannel);
 
     const leaveChannel = supabase
-      .channel('notif-lx_leave')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lx_leave' }, () => {
+      .channel('notif-leave_requests')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => {
         fetchCounts();
       })
       .subscribe();

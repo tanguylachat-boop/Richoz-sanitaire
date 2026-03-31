@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
-type TableName = 'interventions' | 'reports' | 'email_inbox' | 'lx_leave';
+type TableName = 'interventions' | 'reports' | 'email_inbox' | 'leave_requests';
 
 interface UseRealtimeOptions<T> {
   table: TableName;
