@@ -73,7 +73,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/invoices') ||
     request.nextUrl.pathname.startsWith('/quotes') ||
     request.nextUrl.pathname.startsWith('/products') ||
-    request.nextUrl.pathname.startsWith('/technician');
+    request.nextUrl.pathname.startsWith('/technician') ||
+    request.nextUrl.pathname.startsWith('/chantiers') ||
+    request.nextUrl.pathname.startsWith('/leave');
   const isApiWebhook = request.nextUrl.pathname.startsWith('/api/webhooks');
 
   // Allow webhooks without auth (they use their own secret)

@@ -2,11 +2,17 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireAdminOrSecretary } from '@/lib/auth-guard';
 import type { InvoiceStatus } from '@/types/database';
 
 const VALID_STATUSES: InvoiceStatus[] = ['generated', 'sent', 'paid'];
 
 export async function updateInvoiceStatus(invoiceId: string, newStatus: InvoiceStatus) {
+  const auth = await requireAdminOrSecretary();
+  if (!auth.authorized) {
+    return { success: false, error: auth.error };
+  }
+
   if (!invoiceId || !VALID_STATUSES.includes(newStatus)) {
     return { success: false, error: 'Paramètres invalides' };
   }
