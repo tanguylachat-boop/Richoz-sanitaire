@@ -40,6 +40,7 @@ interface ReportRow {
   materials_used: { name: string; quantity: number; unit_price: number }[] | null;
   is_billable: boolean;
   created_at: string;
+  updated_at: string;
   technician?: { id: string; first_name: string; last_name: string } | null;
   intervention?: {
     id: string;
@@ -129,12 +130,12 @@ export default function ValidateReportsPage() {
         .from('reports')
         .select(`
           id, status, text_content, vocal_transcription, work_duration_minutes,
-          photos, materials_used, is_billable, created_at,
+          photos, materials_used, is_billable, created_at, updated_at,
           technician:users!reports_technician_id_fkey(id, first_name, last_name),
           intervention:interventions(id, title, address, date_planned, status, intervention_type, regie:regies(id, name))
         `)
         .in('status', ['submitted', 'draft', 'rejected'])
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (reportsData) {
         setReports(reportsData as unknown as ReportRow[]);
@@ -333,7 +334,7 @@ export default function ValidateReportsPage() {
       {/* Reports List */}
       <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Rapports a valider</h2>
+          <h2 className="font-semibold text-gray-900">Rapports à valider</h2>
           <p className="text-sm text-gray-500">
             {typeFilter === 'all'
               ? 'Tous les rapports des techniciens'
@@ -357,7 +358,7 @@ export default function ValidateReportsPage() {
               Aucun rapport en attente
             </h3>
             <p className="text-gray-500 max-w-sm mx-auto">
-              Les rapports soumis par les techniciens apparaitront ici pour validation.
+              Les rapports soumis par les techniciens apparaîtront ici pour validation.
             </p>
           </div>
         ) : (
@@ -472,7 +473,7 @@ export default function ValidateReportsPage() {
                         )}
                         {materials.length > 0 && (
                           <span className="text-gray-900 font-medium">
-                            Materiaux: {formatCHF(totalMaterials)}
+                            Matériaux: {formatCHF(totalMaterials)}
                           </span>
                         )}
                       </div>
@@ -498,8 +499,8 @@ export default function ValidateReportsPage() {
 
                     {/* Date */}
                     <div className="text-right text-sm text-gray-500 flex-shrink-0">
-                      <p>{formatDate(report.created_at, { day: 'numeric', month: 'short' })}</p>
-                      <p>{formatTime(report.created_at)}</p>
+                      <p>{formatDate(report.updated_at || report.created_at, { day: 'numeric', month: 'short' })}</p>
+                      <p>{formatTime(report.updated_at || report.created_at)}</p>
                     </div>
                   </div>
                 </div>
