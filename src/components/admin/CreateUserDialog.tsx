@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
-import { createUser } from '@/app/(dashboard)/admin/users/actions';
+import { createClient } from '@/lib/supabase/client';
 import type { UserRole } from '@/types/database';
-import { Plus, Loader2, User, Mail, Lock, Shield, Cake, Wrench } from 'lucide-react';
+import { Plus, Loader2, User, Mail, Shield, Cake, Wrench, CheckCircle, Copy, Phone } from 'lucide-react';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
   { value: 'technician', label: 'Technicien', description: 'Accès mobile, rapports terrain' },
@@ -21,24 +21,32 @@ const TECH_TYPE_OPTIONS: { value: 'depannage' | 'chantier'; label: string; emoji
 
 export function CreateUserDialog() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const supabase = createClient();
+
+  // Success state
+  const [successData, setSuccessData] = useState<{ tempPassword: string; email: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    password: '',
+    phone: '',
     birthDate: '',
     role: 'technician' as UserRole,
     interventionTypePreference: 'depannage' as 'depannage' | 'chantier',
+    calendarColor: '',
   });
 
   const [fieldError, setFieldError] = useState('');
 
   const resetForm = () => {
-    setForm({ firstName: '', lastName: '', email: '', password: '', birthDate: '', role: 'technician', interventionTypePreference: 'depannage' });
+    setForm({ firstName: '', lastName: '', email: '', phone: '', birthDate: '', role: 'technician', interventionTypePreference: 'depannage', calendarColor: '' });
     setFieldError('');
+    setSuccessData(null);
+    setCopied(false);
   };
 
   const handleOpen = () => {
@@ -47,13 +55,28 @@ export function CreateUserDialog() {
   };
 
   const handleClose = () => {
-    if (!isPending) {
+    if (!isSubmitting) {
       setIsOpen(false);
       resetForm();
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSuccessClose = () => {
+    setSuccessData(null);
+    setIsOpen(false);
+    resetForm();
+    router.refresh();
+  };
+
+  const handleCopyPassword = async () => {
+    if (!successData) return;
+    await navigator.clipboard.writeText(successData.tempPassword);
+    setCopied(true);
+    toast.success('Mot de passe copié !');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFieldError('');
 
@@ -66,25 +89,112 @@ export function CreateUserDialog() {
       setFieldError('Adresse email invalide.');
       return;
     }
-    if (form.password.length < 6) {
-      setFieldError('Le mot de passe doit contenir au moins 6 caractères.');
-      return;
-    }
 
-    startTransition(async () => {
-      const result = await createUser(form);
+    setIsSubmitting(true);
 
-      if (result.success) {
-        toast.success('Utilisateur créé avec succès !');
-        setIsOpen(false);
-        resetForm();
-        router.refresh();
-      } else {
-        setFieldError(result.error || 'Erreur inconnue.');
-        toast.error(result.error || 'Erreur lors de la création.');
+    try {
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          email: form.email.trim().toLowerCase(),
+          first_name: form.firstName.trim(),
+          last_name: form.lastName.trim(),
+          role: form.role,
+          phone: form.phone.trim() || null,
+          intervention_type_preference: form.role === 'technician' ? form.interventionTypePreference : null,
+          birth_date: form.birthDate || null,
+          calendar_color: form.role === 'technician' && form.calendarColor ? form.calendarColor : null,
+        },
+      });
+
+      if (error) {
+        setFieldError(error.message || 'Erreur lors de la création.');
+        toast.error(error.message || 'Erreur lors de la création.');
+        return;
       }
-    });
+
+      if (data?.error) {
+        setFieldError(data.error);
+        toast.error(data.error);
+        return;
+      }
+
+      if (data?.success) {
+        setSuccessData({
+          tempPassword: data.temp_password,
+          email: form.email.trim().toLowerCase(),
+        });
+        toast.success('Utilisateur créé avec succès !');
+      } else {
+        setFieldError('Réponse inattendue du serveur.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur réseau.';
+      setFieldError(message);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  // Success modal content
+  if (successData) {
+    return (
+      <>
+        <button
+          onClick={handleOpen}
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nouvel utilisateur</span>
+        </button>
+
+        <Modal isOpen={isOpen} onClose={handleSuccessClose} title="Utilisateur créé" size="md">
+          <div className="text-center py-4">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-emerald-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Utilisateur créé avec succès !</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              Transmettez ces identifiants au nouvel utilisateur.
+            </p>
+
+            <div className="bg-gray-50 rounded-xl p-4 text-left space-y-3 mb-6">
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</p>
+                <p className="text-sm font-medium text-gray-900">{successData.email}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mot de passe provisoire</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-base font-mono font-bold text-gray-900 select-all">
+                    {successData.tempPassword}
+                  </code>
+                  <button
+                    onClick={handleCopyPassword}
+                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Copier"
+                  >
+                    {copied ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 mb-4">
+              L&apos;utilisateur pourra changer son mot de passe à la première connexion.
+            </p>
+
+            <button
+              onClick={handleSuccessClose}
+              className="w-full py-2.5 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+            >
+              Fermer
+            </button>
+          </div>
+        </Modal>
+      </>
+    );
+  }
 
   return (
     <>
@@ -122,7 +232,7 @@ export function CreateUserDialog() {
                 onChange={(e) => setForm({ ...form, firstName: e.target.value })}
                 placeholder="Jean"
                 required
-                disabled={isPending}
+                disabled={isSubmitting}
                 className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
               />
             </div>
@@ -136,7 +246,7 @@ export function CreateUserDialog() {
                 onChange={(e) => setForm({ ...form, lastName: e.target.value })}
                 placeholder="Dupont"
                 required
-                disabled={isPending}
+                disabled={isSubmitting}
                 className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
               />
             </div>
@@ -156,32 +266,27 @@ export function CreateUserDialog() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="jean.dupont@richoz.ch"
               required
-              disabled={isPending}
+              disabled={isSubmitting}
               className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
             />
           </div>
 
-          {/* Password */}
+          {/* Phone */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <span className="flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5" />
-                Mot de passe provisoire
+                <Phone className="w-3.5 h-3.5" />
+                Téléphone
               </span>
             </label>
             <input
-              type="text"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="Min. 6 caractères"
-              required
-              minLength={6}
-              disabled={isPending}
-              className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              placeholder="+41 79 123 45 67"
+              disabled={isSubmitting}
+              className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
             />
-            <p className="text-xs text-gray-400 mt-1">
-              L&apos;utilisateur pourra changer son mot de passe à la première connexion.
-            </p>
           </div>
 
           {/* Date de naissance */}
@@ -196,7 +301,7 @@ export function CreateUserDialog() {
               type="date"
               value={form.birthDate}
               onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-              disabled={isPending}
+              disabled={isSubmitting}
               className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
             />
           </div>
@@ -217,7 +322,7 @@ export function CreateUserDialog() {
                     form.role === option.value
                       ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200'
                       : 'border-gray-200 hover:bg-gray-50'
-                  } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <input
                     type="radio"
@@ -225,7 +330,7 @@ export function CreateUserDialog() {
                     value={option.value}
                     checked={form.role === option.value}
                     onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
-                    disabled={isPending}
+                    disabled={isSubmitting}
                     className="sr-only"
                   />
                   <div
@@ -263,7 +368,7 @@ export function CreateUserDialog() {
                       form.interventionTypePreference === option.value
                         ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200'
                         : 'border-gray-200 hover:bg-gray-50'
-                    } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <input
                       type="radio"
@@ -271,7 +376,7 @@ export function CreateUserDialog() {
                       value={option.value}
                       checked={form.interventionTypePreference === option.value}
                       onChange={(e) => setForm({ ...form, interventionTypePreference: e.target.value as 'depannage' | 'chantier' })}
-                      disabled={isPending}
+                      disabled={isSubmitting}
                       className="sr-only"
                     />
                     <span className="text-lg">{option.emoji}</span>
@@ -287,17 +392,17 @@ export function CreateUserDialog() {
             <button
               type="button"
               onClick={handleClose}
-              disabled={isPending}
+              disabled={isSubmitting}
               className="flex-1 py-2.5 px-4 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Annuler
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isSubmitting}
               className="flex-1 py-2.5 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {isPending ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Création...
