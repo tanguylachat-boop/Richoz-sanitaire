@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Loader2,
   MessageSquare,
+  KeyRound,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { format, isToday, addMinutes } from 'date-fns';
@@ -30,6 +31,7 @@ interface Intervention {
   priority: number;
   client_info: { name?: string; phone?: string } | null;
   intervention_type?: 'depannage' | 'chantier' | null;
+  keys_info?: string | null;
 }
 
 interface RevisionReport {
@@ -94,7 +96,7 @@ export default function TechnicianTodayPage() {
 
     let query = supabase
       .from('interventions')
-      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, client_info, intervention_type')
+      .select('id, title, description, address, date_planned, estimated_duration_minutes, status, priority, client_info, intervention_type, keys_info')
       .eq('technician_id', userId)
       .gte('date_planned', startOfDay)
       .lte('date_planned', endOfDay)
@@ -334,6 +336,14 @@ export default function TechnicianTodayPage() {
                         </span>
                         <Navigation className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
                       </button>
+                    )}
+
+                    {/* Keys/access info */}
+                    {intervention.keys_info && (
+                      <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                        <KeyRound className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-amber-800">{intervention.keys_info}</span>
+                      </div>
                     )}
 
                     {/* Client info */}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Trash2, AlertTriangle, Droplets } from 'lucide-react';
+import { Loader2, Trash2, AlertTriangle, Droplets, KeyRound } from 'lucide-react';
 
 interface Intervention {
   id: string;
@@ -18,6 +18,7 @@ interface Intervention {
   technician_id: string | null;
   regie_id: string | null;
   work_order_number: string | null;
+  keys_info?: string | null;
   client_info: { name?: string; phone?: string } | null;
   intervention_type?: 'depannage' | 'chantier' | null;
 }
@@ -97,6 +98,7 @@ export function InterventionForm({
     technician_id: intervention?.technician_id || '',
     regie_id: intervention?.regie_id || '',
     work_order_number: intervention?.work_order_number || '',
+    keys_info: intervention?.keys_info || '',
     client_name: (intervention?.client_info as { name?: string })?.name || '',
     client_phone: (intervention?.client_info as { phone?: string })?.phone || '',
     intervention_type: intervention?.intervention_type || 'depannage',
@@ -195,6 +197,7 @@ export function InterventionForm({
         technician_id: formData.technician_id || null,
         regie_id: formData.regie_id || null,
         work_order_number: formData.work_order_number || null,
+        keys_info: formData.keys_info || null,
         client_info: Object.keys(clientInfo).length > 0 ? clientInfo : null,
       };
 
@@ -423,6 +426,25 @@ export function InterventionForm({
           className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <p className="mt-1 text-xs text-gray-500">Référence du bon de travail de la régie</p>
+      </div>
+
+      {/* Clés & Accès */}
+      <div>
+        <label htmlFor="keys_info" className="block text-sm font-medium text-gray-700 mb-1.5">
+          <span className="flex items-center gap-1.5">
+            <KeyRound className="w-4 h-4 text-amber-500" />
+            Clés & Accès
+          </span>
+        </label>
+        <input
+          type="text"
+          id="keys_info"
+          name="keys_info"
+          value={formData.keys_info}
+          onChange={handleChange}
+          placeholder="Ex: Boîte aux lettres, chez le concierge, code 1234..."
+          className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
       </div>
 
       {/* Date et Heure / Date début + Date fin */}

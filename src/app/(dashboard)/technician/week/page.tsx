@@ -11,6 +11,7 @@ import {
   Loader2,
   Calendar,
   MessageSquare,
+  KeyRound,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { 
@@ -33,6 +34,7 @@ interface Intervention {
   estimated_duration_minutes: number;
   status: string;
   intervention_type?: 'depannage' | 'chantier' | null;
+  keys_info?: string | null;
 }
 
 interface RevisionReport {
@@ -92,7 +94,7 @@ export default function TechnicianWeekPage() {
 
     let query = supabase
       .from('interventions')
-      .select('id, title, address, date_planned, estimated_duration_minutes, status, intervention_type')
+      .select('id, title, address, date_planned, estimated_duration_minutes, status, intervention_type, keys_info')
       .eq('technician_id', userId)
       .gte('date_planned', currentWeekStart.toISOString())
       .lte('date_planned', weekEnd.toISOString())
@@ -329,6 +331,12 @@ export default function TechnicianWeekPage() {
                                 <p className="text-sm text-gray-500 truncate flex items-center gap-1 mt-1">
                                   <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                                   {intervention.address}
+                                </p>
+                              )}
+                              {intervention.keys_info && (
+                                <p className="text-sm text-amber-700 flex items-center gap-1 mt-1">
+                                  <KeyRound className="w-3.5 h-3.5 flex-shrink-0" />
+                                  {intervention.keys_info}
                                 </p>
                               )}
                             </div>

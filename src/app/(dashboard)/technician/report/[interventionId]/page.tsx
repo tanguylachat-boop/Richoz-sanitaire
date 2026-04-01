@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { 
-  ChevronLeft, 
-  MapPin, 
-  Phone, 
-  Clock, 
+import {
+  ChevronLeft,
+  MapPin,
+  Phone,
+  Clock,
   Building2,
   Navigation,
-  Loader2
+  Loader2,
+  KeyRound,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { ReportForm } from '@/components/reports/ReportForm';
@@ -200,6 +201,17 @@ export default function TechnicianReportPage() {
                 <p className="text-gray-900">{intervention.address}</p>
               </div>
             </button>
+          )}
+
+          {/* Clés & Accès */}
+          {intervention.keys_info && (
+            <div className="flex items-start gap-3 mb-3 pb-3 border-b border-gray-100">
+              <KeyRound className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-gray-500">Clés & Accès</p>
+                <p className="text-gray-900 font-medium">{intervention.keys_info}</p>
+              </div>
+            </div>
           )}
 
           {/* Client */}
