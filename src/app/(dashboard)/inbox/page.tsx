@@ -17,6 +17,8 @@ import {
   FileText,
   MessageSquare,
   Paperclip,
+  Image as ImageIcon,
+  Download,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -337,7 +339,7 @@ function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, show
           <div className="flex items-center gap-3 mt-2">
             <p className="text-xs text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />{timeAgo}</p>
             {email.attachment_urls && email.attachment_urls.length > 0 && (
-              <span className="text-xs text-amber-600 flex items-center gap-1"><Paperclip className="w-3 h-3" />{email.attachment_urls.length} PDF</span>
+              <span className="text-xs text-amber-600 flex items-center gap-1"><Paperclip className="w-3 h-3" />{email.attachment_urls.length} fichier{email.attachment_urls.length > 1 ? 's' : ''}</span>
             )}
           </div>
         </div>
@@ -382,29 +384,75 @@ function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActio
         </div>
       </div>
 
-      {/* Pièces jointes PDF */}
+      {/* Pièces jointes */}
       {email.attachment_urls && email.attachment_urls.length > 0 && (
         <div>
           <p className="text-sm font-medium text-gray-700 mb-2">📎 Pièces jointes</p>
-          <div className="space-y-2">
-            {email.attachment_urls.map((url, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-red-500" />
-                    Document PDF {idx + 1}
-                  </span>
-                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
-                    Ouvrir dans un nouvel onglet ↗
-                  </a>
-                </div>
-                <iframe
-                  src={url}
-                  className="w-full h-[500px] border-0"
-                  title={`PDF ${idx + 1}`}
-                />
-              </div>
-            ))}
+          <div className="space-y-3">
+            {email.attachment_urls.map((url, idx) => {
+              const ext = url.split('.').pop()?.split('?')[0]?.toLowerCase() || '';
+              const fileName = decodeURIComponent(url.split('/').pop()?.split('?')[0] || `fichier-${idx + 1}`);
+              const isPdf = ext === 'pdf';
+              const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+
+              if (isPdf) {
+                return (
+                  <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-red-500" />
+                        {fileName}
+                      </span>
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                        Ouvrir ↗
+                      </a>
+                    </div>
+                    <iframe
+                      src={url}
+                      className="w-full h-[500px] border-0"
+                      title={fileName}
+                      onError={(e) => { (e.target as HTMLIFrameElement).style.display = 'none'; }}
+                    />
+                  </div>
+                );
+              }
+
+              if (isImage) {
+                return (
+                  <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <ImageIcon className="w-4 h-4 text-blue-500" />
+                        {fileName}
+                      </span>
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                        Ouvrir ↗
+                      </a>
+                    </div>
+                    <img
+                      src={url}
+                      alt={fileName}
+                      className="max-w-full h-auto max-h-[500px] object-contain mx-auto p-2"
+                    />
+                  </div>
+                );
+              }
+
+              // Document / unknown — download link
+              return (
+                <a
+                  key={idx}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Download className="w-5 h-5 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 flex-1 truncate">{fileName}</span>
+                  <span className="text-xs text-gray-400 uppercase flex-shrink-0">{ext || '?'}</span>
+                </a>
+              );
+            })}
           </div>
         </div>
       )}
