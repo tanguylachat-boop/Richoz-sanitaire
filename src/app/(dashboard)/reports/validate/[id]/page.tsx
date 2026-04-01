@@ -121,7 +121,7 @@ export default function ValidateReportDetailPage() {
       // ÉTAPE 1: GÉNÉRER LE PDF RAPPORT
       try {
         const pdfResponse = await fetch(
-          'https://primary-production-66b7.up.railway.app/webhook/report-pdf',
+          process.env.NEXT_PUBLIC_N8N_REPORT_PDF_WEBHOOK || '',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

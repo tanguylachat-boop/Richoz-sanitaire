@@ -54,7 +54,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   expired: { label: 'Expiré', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
 };
 
-const WEBHOOK_URL = 'https://primary-production-66b7.up.railway.app/webhook/quote-pdf';
+const WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_QUOTE_PDF_WEBHOOK || '';
 
 const formatCHF = (n: number) =>
   new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' }).format(n);

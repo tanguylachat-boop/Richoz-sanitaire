@@ -350,7 +350,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       if (sendToLocataire && locataireEmail) recipients.push(locataireEmail);
 
       if (recipients.length > 0) {
-        await fetch('https://primary-production-66b7.up.railway.app/webhook/confirmation-regie', {
+        await fetch(process.env.NEXT_PUBLIC_N8N_CONFIRMATION_REGIE_WEBHOOK || '', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

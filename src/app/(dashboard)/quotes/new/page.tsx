@@ -47,7 +47,7 @@ interface QuoteLine {
 }
 
 const TVA_RATE = 0.081; // 8.1% Swiss TVA
-const N8N_WEBHOOK_URL = 'https://primary-production-66b7.up.railway.app/webhook/quote-pdf';
+const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_QUOTE_PDF_WEBHOOK || '';
 
 function generateTempId() {
   return Math.random().toString(36).substring(2, 9);
