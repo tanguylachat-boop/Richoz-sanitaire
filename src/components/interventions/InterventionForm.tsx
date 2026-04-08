@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Trash2, AlertTriangle, Droplets, KeyRound } from 'lucide-react';
+import { sendPush } from '@/lib/send-push';
 
 interface Intervention {
   id: string;
@@ -201,6 +202,28 @@ export function InterventionForm({
         client_info: Object.keys(clientInfo).length > 0 ? clientInfo : null,
       };
 
+      // Helper: insert a cutoff reminder + fire push notification
+      const createCutoffReminder = async (interventionId: string, techId: string) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: reminderErr } = await (supabase as any).from('intervention_reminders').insert({
+          intervention_id: interventionId,
+          user_id: techId,
+          reminder_date: cutoffDate,
+          message: 'Avis de coupure d eau',
+          reminder_type: 'cutoff',
+        });
+        if (reminderErr) {
+          console.error('Cutoff reminder insert failed:', reminderErr);
+          return;
+        }
+        sendPush({
+          recipient_id: techId,
+          title: 'Avis de coupure d\'eau',
+          message: `${formData.title} — ${formData.address}`,
+          url: isChantier ? `/technician/chantier/${interventionId}` : `/technician/report/${interventionId}`,
+        });
+      };
+
       if (isEditMode && intervention) {
         // UPDATE
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,16 +237,10 @@ export function InterventionForm({
           throw new Error(error.message);
         }
 
-        // Insert cutoff reminder if enabled for chantier
-        if (isChantier && cutoffEnabled && cutoffDate) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase as any).from('intervention_reminders').insert({
-            intervention_id: intervention.id,
-            user_id: formData.technician_id || intervention.technician_id,
-            reminder_date: cutoffDate,
-            message: 'Avis de coupure d eau',
-            reminder_type: 'cutoff',
-          });
+        // Cutoff reminder works for both chantier and dépannage
+        if (cutoffEnabled && cutoffDate) {
+          const techId = formData.technician_id || intervention.technician_id;
+          if (techId) await createCutoffReminder(intervention.id, techId);
         }
 
         toast.success('Intervention modifiée avec succès');
@@ -240,19 +257,9 @@ export function InterventionForm({
           throw new Error(error.message);
         }
 
-        // Insert cutoff reminder if enabled for chantier
-        if (isChantier && cutoffEnabled && cutoffDate && data?.[0]?.id) {
-          const techId = formData.technician_id;
-          if (techId) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase as any).from('intervention_reminders').insert({
-              intervention_id: data[0].id,
-              user_id: techId,
-              reminder_date: cutoffDate,
-              message: 'Avis de coupure d eau',
-              reminder_type: 'cutoff',
-            });
-          }
+        // Cutoff reminder works for both chantier and dépannage
+        if (cutoffEnabled && cutoffDate && data?.[0]?.id && formData.technician_id) {
+          await createCutoffReminder(data[0].id, formData.technician_id);
         }
 
         toast.success('Intervention créée avec succès');
@@ -490,37 +497,35 @@ export function InterventionForm({
         </div>
       )}
 
-      {/* Avis de coupure (chantier only) */}
-      {isChantier && (
-        <div className="pt-4 border-t border-gray-100">
-          <label className="flex items-center gap-3 cursor-pointer">
+      {/* Avis de coupure (chantier ET dépannage) */}
+      <div className="pt-4 border-t border-gray-100">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={cutoffEnabled}
+            onChange={(e) => setCutoffEnabled(e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+            <Droplets className="w-4 h-4 text-blue-500" />
+            Coupure d&apos;eau prévue
+          </span>
+        </label>
+        {cutoffEnabled && (
+          <div className="mt-3 ml-7">
+            <label htmlFor="cutoff_date" className="block text-sm text-gray-600 mb-1.5">
+              Date de la coupure
+            </label>
             <input
-              type="checkbox"
-              checked={cutoffEnabled}
-              onChange={(e) => setCutoffEnabled(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              type="date"
+              id="cutoff_date"
+              value={cutoffDate}
+              onChange={(e) => setCutoffDate(e.target.value)}
+              className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
-              <Droplets className="w-4 h-4 text-blue-500" />
-              Coupure d&apos;eau prévue
-            </span>
-          </label>
-          {cutoffEnabled && (
-            <div className="mt-3 ml-7">
-              <label htmlFor="cutoff_date" className="block text-sm text-gray-600 mb-1.5">
-                Date de la coupure
-              </label>
-              <input
-                type="date"
-                id="cutoff_date"
-                value={cutoffDate}
-                onChange={(e) => setCutoffDate(e.target.value)}
-                className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* Priorité */}
       <div>

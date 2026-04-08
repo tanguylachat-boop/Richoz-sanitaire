@@ -11,6 +11,7 @@ import {
   Navigation,
   Loader2,
   KeyRound,
+  Droplets,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { ReportForm } from '@/components/reports/ReportForm';
@@ -23,13 +24,21 @@ type InterventionWithDetails = Intervention & {
   reports?: Report[] | null;
 };
 
+interface CutoffReminder {
+  id: string;
+  reminder_date: string;
+  message: string;
+  reminder_type: string | null;
+}
+
 export default function TechnicianReportPage() {
   const router = useRouter();
   const params = useParams();
   const interventionId = params.interventionId as string;
-  
+
   const [intervention, setIntervention] = useState<InterventionWithDetails | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [cutoffs, setCutoffs] = useState<CutoffReminder[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +75,15 @@ export default function TechnicianReportPage() {
       }
 
       setIntervention(interventionData as InterventionWithDetails);
+
+      // Fetch cutoff notices for this intervention (water cutoff reminders set by admin)
+      const { data: cutoffData } = await supabase
+        .from('intervention_reminders')
+        .select('id, reminder_date, message, reminder_type')
+        .eq('intervention_id', interventionId)
+        .eq('reminder_type', 'cutoff')
+        .order('reminder_date', { ascending: true });
+      setCutoffs((cutoffData as CutoffReminder[]) || []);
 
       // Fetch products
       const { data: productsData } = await supabase
@@ -242,6 +260,36 @@ export default function TechnicianReportPage() {
           )}
         </div>
       </div>
+
+      {/* Avis de coupure (set by admin/secretary) */}
+      {cutoffs.length > 0 && (
+        <div className="px-4 mb-4 space-y-3">
+          {cutoffs.map((cutoff) => (
+            <div
+              key={cutoff.id}
+              className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-2xl p-4 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <Droplets className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-900">Avis de coupure d&apos;eau</p>
+                  <p className="text-sm text-blue-700 mt-0.5">
+                    Prévue le{' '}
+                    <strong>
+                      {format(new Date(cutoff.reminder_date + 'T00:00:00'), 'EEEE d MMMM yyyy', { locale: fr })}
+                    </strong>
+                  </p>
+                  {cutoff.message && cutoff.message !== 'Avis de coupure d eau' && (
+                    <p className="text-sm text-blue-600 mt-1">{cutoff.message}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Report Form */}
       <div className="px-4">

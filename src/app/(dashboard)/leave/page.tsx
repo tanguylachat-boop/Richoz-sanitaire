@@ -16,7 +16,9 @@ import {
   Pencil,
   Trash2,
   MessageSquare,
+  Plus,
 } from 'lucide-react';
+import { sendPush } from '@/lib/send-push';
 
 interface LeaveRequest {
   id: string;
@@ -38,6 +40,13 @@ interface LeaveRequest {
 
 type TabFilter = 'pending' | 'all';
 
+interface TechnicianOption {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+}
+
 export default function LeaveManagementPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +63,17 @@ export default function LeaveManagementPage() {
   const [editReason, setEditReason] = useState('');
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  // Create-leave-for-technician state
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
+  const [createForm, setCreateForm] = useState({
+    technician_id: '',
+    start_date: '',
+    end_date: '',
+    reason: '',
+  });
+  const [isCreating, setIsCreating] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -62,6 +82,19 @@ export default function LeaveManagementPage() {
       if (user) setUserId(user.id);
     };
     getUser();
+  }, []);
+
+  // Load technicians once for the create-leave form
+  useEffect(() => {
+    const loadTechnicians = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .eq('role', 'technician')
+        .order('last_name');
+      if (data) setTechnicians(data as TechnicianOption[]);
+    };
+    loadTechnicians();
   }, []);
 
   const fetchRequests = useCallback(async () => {
@@ -195,6 +228,87 @@ export default function LeaveManagementPage() {
     }
   };
 
+  const handleCreateLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId) return;
+    if (!createForm.technician_id) {
+      toast.error('Sélectionne un technicien');
+      return;
+    }
+    if (!createForm.start_date || !createForm.end_date) {
+      toast.error('Dates de début et de fin obligatoires');
+      return;
+    }
+    if (new Date(createForm.start_date) > new Date(createForm.end_date)) {
+      toast.error('La date de fin doit être après la date de début');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('leave_requests')
+        .insert({
+          technician_id: createForm.technician_id,
+          start_date: createForm.start_date,
+          end_date: createForm.end_date,
+          reason: createForm.reason || null,
+          status: 'approved',
+          reviewed_by: userId,
+          reviewed_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (error) throw new Error(error.message);
+
+      // Notify the technician (in-app + push)
+      const tech = technicians.find((t) => t.id === createForm.technician_id);
+      const techName = tech
+        ? `${tech.first_name || ''} ${tech.last_name || ''}`.trim() || tech.email
+        : 'Technicien';
+      const startLabel = format(new Date(createForm.start_date + 'T00:00:00'), 'd MMM', { locale: fr });
+      const endLabel = format(new Date(createForm.end_date + 'T00:00:00'), 'd MMM yyyy', { locale: fr });
+      const notifMessage = createForm.start_date === createForm.end_date
+        ? `Congé enregistré le ${startLabel}`
+        : `Congé enregistré du ${startLabel} au ${endLabel}`;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('notifications').insert({
+          recipient_id: createForm.technician_id,
+          sender_id: userId,
+          title: 'Congé ajouté par l\'administration',
+          message: notifMessage,
+          type: 'leave_created',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          reference_id: (data as any)?.id || null,
+          reference_type: 'leave_request',
+        });
+      } catch (notifErr) {
+        console.error('Notification insert failed:', notifErr);
+      }
+
+      sendPush({
+        recipient_id: createForm.technician_id,
+        title: 'Congé ajouté',
+        message: notifMessage,
+        url: '/technician/leave',
+      });
+
+      toast.success(`Congé créé pour ${techName}`);
+      setCreateForm({ technician_id: '', start_date: '', end_date: '', reason: '' });
+      setShowCreateForm(false);
+      fetchRequests();
+    } catch (error) {
+      console.error('Error creating leave:', error);
+      toast.error('Erreur lors de la création du congé');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleDelete = async (requestId: string) => {
     setProcessingId(requestId);
     try {
@@ -246,6 +360,16 @@ export default function LeaveManagementPage() {
           </p>
         </div>
 
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCreateForm((s) => !s)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nouveau congé
+          </button>
+        </div>
+
         {/* Tabs */}
         <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
           <button
@@ -268,6 +392,99 @@ export default function LeaveManagementPage() {
           </button>
         </div>
       </div>
+
+      {/* Create-leave-for-technician form */}
+      {showCreateForm && (
+        <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-blue-600" />
+              Ajouter un congé pour un technicien
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowCreateForm(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
+          <form onSubmit={handleCreateLeave} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Technicien *</label>
+              <select
+                required
+                value={createForm.technician_id}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, technician_id: e.target.value }))}
+                className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Sélectionner --</option>
+                {technicians.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.first_name && t.last_name ? `${t.first_name} ${t.last_name}` : t.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date de début *</label>
+                <input
+                  type="date"
+                  required
+                  value={createForm.start_date}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                  className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date de fin *</label>
+                <input
+                  type="date"
+                  required
+                  value={createForm.end_date}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, end_date: e.target.value }))}
+                  min={createForm.start_date || undefined}
+                  className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            {createForm.start_date && createForm.end_date && (
+              <div className="px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
+                📅 {getDurationDays(createForm.start_date, createForm.end_date)} jour
+                {getDurationDays(createForm.start_date, createForm.end_date) > 1 ? 's' : ''} de congé
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Motif (optionnel)</label>
+              <input
+                type="text"
+                value={createForm.reason}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, reason: e.target.value }))}
+                placeholder="Vacances, maladie, formation..."
+                className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowCreateForm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={isCreating}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm disabled:opacity-50"
+              >
+                {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {isCreating ? 'Création...' : 'Créer le congé'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Content */}
       {isLoading ? (
