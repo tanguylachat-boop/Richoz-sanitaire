@@ -19,6 +19,8 @@ import {
   CalendarCheck,
   History,
   HardHat,
+  Clock,
+  FileSignature,
   LogOut,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -41,6 +43,8 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   'calendar-check': CalendarCheck,
   'hard-hat': HardHat,
   'history': History,
+  'clock': Clock,
+  'file-signature': FileSignature,
 };
 
 interface SidebarProps {

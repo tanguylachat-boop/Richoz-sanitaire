@@ -743,3 +743,95 @@ export interface ExtractedEmailData {
   urgency?: string;
   apartment?: string;
 }
+
+// ==============================================
+// V3 — Clients, Piquet, Maintenance Contracts
+// ==============================================
+
+export type ClientType = 'locataire' | 'proprietaire' | 'particulier' | 'entreprise';
+
+export interface Client {
+  id: string;
+  client_type: ClientType;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  address: string | null;
+  apartment: string | null;
+  city: string | null;
+  postal_code: string | null;
+  regie_id: string | null;
+  owner_name: string | null;
+  notes: string | null;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PiquetSchedule {
+  id: string;
+  technician_id: string;
+  start_date: string;
+  end_date: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type PiquetReportStatus = 'draft' | 'submitted' | 'validated' | 'billed';
+
+export interface PiquetReport {
+  id: string;
+  intervention_id: string | null;
+  technician_id: string;
+  client_id: string | null;
+  call_received_at: string;
+  intervention_started_at: string | null;
+  intervention_ended_at: string | null;
+  client_name: string | null;
+  client_phone: string | null;
+  address: string;
+  problem_description: string | null;
+  actions_taken: string | null;
+  supplies_used: string | null;
+  photos: string[];
+  client_signature: string | null;
+  travel_distance_km: number | null;
+  is_billable: boolean;
+  status: PiquetReportStatus;
+  invoice_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MaintenanceFrequency = 'annuel' | 'biannuel' | 'trimestriel' | 'mensuel' | 'custom';
+export type MaintenanceContractStatus = 'active' | 'paused' | 'terminated' | 'expired';
+
+export interface MaintenanceContract {
+  id: string;
+  contract_number: string;
+  client_id: string | null;
+  regie_id: string | null;
+  title: string;
+  description: string | null;
+  equipment: string | null;
+  address: string | null;
+  frequency: MaintenanceFrequency;
+  custom_interval_days: number | null;
+  start_date: string;
+  end_date: string | null;
+  next_due_date: string;
+  last_performed_date: string | null;
+  amount_per_visit: number;
+  estimated_duration_minutes: number | null;
+  auto_generate_intervention: boolean;
+  reminder_days_before: number | null;
+  status: MaintenanceContractStatus;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
