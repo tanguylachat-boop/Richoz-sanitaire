@@ -69,6 +69,7 @@ export default function TechnicianTodayPage() {
   }, []);
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [isOnCall, setIsOnCall] = useState<{ start_date: string; end_date: string } | null>(null);
 
   // Fetch user preference and id
   useEffect(() => {
@@ -80,6 +81,16 @@ export default function TechnicianTodayPage() {
         if (data?.intervention_type_preference) {
           setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
         }
+        // Check if on-call this week
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const { data: sched } = await supabase
+          .from('piquet_schedule')
+          .select('start_date, end_date')
+          .eq('technician_id', user.id)
+          .lte('start_date', today)
+          .gte('end_date', today)
+          .maybeSingle();
+        if (sched) setIsOnCall(sched as { start_date: string; end_date: string });
       }
     };
     fetchPref();
@@ -205,6 +216,30 @@ export default function TechnicianTodayPage() {
           </div>
         </div>
       </div>
+
+      {/* Piquet banner */}
+      {isOnCall && (
+        <div className="px-4 -mt-4 mb-2">
+          <Link
+            href="/technician/piquet"
+            className="block bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl p-4 shadow-lg active:scale-[0.98] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-base">Tu es de garde cette semaine</p>
+                <p className="text-sm text-orange-50">
+                  Du {format(new Date(isOnCall.start_date + 'T00:00:00'), 'd MMM', { locale: fr })}
+                  {' '}au {format(new Date(isOnCall.end_date + 'T00:00:00'), 'd MMM', { locale: fr })} — clique pour saisir une intervention nocturne
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 flex-shrink-0" />
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* Revision Alerts */}
       {revisionReports.length > 0 && (
