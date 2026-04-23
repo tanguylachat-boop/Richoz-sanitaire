@@ -15,12 +15,14 @@ import {
   Palmtree,
   Send,
 } from 'lucide-react';
+import { LEAVE_TYPES, LEAVE_TYPE_ORDER, type LeaveType } from '@/lib/constants';
 
 interface LeaveRequest {
   id: string;
   start_date: string;
   end_date: string;
   reason: string | null;
+  leave_type: LeaveType;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason: string | null;
   created_at: string;
@@ -40,10 +42,16 @@ export default function TechnicianLeavePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    start_date: string;
+    end_date: string;
+    reason: string;
+    leave_type: LeaveType;
+  }>({
     start_date: '',
     end_date: '',
     reason: '',
+    leave_type: 'conge',
   });
 
   const supabase = createClient();
@@ -91,13 +99,17 @@ export default function TechnicianLeavePage() {
       return;
     }
 
-    if (new Date(formData.start_date) < new Date(new Date().toDateString())) {
+    // Maladie and accident can be declared retroactively
+    const allowPast = formData.leave_type === 'maladie' || formData.leave_type === 'accident';
+    if (!allowPast && new Date(formData.start_date) < new Date(new Date().toDateString())) {
       toast.error('Vous ne pouvez pas demander un congé dans le passé');
       return;
     }
 
     setIsSubmitting(true);
     try {
+      // Maladie/accident: auto-approve (déclaratif), sinon: pending
+      const autoApprove = formData.leave_type === 'maladie' || formData.leave_type === 'accident';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('leave_requests')
@@ -106,13 +118,16 @@ export default function TechnicianLeavePage() {
           start_date: formData.start_date,
           end_date: formData.end_date,
           reason: formData.reason || null,
-          status: 'pending',
+          leave_type: formData.leave_type,
+          status: autoApprove ? 'approved' : 'pending',
+          reviewed_at: autoApprove ? new Date().toISOString() : null,
+          reviewed_by: autoApprove ? userId : null,
         });
 
       if (error) throw new Error(error.message);
 
-      toast.success('Demande de congé envoyée !');
-      setFormData({ start_date: '', end_date: '', reason: '' });
+      toast.success(autoApprove ? 'Absence enregistrée' : 'Demande de congé envoyée !');
+      setFormData({ start_date: '', end_date: '', reason: '', leave_type: 'conge' });
       setShowForm(false);
       fetchRequests();
     } catch (error) {
@@ -192,9 +207,25 @@ export default function TechnicianLeavePage() {
 
             {formData.start_date && formData.end_date && (
               <div className="px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
-                📅 {getDurationDays(formData.start_date, formData.end_date)} jour{getDurationDays(formData.start_date, formData.end_date) > 1 ? 's' : ''} de congé demandé{getDurationDays(formData.start_date, formData.end_date) > 1 ? 's' : ''}
+                📅 {getDurationDays(formData.start_date, formData.end_date)} jour{getDurationDays(formData.start_date, formData.end_date) > 1 ? 's' : ''} d&apos;absence
               </div>
             )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+              <select
+                value={formData.leave_type}
+                onChange={(e) => setFormData((prev) => ({ ...prev, leave_type: e.target.value as LeaveType }))}
+                className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {LEAVE_TYPE_ORDER.map((t) => (
+                  <option key={t} value={t}>{LEAVE_TYPES[t].emoji} {LEAVE_TYPES[t].label}</option>
+                ))}
+              </select>
+              {(formData.leave_type === 'maladie' || formData.leave_type === 'accident') && (
+                <p className="text-xs text-amber-700 mt-1">⚠️ Auto-validé. Pense à transmettre le certificat médical à la secrétaire.</p>
+              )}
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -255,11 +286,16 @@ export default function TechnicianLeavePage() {
               <div key={req.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${config.color}`}>
                         <StatusIcon className="w-3 h-3" />
                         {config.label}
                       </span>
+                      {req.leave_type && LEAVE_TYPES[req.leave_type] && (
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${LEAVE_TYPES[req.leave_type].badgeClass}`}>
+                          {LEAVE_TYPES[req.leave_type].emoji} {LEAVE_TYPES[req.leave_type].label}
+                        </span>
+                      )}
                       <span className="text-xs text-gray-400">
                         {days} jour{days > 1 ? 's' : ''}
                       </span>

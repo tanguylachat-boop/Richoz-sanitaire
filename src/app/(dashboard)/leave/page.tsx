@@ -19,6 +19,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { sendPush } from '@/lib/send-push';
+import { LEAVE_TYPES, LEAVE_TYPE_ORDER, type LeaveType } from '@/lib/constants';
 
 interface LeaveRequest {
   id: string;
@@ -26,6 +27,7 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   reason: string | null;
+  leave_type: LeaveType;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason: string | null;
   reviewed_at: string | null;
@@ -66,11 +68,18 @@ export default function LeaveManagementPage() {
   // Create-leave-for-technician state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([]);
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<{
+    technician_id: string;
+    start_date: string;
+    end_date: string;
+    reason: string;
+    leave_type: LeaveType;
+  }>({
     technician_id: '',
     start_date: '',
     end_date: '',
     reason: '',
+    leave_type: 'conge',
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -254,6 +263,7 @@ export default function LeaveManagementPage() {
           start_date: createForm.start_date,
           end_date: createForm.end_date,
           reason: createForm.reason || null,
+          leave_type: createForm.leave_type,
           status: 'approved',
           reviewed_by: userId,
           reviewed_at: new Date().toISOString(),
@@ -298,7 +308,7 @@ export default function LeaveManagementPage() {
       });
 
       toast.success(`Congé créé pour ${techName}`);
-      setCreateForm({ technician_id: '', start_date: '', end_date: '', reason: '' });
+      setCreateForm({ technician_id: '', start_date: '', end_date: '', reason: '', leave_type: 'conge' });
       setShowCreateForm(false);
       fetchRequests();
     } catch (error) {
@@ -452,9 +462,21 @@ export default function LeaveManagementPage() {
             {createForm.start_date && createForm.end_date && (
               <div className="px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
                 📅 {getDurationDays(createForm.start_date, createForm.end_date)} jour
-                {getDurationDays(createForm.start_date, createForm.end_date) > 1 ? 's' : ''} de congé
+                {getDurationDays(createForm.start_date, createForm.end_date) > 1 ? 's' : ''} d&apos;absence
               </div>
             )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+              <select
+                value={createForm.leave_type}
+                onChange={(e) => setCreateForm((prev) => ({ ...prev, leave_type: e.target.value as LeaveType }))}
+                className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {LEAVE_TYPE_ORDER.map((t) => (
+                  <option key={t} value={t}>{LEAVE_TYPES[t].emoji} {LEAVE_TYPES[t].label}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Motif (optionnel)</label>
               <input
@@ -547,6 +569,11 @@ export default function LeaveManagementPage() {
                         {isRejected && (
                           <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full flex items-center gap-1">
                             <XCircle className="w-3 h-3" /> Refusé
+                          </span>
+                        )}
+                        {req.leave_type && LEAVE_TYPES[req.leave_type] && (
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${LEAVE_TYPES[req.leave_type].badgeClass}`}>
+                            {LEAVE_TYPES[req.leave_type].emoji} {LEAVE_TYPES[req.leave_type].label}
                           </span>
                         )}
                       </div>

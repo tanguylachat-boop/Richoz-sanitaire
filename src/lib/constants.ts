@@ -54,6 +54,9 @@ export const ADMIN_ROUTES = [
   { href: '/calendar', label: 'Calendrier', icon: 'calendar' },
   { href: '/interventions', label: 'Interventions', icon: 'wrench' },
   { href: '/chantiers', label: 'Chantiers', icon: 'hard-hat' },
+  { href: '/clients', label: 'Clients', icon: 'users' },
+  { href: '/piquet', label: 'Piquet', icon: 'clock' },
+  { href: '/contracts', label: 'Contrats maintenance', icon: 'file-signature' },
   { href: '/reports/validate', label: 'Validation rapports', icon: 'clipboard-check' },
   { href: '/invoices', label: 'Factures', icon: 'file-text' },
   { href: '/quotes', label: 'Devis', icon: 'file-plus' },
@@ -64,12 +67,14 @@ export const ADMIN_ROUTES = [
 export const ADMIN_ONLY_ROUTES = [
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/regies', label: 'Régies', icon: 'building' },
+  { href: '/admin/stats', label: 'Statistiques RH', icon: 'history' },
   { href: '/admin/settings', label: 'Paramètres', icon: 'settings' },
 ];
 
 export const TECHNICIAN_ROUTES = [
   { href: '/technician/today', label: "Aujourd'hui", icon: 'calendar-check' },
   { href: '/technician/week', label: 'Ma semaine', icon: 'calendar' },
+  { href: '/technician/piquet', label: 'Piquet / urgence', icon: 'clock' },
   { href: '/interventions', label: 'Historique', icon: 'history' },
   { href: '/technician/leave', label: 'Mes congés', icon: 'calendar-check' },
   { href: '/technician/profile', label: 'Mon profil', icon: 'users' },
@@ -96,6 +101,23 @@ export const PRIORITY_LEVELS = [
   { value: 1, label: 'Urgent', color: 'bg-orange-100 text-orange-800' },
   { value: 2, label: 'Urgence absolue', color: 'bg-red-100 text-red-800' },
 ];
+
+// ==============================================
+// LEAVE TYPES (congé, maladie, ...)
+// ==============================================
+
+export type LeaveType = 'conge' | 'maladie' | 'rtt' | 'sans_solde' | 'accident' | 'autre';
+
+export const LEAVE_TYPES: Record<LeaveType, { label: string; emoji: string; badgeClass: string }> = {
+  conge: { label: 'Congé', emoji: '🌴', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+  maladie: { label: 'Maladie', emoji: '🤒', badgeClass: 'bg-red-100 text-red-800 border-red-300' },
+  rtt: { label: 'RTT', emoji: '⏱️', badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-300' },
+  sans_solde: { label: 'Sans solde', emoji: '💤', badgeClass: 'bg-gray-100 text-gray-800 border-gray-300' },
+  accident: { label: 'Accident', emoji: '🚑', badgeClass: 'bg-orange-100 text-orange-800 border-orange-300' },
+  autre: { label: 'Autre', emoji: '📄', badgeClass: 'bg-violet-100 text-violet-800 border-violet-300' },
+};
+
+export const LEAVE_TYPE_ORDER: LeaveType[] = ['conge', 'maladie', 'rtt', 'accident', 'sans_solde', 'autre'];
 
 // ==============================================
 // VAT RATE (Switzerland)
