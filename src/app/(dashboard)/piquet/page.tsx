@@ -19,6 +19,8 @@ import {
   Trash2,
   AlertCircle,
   Receipt,
+  Download,
+  Archive,
 } from 'lucide-react';
 
 interface Technician {
@@ -58,7 +60,7 @@ interface PiquetReport {
   created_at: string;
 }
 
-type Tab = 'planning' | 'reports';
+type Tab = 'planning' | 'reports' | 'history';
 
 function getTechName(t?: Technician | null): string {
   if (!t) return '—';
@@ -71,6 +73,7 @@ export default function PiquetAdminPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [reports, setReports] = useState<PiquetReport[]>([]);
+  const [historyReports, setHistoryReports] = useState<PiquetReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const supabase = createClient();
@@ -79,7 +82,7 @@ export default function PiquetAdminPage() {
     setIsLoading(true);
     const today = new Date();
     const horizonEnd = addWeeks(today, 26);
-    const [{ data: techData }, { data: schedData }, { data: reportsData }] = await Promise.all([
+    const [{ data: techData }, { data: schedData }, { data: reportsData }, { data: historyData }] = await Promise.all([
       supabase.from('users').select('id, first_name, last_name, email').eq('role', 'technician').eq('is_active', true).order('last_name'),
       supabase
         .from('piquet_schedule')
@@ -93,11 +96,18 @@ export default function PiquetAdminPage() {
         .in('status', ['submitted', 'draft'])
         .order('call_received_at', { ascending: false })
         .limit(50),
+      supabase
+        .from('piquet_reports')
+        .select('*, technician:users!piquet_reports_technician_id_fkey(id, first_name, last_name, email)')
+        .in('status', ['validated', 'billed'])
+        .order('call_received_at', { ascending: false })
+        .limit(200),
     ]);
 
     if (techData) setTechnicians(techData as Technician[]);
     if (schedData) setSchedules(schedData as Schedule[]);
     if (reportsData) setReports(reportsData as PiquetReport[]);
+    if (historyData) setHistoryReports(historyData as PiquetReport[]);
     setIsLoading(false);
   }, [supabase]);
 
@@ -294,19 +304,29 @@ export default function PiquetAdminPage() {
             className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === 'planning' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
             <CalendarDays className="w-4 h-4 inline-block mr-1.5" />
-            Planning (12 semaines)
+            Planning
           </button>
           <button
             onClick={() => setTab('reports')}
             className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === 'reports' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
             <FileText className="w-4 h-4 inline-block mr-1.5" />
-            Rapports à valider
+            À valider
             {reports.filter(r => r.status === 'submitted').length > 0 && (
               <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded-full">
                 {reports.filter(r => r.status === 'submitted').length}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setTab('history')}
+            className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === 'history' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            <Archive className="w-4 h-4 inline-block mr-1.5" />
+            Historique
+            <span className="ml-2 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+              {historyReports.length}
+            </span>
           </button>
         </div>
 
@@ -344,6 +364,59 @@ export default function PiquetAdminPage() {
               );
             })}
           </div>
+        ) : tab === 'history' ? (
+          historyReports.length === 0 ? (
+            <div className="p-12 text-center">
+              <Archive className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500">Pas encore d&apos;historique</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {historyReports.map((r) => (
+                <div key={r.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          r.status === 'billed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {r.status === 'billed' ? 'Facturé' : 'Validé'}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900">{getTechName(r.technician)}</span>
+                        <span className="text-xs text-gray-500">
+                          · {format(new Date(r.call_received_at), "d MMM yyyy 'à' HH:mm", { locale: fr })}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-1 text-sm text-gray-700">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
+                        {r.address}
+                      </div>
+                      {r.client_name && <p className="text-sm text-gray-600 mt-0.5">👤 {r.client_name}</p>}
+                      {r.problem_description && (
+                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">{r.problem_description}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <a
+                        href={`/api/piquet-report-pdf?id=${r.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                      >
+                        <Download className="w-3 h-3" />
+                        Télécharger PDF
+                      </a>
+                      {r.intervention_id && (
+                        <Link href={`/interventions/${r.intervention_id}`} className="text-xs text-blue-600 hover:underline">
+                          Voir facture/intervention
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : reports.length === 0 ? (
           <div className="p-12 text-center">
             <CheckCircle2 className="w-12 h-12 text-emerald-300 mx-auto mb-3" />
@@ -421,6 +494,15 @@ export default function PiquetAdminPage() {
                       <Receipt className="w-3 h-3" />
                       Transformer en facture
                     </button>
+                    <a
+                      href={`/api/piquet-report-pdf?id=${r.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+                    >
+                      <Download className="w-3 h-3" />
+                      PDF
+                    </a>
                     {r.intervention_id && (
                       <Link href={`/interventions/${r.intervention_id}`} className="text-xs text-blue-600 hover:underline">
                         Voir l&apos;intervention

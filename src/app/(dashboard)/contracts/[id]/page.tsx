@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -67,8 +67,9 @@ const FREQ_LABEL: Record<Frequency, string> = {
   custom: 'Personnalisé',
 };
 
-export default function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: contractId } = use(params);
+export default function ContractDetailPage() {
+  const params = useParams();
+  const contractId = params.id as string;
   const router = useRouter();
   const supabase = createClient();
 

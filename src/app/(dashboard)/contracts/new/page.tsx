@@ -148,8 +148,37 @@ export default function NewContractPage() {
         setIsSaving(false);
         return;
       }
-      toast.success('Contrat créé');
-      router.push(`/contracts/${(data as { id: string }).id}`);
+
+      const newContractId = (data as { id: string }).id;
+
+      // Immediately generate the first intervention so it shows up in the calendar
+      if (form.auto_generate_intervention) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: ivErr } = await (supabase as any).from('interventions').insert({
+          title: form.title,
+          description: form.description || null,
+          address: form.address || selectedClient?.address || '',
+          date_planned: new Date(nextDue + 'T09:00:00').toISOString(),
+          estimated_duration_minutes: form.estimated_duration_minutes,
+          status: 'nouveau',
+          priority: 0,
+          regie_id: form.regie_id || null,
+          client_id: finalClientId,
+          source_type: 'maintenance_contract',
+          intervention_type: 'depannage',
+          maintenance_contract_id: newContractId,
+        });
+        if (ivErr) {
+          console.warn('Could not auto-generate intervention:', ivErr);
+          toast.success('Contrat créé (génération intervention échouée — génère manuellement)');
+        } else {
+          toast.success(`Contrat créé — intervention planifiée le ${nextDue}`);
+        }
+      } else {
+        toast.success('Contrat créé');
+      }
+
+      router.push(`/contracts/${newContractId}`);
     } catch (err) {
       console.error(err);
       toast.error(`Erreur : ${err instanceof Error ? err.message : 'inconnue'}`);

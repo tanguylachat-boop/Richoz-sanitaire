@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { normalizeImage } from '@/lib/normalize-image';
+import { SignatureCanvas } from '@/components/reports/SignatureCanvas';
 
 interface PiquetReport {
   id: string;
@@ -54,6 +55,7 @@ export default function TechnicianPiquetPage() {
     supplies_used: '',
   });
   const [photos, setPhotos] = useState<string[]>([]);
+  const [signature, setSignature] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function TechnicianPiquetPage() {
       supplies_used: '',
     });
     setPhotos([]);
+    setSignature(null);
     setShowForm(true);
   };
 
@@ -165,6 +168,7 @@ export default function TechnicianPiquetPage() {
         actions_taken: form.actions_taken || null,
         supplies_used: form.supplies_used || null,
         photos,
+        client_signature: signature,
         status: 'submitted',
         is_billable: true,
       });
@@ -370,6 +374,15 @@ export default function TechnicianPiquetPage() {
                 />
               </label>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">✍️ Signature du client</label>
+            <SignatureCanvas
+              onSignatureChange={setSignature}
+              existingSignature={signature}
+              height={160}
+            />
           </div>
 
           <div className="flex gap-2 pt-3 border-t border-gray-100">

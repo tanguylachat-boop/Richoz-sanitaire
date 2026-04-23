@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -84,8 +84,9 @@ function getClientName(c: ClientDetail | null): string {
   return [c.first_name, c.last_name].filter(Boolean).join(' ') || 'Sans nom';
 }
 
-export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: clientId } = use(params);
+export default function ClientDetailPage() {
+  const params = useParams();
+  const clientId = params.id as string;
   const router = useRouter();
   const supabase = createClient();
 
