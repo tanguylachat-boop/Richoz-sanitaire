@@ -31,6 +31,7 @@ interface Intervention {
   client_info: { name?: string; phone?: string } | null;
   work_order_number: string | null;
   intervention_type?: 'depannage' | 'chantier' | null;
+  maintenance_contract_id?: string | null;
   technician?: {
     id: string;
     first_name: string | null;
@@ -88,10 +89,11 @@ interface TimeGridViewProps {
   onInterventionClick: (intervention: Intervention) => void;
   onSlotClick?: (day: Date, hour: number) => void;
   onLeaveClick?: (leave: LeaveEntry) => void;
+  onReminderClick?: (reminder: ReminderEntry) => void;
   selectedSlot?: SelectedSlot | null;
 }
 
-export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], reminders = [], onInterventionClick, onSlotClick, onLeaveClick, selectedSlot }: TimeGridViewProps) {
+export function TimeGridView({ mode, currentDate, interventions, leaves = [], birthdays = [], reminders = [], onInterventionClick, onSlotClick, onLeaveClick, onReminderClick, selectedSlot }: TimeGridViewProps) {
   // Build technician → color map — use stored calendar_color, fallback to palette
   const techColorMap = useMemo(() => {
     const uniqueIds = Array.from(new Set(interventions.map((iv) => iv.technician_id).filter(Boolean))) as string[];
@@ -279,13 +281,15 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                         </span>
                       ))}
                       {dayReminders.map((rem) => (
-                        <span
+                        <button
+                          type="button"
                           key={`r-${rem.id}`}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-200 text-orange-800 text-xs font-semibold whitespace-nowrap border border-orange-400"
+                          onClick={onReminderClick ? () => onReminderClick(rem) : undefined}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-200 text-orange-800 text-xs font-semibold whitespace-nowrap border border-orange-400 ${onReminderClick ? 'cursor-pointer hover:bg-orange-300 transition-colors' : ''}`}
                           title={`${rem.message}${getReminderTechName(rem) ? ` — ${getReminderTechName(rem)}` : ''}`}
                         >
                           🔔 {rem.message.length > 20 ? rem.message.slice(0, 20) + '…' : rem.message}
-                        </span>
+                        </button>
                       ))}
                       {dayMultiDay.map((iv) => (
                         <button
@@ -422,7 +426,8 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                         ? format(addMinutes(new Date(iv.date_planned), iv.estimated_duration_minutes || 30), 'HH:mm')
                         : '';
                       const initials = getTechInitials(iv.technician);
-                      const typeLabel = iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
+                      const typeLabel = iv.maintenance_contract_id ? '🔩' : (iv.intervention_type === 'chantier' ? '🏗️' : '🔧');
+                      const kindLabel = iv.maintenance_contract_id ? '[Maintenance]' : (iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]');
                       const displayLabel = iv.work_order_number || iv.title;
 
                       return (
@@ -431,7 +436,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                           onClick={() => onInterventionClick(iv)}
                           className="absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5]"
                           style={{ top, height: Math.max(height, 24), backgroundColor: bgColor, borderLeftColor: bgColor }}
-                          title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${displayLabel}`}
+                          title={`${kindLabel} ${displayLabel}`}
                         >
                           <div className="px-2 py-1 h-full flex flex-col">
                             <div className="flex items-center gap-1">

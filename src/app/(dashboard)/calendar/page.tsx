@@ -5,6 +5,7 @@ import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, C
 import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
+import { CutoffNoticeSheet } from '@/components/calendar/CutoffNoticeSheet';
 import { TimeGridView, TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
 import type { LeaveEntry, BirthdayEntry, ReminderEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import { getApprovedLeaves } from '@/lib/leave-utils';
@@ -19,7 +20,7 @@ import {
 import { fr } from 'date-fns/locale';
 
 type CalendarView = 'month' | 'week' | 'day';
-type InterventionTypeFilter = 'all' | 'depannage' | 'chantier';
+type InterventionTypeFilter = 'all' | 'depannage' | 'chantier' | 'maintenance';
 
 interface Intervention {
   id: string; title: string; description: string | null; address: string;
@@ -27,6 +28,7 @@ interface Intervention {
   priority: number; technician_id: string | null; regie_id: string | null;
   client_info: { name?: string; phone?: string } | null; work_order_number: string | null;
   intervention_type?: 'depannage' | 'chantier' | null;
+  maintenance_contract_id?: string | null;
   technician?: { id: string; first_name: string | null; last_name: string | null; calendar_color?: string | null } | null;
 }
 
@@ -61,6 +63,8 @@ export default function CalendarPage() {
   const [editLeaveEnd, setEditLeaveEnd] = useState('');
   const [isDeletingLeave, setIsDeletingLeave] = useState(false);
   const [leaveProcessing, setLeaveProcessing] = useState(false);
+  // Cutoff reminder sheet state
+  const [selectedReminder, setSelectedReminder] = useState<ReminderEntry | null>(null);
   const supabase = createClient();
 
   const getDateRange = useCallback(() => {
@@ -75,7 +79,7 @@ export default function CalendarPage() {
     setIsLoading(true);
     const { start, end } = getDateRange();
     // Fetch interventions: date_planned in range OR date_end overlaps range (multi-day chantiers)
-    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name, calendar_color)`).or(`and(date_planned.gte.${start.toISOString()},date_planned.lte.${end.toISOString()}),and(date_planned.lte.${end.toISOString()},date_end.gte.${start.toISOString()})`).order('date_planned', { ascending: true });
+    const { data } = await supabase.from('interventions').select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, maintenance_contract_id, technician:users!interventions_technician_id_fkey(id, first_name, last_name, calendar_color)`).or(`and(date_planned.gte.${start.toISOString()},date_planned.lte.${end.toISOString()}),and(date_planned.lte.${end.toISOString()},date_end.gte.${start.toISOString()})`).order('date_planned', { ascending: true });
     if (data) setInterventions(data as Intervention[]);
     const sd = format(start, 'yyyy-MM-dd'); const ed = format(end, 'yyyy-MM-dd');
     const { data: leavesData } = await supabase.from('leave_requests').select(`id, technician_id, start_date, end_date, technician:users!leave_requests_technician_id_fkey(first_name, last_name)`).eq('status', 'approved').lte('start_date', ed).gte('end_date', sd);
@@ -162,6 +166,25 @@ export default function CalendarPage() {
   };
 
   const handleInterventionClick = (iv: Intervention) => setDetailIntervention(iv);
+  const handleReminderClick = (r: ReminderEntry) => setSelectedReminder(r);
+  const handleOpenInterventionFromReminder = async (interventionId: string) => {
+    // Try to find in current state; fallback to fetching
+    const existing = interventions.find(iv => iv.id === interventionId);
+    if (existing) {
+      setSelectedReminder(null);
+      setDetailIntervention(existing);
+      return;
+    }
+    const { data } = await supabase
+      .from('interventions')
+      .select(`id, title, description, address, date_planned, date_end, estimated_duration_minutes, status, priority, technician_id, regie_id, client_info, work_order_number, intervention_type, technician:users!interventions_technician_id_fkey(id, first_name, last_name, calendar_color)`)
+      .eq('id', interventionId)
+      .single();
+    if (data) {
+      setSelectedReminder(null);
+      setDetailIntervention(data as Intervention);
+    }
+  };
   const handleEditFromDetail = () => { if (detailIntervention) { setSelectedIntervention(detailIntervention); setDetailIntervention(null); setIsEditModalOpen(true); } };
   const handleCreateSuccess = () => { setIsCreateModalOpen(false); fetchInterventions(); };
   const handleEditSuccess = () => { setIsEditModalOpen(false); setSelectedIntervention(null); fetchInterventions(); };
@@ -174,7 +197,11 @@ export default function CalendarPage() {
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   const filteredInterventions = useMemo(() => {
     let result = interventions.filter(iv => iv.status !== 'cancelled' && iv.status !== 'annule');
-    if (typeFilter !== 'all') result = result.filter(iv => iv.intervention_type === typeFilter);
+    if (typeFilter === 'maintenance') {
+      result = result.filter(iv => !!iv.maintenance_contract_id);
+    } else if (typeFilter !== 'all') {
+      result = result.filter(iv => iv.intervention_type === typeFilter && !iv.maintenance_contract_id);
+    }
     return result;
   }, [interventions, typeFilter]);
 
@@ -225,7 +252,11 @@ export default function CalendarPage() {
   const activeReminders = useMemo(() => reminders.filter(r => !cancelledInterventionIds.has(r.intervention_id)), [reminders, cancelledInterventionIds]);
   const getRemindersForDay = (day: Date): ReminderEntry[] => activeReminders.filter((r) => isSameDay(new Date(r.reminder_date + 'T00:00:00'), day));
   const getTechInitials = (t: Intervention['technician']) => t ? ((t.first_name?.[0] || '') + (t.last_name?.[0] || '')).toUpperCase() || '?' : null;
-  const getTypeEmoji = (iv: Intervention) => iv.intervention_type === 'chantier' ? '🏗️' : '🔧';
+  const getTypeEmoji = (iv: Intervention) => {
+    if (iv.maintenance_contract_id) return '🔩';
+    if (iv.intervention_type === 'chantier') return '🏗️';
+    return '🔧';
+  };
   const getTechName = (t: LeaveEntry['technician']) => { if (!t) return '?'; if (t.first_name && t.last_name) return `${t.first_name} ${t.last_name}`; return t.first_name || t.last_name || '?'; };
 
   return (
@@ -249,6 +280,7 @@ export default function CalendarPage() {
                 { value: 'all' as const, label: 'Tout', color: 'text-gray-900', activeBg: 'bg-white' },
                 { value: 'depannage' as const, label: '🔧 Dépannage', color: 'text-red-700', activeBg: 'bg-red-50' },
                 { value: 'chantier' as const, label: '🏗️ Chantier', color: 'text-blue-700', activeBg: 'bg-blue-50' },
+                { value: 'maintenance' as const, label: '🔩 Maintenance', color: 'text-violet-700', activeBg: 'bg-violet-50' },
               ]).map((tab) => (
                 <button key={tab.value} onClick={() => setTypeFilter(tab.value)} className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${typeFilter === tab.value ? `${tab.activeBg} ${tab.color} shadow-sm` : 'text-gray-500 hover:text-gray-700'}`}>{tab.label}</button>
               ))}
@@ -275,7 +307,7 @@ export default function CalendarPage() {
                     <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${isT ? 'bg-blue-600 text-white' : isCur ? 'text-gray-900' : 'text-gray-400'}`}>{format(day, 'd')}</div>
                     {dayBirthdays.map((b) => (<div key={`b-${b.user_id}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-violet-200 text-violet-800 font-semibold mb-0.5 truncate border border-violet-300">🎂 {b.first_name}</div>))}
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-emerald-200 text-emerald-800 font-semibold mb-0.5 truncate border border-emerald-400">🌴 {getTechName(l.technician)}</div>))}
-                    {dayReminders.map((rem) => (<div key={`r-${rem.id}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-orange-200 text-orange-800 font-semibold mb-0.5 truncate border border-orange-400" title={rem.message}>🔔 {rem.message.length > 15 ? rem.message.slice(0, 15) + '…' : rem.message}</div>))}
+                    {dayReminders.map((rem) => (<button type="button" key={`r-${rem.id}`} onClick={() => handleReminderClick(rem)} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-orange-200 text-orange-800 font-semibold mb-0.5 truncate border border-orange-400 hover:bg-orange-300 transition-colors cursor-pointer" title={rem.message}>🔔 {rem.message.length > 15 ? rem.message.slice(0, 15) + '…' : rem.message}</button>))}
                     <div className="space-y-1">
                       {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className="w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer hover:opacity-90" style={{ backgroundColor: getTechColor(iv.technician_id) }} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.work_order_number || iv.title}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{iv.work_order_number || iv.title}</span></div></button>))}
                       {overflow > 0 && (<button onClick={() => switchToDay(day)} className="w-full text-left text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-0.5 hover:bg-blue-50 rounded transition-colors">+ {overflow} autre{overflow > 1 ? 's' : ''}</button>)}
@@ -284,8 +316,8 @@ export default function CalendarPage() {
                 })}
               </div>
             </>)}
-            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={activeReminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
-            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={activeReminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} />}
+            {view === 'week' && <TimeGridView mode="week" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={activeReminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} onReminderClick={handleReminderClick} />}
+            {view === 'day' && <TimeGridView mode="day" currentDate={currentDate} interventions={filteredInterventions} leaves={leaves} birthdays={birthdays} reminders={activeReminders} onInterventionClick={handleInterventionClick} onLeaveClick={handleLeaveClick} onReminderClick={handleReminderClick} />}
           </>)}
         </div>
 
@@ -298,6 +330,7 @@ export default function CalendarPage() {
             <div className="border-l border-gray-300 h-4" />
             <div className="flex items-center gap-1.5"><span className="text-gray-600">🔧 Dépannage</span></div>
             <div className="flex items-center gap-1.5"><span className="text-gray-600">🏗️ Chantier</span></div>
+            <div className="flex items-center gap-1.5"><span className="text-gray-600">🔩 Maintenance</span></div>
             <div className="border-l border-gray-300 h-4" />
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /><span className="text-gray-600">🌴 Congé</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /><span className="text-gray-600">🎂 Anniversaire</span></div>
@@ -317,6 +350,13 @@ export default function CalendarPage() {
       </Modal>
 
       <InterventionDetailSheet intervention={detailIntervention} onClose={() => setDetailIntervention(null)} onEdit={handleEditFromDetail} />
+
+      <CutoffNoticeSheet
+        reminder={selectedReminder}
+        onClose={() => setSelectedReminder(null)}
+        onOpenIntervention={handleOpenInterventionFromReminder}
+        onChanged={fetchInterventions}
+      />
 
       {/* Leave popup */}
       {selectedLeave && (
@@ -383,6 +423,16 @@ export default function CalendarPage() {
 // SPLIT VIEW pour création: Formulaire + TimeGridView calendrier semaine
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface ClientOption {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string | null;
+  phone: string | null;
+  address: string | null;
+  regie_id: string | null;
+}
+
 function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [calendarWeek, setCalendarWeek] = useState(new Date());
@@ -391,6 +441,10 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
   const [calendarBirthdays, setCalendarBirthdays] = useState<BirthdayEntry[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [regies, setRegies] = useState<Regie[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientSuggestions, setClientSuggestions] = useState<ClientOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', address: '', date_planned: '', time_planned: '',
     estimated_duration_minutes: 60, priority: 0,
@@ -449,6 +503,30 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
 
   useEffect(() => { fetchCalendarData(); }, [fetchCalendarData]);
 
+  // Debounced client search
+  useEffect(() => {
+    if (!clientSearch || clientSearch.length < 2 || selectedClientId) {
+      setClientSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const q = clientSearch.trim();
+      const digits = q.replace(/[^0-9]/g, '');
+      const filters = [`last_name.ilike.%${q}%`, `first_name.ilike.%${q}%`, `company_name.ilike.%${q}%`, `address.ilike.%${q}%`];
+      if (digits.length >= 3) {
+        filters.push(`phone.ilike.%${digits}%`, `mobile.ilike.%${digits}%`);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from('clients')
+        .select('id, first_name, last_name, company_name, phone, address, regie_id')
+        .or(filters.join(','))
+        .limit(8);
+      setClientSuggestions((data as ClientOption[]) || []);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [clientSearch, selectedClientId, supabase]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => {
@@ -484,6 +562,22 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
       const ci: Record<string, string> = {};
       if (formData.client_name) ci.name = formData.client_name;
       if (formData.client_phone) ci.phone = formData.client_phone;
+
+      // Resolve / create client_id using the Postgres RPC
+      let resolvedClientId: string | null = selectedClientId;
+      if (!resolvedClientId && (formData.client_name || formData.client_phone)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: cid, error: rpcErr } = await (supabase as any).rpc('match_or_create_client', {
+          p_phone: formData.client_phone || null,
+          p_name: formData.client_name || null,
+          p_address: formData.address || null,
+          p_email: null,
+          p_regie_id: formData.regie_id || null,
+          p_client_type: 'locataire',
+        });
+        if (!rpcErr && cid) resolvedClientId = cid as string;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: insertedData, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null, address: formData.address,
@@ -492,6 +586,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         technician_id: formData.technician_id || null, regie_id: formData.regie_id || null,
         work_order_number: formData.work_order_number || null,
         client_info: Object.keys(ci).length > 0 ? ci : null,
+        client_id: resolvedClientId,
         source_type: 'manual', intervention_type: formData.intervention_type,
         keys_info: formData.keys_info || null,
         date_end: formData.intervention_type === 'chantier' && formData.date_end
@@ -632,9 +727,59 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Nom client</label><input type="text" name="client_name" value={formData.client_name} onChange={handleChange} className={ic} placeholder="Nom du locataire" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label><input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={ic} placeholder="+41 XX XXX XX XX" /></div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">Client</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={clientSearch}
+                onChange={(e) => {
+                  setClientSearch(e.target.value);
+                  setFormData((prev) => ({ ...prev, client_name: e.target.value }));
+                  setSelectedClientId(null);
+                  setShowClientDropdown(true);
+                }}
+                onFocus={() => setShowClientDropdown(true)}
+                onBlur={() => setTimeout(() => setShowClientDropdown(false), 150)}
+                className={ic}
+                placeholder="Nom / téléphone / adresse — tape pour rechercher"
+              />
+              {showClientDropdown && clientSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+                  {clientSuggestions.map((c) => {
+                    const name = c.company_name || [c.first_name, c.last_name].filter(Boolean).join(' ');
+                    return (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => {
+                          setSelectedClientId(c.id);
+                          setClientSearch(name);
+                          setFormData((prev) => ({
+                            ...prev,
+                            client_name: name,
+                            client_phone: c.phone || prev.client_phone,
+                            address: prev.address || c.address || '',
+                            regie_id: prev.regie_id || c.regie_id || '',
+                          }));
+                          setShowClientDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                      >
+                        <div className="font-medium text-sm text-gray-900">{name}</div>
+                        <div className="text-xs text-gray-500">{c.phone || '—'} · {c.address || '—'}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {selectedClientId && (
+              <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1">
+                ✓ Client existant sélectionné — l&apos;intervention sera liée à sa fiche
+              </div>
+            )}
+            <input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={ic} placeholder="📞 Téléphone (optionnel si client existant)" />
           </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">🔑 Clés & Accès</label><textarea name="keys_info" rows={2} value={formData.keys_info} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ex: Clés dans la boîte aux lettres, code 1234..." /></div>
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
