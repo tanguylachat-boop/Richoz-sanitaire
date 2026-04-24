@@ -17,6 +17,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { getApprovedLeaves } from '@/lib/leave-utils';
+import { parseExtractedData, normalizePhone } from '@/lib/parse-extracted-data';
 import { TimeGridView } from '@/components/calendar/TimeGridView';
 import type { LeaveEntry, BirthdayEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import {
@@ -128,22 +129,25 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
 
   const supabase = createClient();
 
-  // Pré-remplir depuis l'email + extracted_data si présent
+  // Pré-remplir depuis l'email + extracted_data si présent.
+  // Parse description pour extraire keys_info / owner / facturation quand l'IA
+  // les noie dedans (cas actuel : 100% des emails n'ont pas ces champs
+  // structurés, voir lib/parse-extracted-data.ts).
   useEffect(() => {
     if (email) {
-      const ed = email.extracted_data;
+      const ed = parseExtractedData(email.extracted_data);
       setFormData((prev) => ({
         ...prev,
-        title: ed?.title || email.subject || '',
-        description: ed?.description || '',
-        address: ed?.address || '',
+        title: ed.title || email.subject || '',
+        description: ed.description || '',
+        address: ed.address || '',
         regie_id: email.regie_id || '',
         work_order_number: email.work_order_number || '',
-        client_name: ed?.tenant_name || '',
-        client_phone: ed?.tenant_phone || '',
-        client_email: ed?.tenant_email || '',
-        priority: ed?.priority === 'urgent' ? 1 : 0,
-        keys_info: ed?.keys_info || '',
+        client_name: ed.tenant_name || '',
+        client_phone: normalizePhone(ed.tenant_phone),
+        client_email: ed.tenant_email || '',
+        priority: ed.priority === 'urgent' ? 1 : 0,
+        keys_info: ed.keys_info || '',
       }));
     }
   }, [email]);
