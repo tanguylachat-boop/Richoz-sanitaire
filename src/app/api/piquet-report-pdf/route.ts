@@ -51,6 +51,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Report not found' }, { status: 404 });
   }
 
+  // If an edited PDF was uploaded back from a Word document, serve that instead
+  if (data.pdf_url) {
+    return NextResponse.redirect(data.pdf_url, 302);
+  }
+
   const r = data as {
     id: string;
     call_received_at: string;

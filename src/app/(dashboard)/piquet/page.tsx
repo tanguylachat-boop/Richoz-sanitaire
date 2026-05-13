@@ -21,7 +21,10 @@ import {
   Receipt,
   Download,
   Archive,
+  FileType,
+  Upload,
 } from 'lucide-react';
+import { useRef } from 'react';
 
 interface Technician {
   id: string;
@@ -76,7 +79,33 @@ export default function PiquetAdminPage() {
   const [historyReports, setHistoryReports] = useState<PiquetReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [uploadingDocxId, setUploadingDocxId] = useState<string | null>(null);
+  const docxInputsRef = useRef<Record<string, HTMLInputElement | null>>({});
   const supabase = createClient();
+
+  const handlePiquetDocxUpload = async (reportId: string, file: File) => {
+    setUploadingDocxId(reportId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/piquet-report-docx?id=${reportId}`, {
+        method: 'POST',
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.detail || json.error || 'Conversion échouée');
+      }
+      toast.success('Word importé et PDF mis à jour ✅');
+    } catch (e) {
+      console.error('Upload piquet Word error', e);
+      toast.error(`Erreur upload Word: ${(e as Error).message}`);
+    } finally {
+      setUploadingDocxId(null);
+      const input = docxInputsRef.current[reportId];
+      if (input) input.value = '';
+    }
+  };
 
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
@@ -397,15 +426,40 @@ export default function PiquetAdminPage() {
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <a
-                        href={`/api/piquet-report-pdf?id=${r.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`/api/piquet-report-pdf?id=${r.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg"
+                        >
+                          <Download className="w-3 h-3" /> PDF
+                        </a>
+                        <a
+                          href={`/api/piquet-report-docx?id=${r.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                        >
+                          <FileType className="w-3 h-3" /> Word
+                        </a>
+                      </div>
+                      <input
+                        ref={(el) => { docxInputsRef.current[r.id] = el; }}
+                        type="file"
+                        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handlePiquetDocxUpload(r.id, f);
+                        }}
+                      />
+                      <button
+                        onClick={() => docxInputsRef.current[r.id]?.click()}
+                        disabled={uploadingDocxId === r.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-lg disabled:opacity-50"
                       >
-                        <Download className="w-3 h-3" />
-                        Télécharger PDF
-                      </a>
+                        {uploadingDocxId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        {uploadingDocxId === r.id ? 'Conversion…' : 'Importer Word édité'}
+                      </button>
                       {r.intervention_id && (
                         <Link href={`/interventions/${r.intervention_id}`} className="text-xs text-blue-600 hover:underline">
                           Voir facture/intervention
@@ -494,15 +548,40 @@ export default function PiquetAdminPage() {
                       <Receipt className="w-3 h-3" />
                       Transformer en facture
                     </button>
-                    <a
-                      href={`/api/piquet-report-pdf?id=${r.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg"
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`/api/piquet-report-pdf?id=${r.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg"
+                      >
+                        <Download className="w-3 h-3" /> PDF
+                      </a>
+                      <a
+                        href={`/api/piquet-report-docx?id=${r.id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                      >
+                        <FileType className="w-3 h-3" /> Word
+                      </a>
+                    </div>
+                    <input
+                      ref={(el) => { docxInputsRef.current[r.id] = el; }}
+                      type="file"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handlePiquetDocxUpload(r.id, f);
+                      }}
+                    />
+                    <button
+                      onClick={() => docxInputsRef.current[r.id]?.click()}
+                      disabled={uploadingDocxId === r.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-lg disabled:opacity-50"
                     >
-                      <Download className="w-3 h-3" />
-                      PDF
-                    </a>
+                      {uploadingDocxId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                      {uploadingDocxId === r.id ? 'Conversion…' : 'Importer Word édité'}
+                    </button>
                     {r.intervention_id && (
                       <Link href={`/interventions/${r.intervention_id}`} className="text-xs text-blue-600 hover:underline">
                         Voir l&apos;intervention

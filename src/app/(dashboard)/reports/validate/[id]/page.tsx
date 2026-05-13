@@ -11,8 +11,9 @@ import {
   ChevronLeft, User, MapPin, Building2, Clock, CheckCircle, XCircle,
   Phone, FileText, Image as ImageIcon, Package,
   CreditCard, Loader2, AlertTriangle, MessageSquare,
-  X, Archive, PenTool, Download,
+  X, Archive, PenTool, Download, Upload, FileType,
 } from 'lucide-react';
+import { useRef } from 'react';
 import { sendPush } from '@/lib/send-push';
 import PhotoAnnotator from '@/components/reports/PhotoAnnotator';
 
@@ -58,6 +59,8 @@ export default function ValidateReportDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [showAnnotator, setShowAnnotator] = useState(false);
+  const [isUploadingDocx, setIsUploadingDocx] = useState(false);
+  const docxInputRef = useRef<HTMLInputElement>(null);
   // Editable fields for secretary
   const [editTextContent, setEditTextContent] = useState('');
   const [editSuppliesText, setEditSuppliesText] = useState('');
@@ -253,6 +256,31 @@ export default function ValidateReportDetailPage() {
     setSelectedPhoto(null);
   };
 
+  const handleDocxUpload = async (file: File) => {
+    if (!report) return;
+    setIsUploadingDocx(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/reports/${report.id}/docx`, {
+        method: 'POST',
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.detail || json.error || 'Conversion échouée');
+      }
+      toast.success('Word importé et PDF mis à jour ✅');
+      setReport({ ...report, pdf_url: json.pdf_url });
+    } catch (e) {
+      console.error('Upload Word error', e);
+      toast.error(`Erreur upload Word: ${(e as Error).message}`);
+    } finally {
+      setIsUploadingDocx(false);
+      if (docxInputRef.current) docxInputRef.current.value = '';
+    }
+  };
+
   // Helper used before report is loaded — declared as function for hoisting
   function getPhotoUrl(path: string): string {
     if (!path) return '';
@@ -378,29 +406,56 @@ export default function ValidateReportDetailPage() {
         </div>
       )}
 
-      {/* PDF Banner */}
-      {report.pdf_url && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <FileText className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900">Rapport PDF</p>
-              <p className="text-sm text-gray-500">Généré à la validation</p>
-            </div>
+      {/* Export Banner — PDF + Word + Upload édité */}
+      <div className="bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+            <FileText className="w-5 h-5 text-blue-700" />
           </div>
-          <a
-            href={report.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 py-2.5 px-5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all active:scale-[0.98] shadow-lg shadow-red-600/30"
-          >
-            <Download className="w-4 h-4" />
-            PDF
-          </a>
+          <div>
+            <p className="font-semibold text-gray-900">Exporter le rapport</p>
+            <p className="text-sm text-gray-500">
+              Télécharge en Word pour éditer, puis remonte le fichier pour mettre à jour le PDF.
+            </p>
+          </div>
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-2">
+          {report.pdf_url && (
+            <a
+              href={report.pdf_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 py-2.5 px-4 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all active:scale-[0.98] shadow-md shadow-red-600/20"
+            >
+              <Download className="w-4 h-4" /> PDF
+            </a>
+          )}
+          <a
+            href={`/api/reports/${report.id}/docx`}
+            className="inline-flex items-center gap-2 py-2.5 px-4 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all active:scale-[0.98] shadow-md shadow-blue-600/20"
+          >
+            <FileType className="w-4 h-4" /> Word
+          </a>
+          <input
+            ref={docxInputRef}
+            type="file"
+            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleDocxUpload(f);
+            }}
+          />
+          <button
+            onClick={() => docxInputRef.current?.click()}
+            disabled={isUploadingDocx}
+            className="inline-flex items-center gap-2 py-2.5 px-4 bg-white border-2 border-blue-200 text-blue-700 rounded-xl font-semibold hover:bg-blue-50 disabled:opacity-50 transition-all"
+          >
+            {isUploadingDocx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {isUploadingDocx ? 'Conversion…' : 'Importer Word édité'}
+          </button>
+        </div>
+      </div>
 
       {/* 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

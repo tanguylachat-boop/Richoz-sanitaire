@@ -277,7 +277,7 @@ async function buildPhotoSection(
 
 // ─── Main generator ──────────────────────────────────────────────────────────
 
-export async function generateReportDocx(data: ReportData): Promise<Blob> {
+async function buildReportDocument(data: ReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [];
 
   // ═══ 1. HEADER ═══
@@ -496,5 +496,17 @@ export async function generateReportDocx(data: ReportData): Promise<Blob> {
     ],
   });
 
+  return doc;
+}
+
+/** Browser variant: returns Blob */
+export async function generateReportDocx(data: ReportData): Promise<Blob> {
+  const doc = await buildReportDocument(data);
   return await Packer.toBlob(doc);
+}
+
+/** Server variant: returns Buffer for Node.js API routes */
+export async function generateReportDocxBuffer(data: ReportData): Promise<Buffer> {
+  const doc = await buildReportDocument(data);
+  return await Packer.toBuffer(doc);
 }
