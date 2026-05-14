@@ -22,6 +22,9 @@ import {
   infoRow,
   imageParagraph,
   downloadImage,
+  PAGE_WIDTH_DXA,
+  COL_LABEL_DXA,
+  COL_VALUE_DXA,
 } from './shared';
 
 export interface PiquetReportData {
@@ -74,14 +77,14 @@ async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
   if (data.clientName) {
     ir.push(infoRow('Client', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
   }
-  children.push(new Table({ rows: ir, width: { size: 100, type: WidthType.PERCENTAGE } }));
+  children.push(new Table({ rows: ir, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
 
   children.push(blueBanner('Horaires'));
   const hr: TableRow[] = [];
   hr.push(infoRow('Appel reçu', data.callReceivedAt));
   if (data.interventionStartedAt) hr.push(infoRow('Début intervention', data.interventionStartedAt));
   if (data.interventionEndedAt) hr.push(infoRow('Fin intervention', data.interventionEndedAt));
-  children.push(new Table({ rows: hr, width: { size: 100, type: WidthType.PERCENTAGE } }));
+  children.push(new Table({ rows: hr, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
 
   if (data.problemDescription) {
     children.push(blueBanner("Constat à l'arrivée"));

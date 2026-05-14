@@ -60,6 +60,12 @@ const BLUE_LIGHT = 'D6E4F0';
 const GRAY = '666666';
 const WHITE = 'FFFFFF';
 
+// A4 layout in twips (twentieths of a point). Word renders tables sized
+// with PERCENTAGE inconsistently, so we use absolute DXA widths.
+const PAGE_WIDTH_DXA = 9600;
+const COL_LABEL_DXA = 2880;
+const COL_VALUE_DXA = 6720;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Blue banner with white text (like the Richoz PDF) */
@@ -141,7 +147,7 @@ function infoRow(label: string, value: string): TableRow {
             children: [new TextRun({ text: label, bold: true, size: 18, font: 'Calibri', color: GRAY })],
           }),
         ],
-        width: { size: 30, type: WidthType.PERCENTAGE },
+        width: { size: COL_LABEL_DXA, type: WidthType.DXA },
         borders: noBorders(),
         shading: { type: ShadingType.SOLID, color: 'F8F8F8' },
       }),
@@ -151,7 +157,7 @@ function infoRow(label: string, value: string): TableRow {
             children: [new TextRun({ text: value, size: 20, font: 'Calibri' })],
           }),
         ],
-        width: { size: 70, type: WidthType.PERCENTAGE },
+        width: { size: COL_VALUE_DXA, type: WidthType.DXA },
         borders: noBorders(),
       }),
     ],
@@ -320,7 +326,8 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   children.push(
     new Table({
       rows: regieRows,
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
+      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
     })
   );
 
@@ -338,7 +345,8 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   children.push(
     new Table({
       rows: locataireRows,
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
+      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
     })
   );
 
@@ -445,7 +453,8 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   children.push(
     new Table({
       rows: dateRows,
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
+      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
     })
   );
 

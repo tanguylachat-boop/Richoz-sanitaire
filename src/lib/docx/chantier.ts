@@ -20,6 +20,9 @@ import {
   placeholder,
   infoRow,
   imageParagraph,
+  PAGE_WIDTH_DXA,
+  COL_LABEL_DXA,
+  COL_VALUE_DXA,
 } from './shared';
 
 export interface ChantierReportData {
@@ -75,7 +78,7 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   if (data.ownerName) ch.push(infoRow('Propriétaire', data.ownerName));
   if (data.clientName) ch.push(infoRow('Contact', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
   if (ch.length > 0) {
-    children.push(new Table({ rows: ch, width: { size: 100, type: WidthType.PERCENTAGE } }));
+    children.push(new Table({ rows: ch, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
   }
 
   children.push(blueBanner('Suivi'));
@@ -87,7 +90,7 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   if (typeof data.progressPercent === 'number') {
     su.push(infoRow('Avancement', `${data.progressPercent} %`));
   }
-  children.push(new Table({ rows: su, width: { size: 100, type: WidthType.PERCENTAGE } }));
+  children.push(new Table({ rows: su, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
 
   children.push(blueBanner('Description des travaux'));
   if (data.textContent && data.textContent.trim()) {

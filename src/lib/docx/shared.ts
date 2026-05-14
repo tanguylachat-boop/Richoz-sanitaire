@@ -10,6 +10,12 @@ import {
   ImageRun,
 } from 'docx';
 
+// Page width in DXA (twentieths of a point) for A4 minus our margins.
+// A4 = 11907 dxa wide. Margins 900 dxa each side. Usable ≈ 10100.
+export const PAGE_WIDTH_DXA = 9600;
+export const COL_LABEL_DXA = 2880; // ~30%
+export const COL_VALUE_DXA = 6720; // ~70%
+
 export const RED = 'C0392B';
 export const BLUE = '2C3E87';
 export const GRAY = '666666';
@@ -67,7 +73,7 @@ export function infoRow(label: string, value: string): TableRow {
             children: [new TextRun({ text: label, bold: true, size: 18, font: 'Calibri', color: GRAY })],
           }),
         ],
-        width: { size: 30, type: WidthType.PERCENTAGE },
+        width: { size: COL_LABEL_DXA, type: WidthType.DXA },
         borders: NO_BORDERS,
         shading: { type: ShadingType.SOLID, color: 'F8F8F8' },
       }),
@@ -77,7 +83,7 @@ export function infoRow(label: string, value: string): TableRow {
             children: [new TextRun({ text: value, size: 20, font: 'Calibri' })],
           }),
         ],
-        width: { size: 70, type: WidthType.PERCENTAGE },
+        width: { size: COL_VALUE_DXA, type: WidthType.DXA },
         borders: NO_BORDERS,
       }),
     ],
