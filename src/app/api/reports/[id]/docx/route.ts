@@ -9,7 +9,7 @@ import { convertDocxToPdf } from '@/lib/docx/convert';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const STORAGE_BUCKET = 'photos';
+const STORAGE_BUCKET = 'documents';
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
