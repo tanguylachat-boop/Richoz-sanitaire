@@ -216,10 +216,11 @@ async function downloadImage(url: string): Promise<ArrayBuffer | null> {
   }
 }
 
-/** Build photo paragraphs with embedded images */
+/** Build photo paragraphs with embedded images + individual labels */
 async function buildPhotoSection(
   photos: { url: string; caption?: string }[],
   emptyText: string,
+  labelPrefix?: string,
 ): Promise<(Paragraph | Table)[]> {
   const result: (Paragraph | Table)[] = [];
 
@@ -228,7 +229,28 @@ async function buildPhotoSection(
     return result;
   }
 
-  for (const photo of photos) {
+  const total = photos.length;
+  for (let i = 0; i < photos.length; i++) {
+    const photo = photos[i];
+
+    if (labelPrefix) {
+      result.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `${labelPrefix} — Photo ${i + 1}/${total}`,
+              bold: true,
+              size: 18,
+              font: 'Calibri',
+              color: BLUE,
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 100, after: 40 },
+        })
+      );
+    }
+
     const imageData = await downloadImage(photo.url);
     if (imageData) {
       result.push(
@@ -412,8 +434,7 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
       children.push(placeholder('(à compléter)'));
     }
   } else {
-    // Unstructured: create all 4 sections with content in "Constat" and placeholders for the rest
-    children.push(redSectionTitle("Constat à l'arrivée"));
+    // Unstructured: render description as plain text (no fake sub-sections)
     if (data.textContent) {
       for (const line of data.textContent.split('\n')) {
         if (line.trim()) children.push(bodyText(line));
@@ -421,15 +442,6 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
     } else {
       children.push(placeholder('(à compléter)'));
     }
-
-    children.push(underlinedTitle('Investigations réalisées'));
-    children.push(placeholder('(à compléter)'));
-
-    children.push(redSectionTitle('Analyse de la situation'));
-    children.push(placeholder('(à compléter)'));
-
-    children.push(underlinedTitle('Conclusion'));
-    children.push(placeholder('(à compléter)'));
   }
 
   // ═══ 5b. FOURNITURES ═══
@@ -462,12 +474,12 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
 
   // ═══ 7. PHOTOS AVANT ═══
   children.push(blueBanner('Photos Avant'));
-  const beforePhotos = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant');
+  const beforePhotos = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant', 'Avant');
   children.push(...beforePhotos);
 
   // ═══ 8. PHOTOS APRÈS ═══
   children.push(blueBanner('Photos Après'));
-  const afterPhotos = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après');
+  const afterPhotos = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après', 'Après');
   children.push(...afterPhotos);
 
   // ═══ 9. SIGNATURE CLIENT ═══
