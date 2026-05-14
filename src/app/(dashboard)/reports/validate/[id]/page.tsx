@@ -34,6 +34,7 @@ interface Report {
   created_at: string;
   client_signature: string | null;
   pdf_url: string | null;
+  docx_url: string | null;
   technician?: {
     id: string; first_name: string; last_name: string; phone: string | null;
   } | null;
@@ -119,21 +120,25 @@ export default function ValidateReportDetailPage() {
         .eq('id', report.id);
       if (saveError) throw saveError;
 
-      // ÉTAPE 1: GÉNÉRER LE PDF RAPPORT
-      try {
-        const pdfResponse = await fetch(
-          process.env.NEXT_PUBLIC_N8N_REPORT_PDF_WEBHOOK || '',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ report_id: report.id }),
+      // ÉTAPE 1: GÉNÉRER LE PDF RAPPORT (skip si un Word édité a déjà été uploadé)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const hasCustomDocx = Boolean((report as any).docx_url);
+      if (!hasCustomDocx) {
+        try {
+          const pdfResponse = await fetch(
+            process.env.NEXT_PUBLIC_N8N_REPORT_PDF_WEBHOOK || '',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ report_id: report.id }),
+            }
+          );
+          if (pdfResponse.ok) {
+            await pdfResponse.json();
           }
-        );
-        if (pdfResponse.ok) {
-          await pdfResponse.json();
+        } catch {
+          // PDF generation is non-blocking
         }
-      } catch {
-        // PDF generation is non-blocking
       }
 
       // ÉTAPE 2: VALIDER LE RAPPORT
@@ -271,7 +276,7 @@ export default function ValidateReportDetailPage() {
         throw new Error(json.detail || json.error || 'Conversion échouée');
       }
       toast.success('Word importé et PDF mis à jour ✅');
-      setReport({ ...report, pdf_url: json.pdf_url });
+      setReport({ ...report, pdf_url: json.pdf_url, docx_url: json.docx_url });
     } catch (e) {
       console.error('Upload Word error', e);
       toast.error(`Erreur upload Word: ${(e as Error).message}`);
