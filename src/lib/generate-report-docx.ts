@@ -28,6 +28,7 @@ export interface ReportData {
   regiePhone?: string;
   regieEmail?: string;
   ownerName?: string;
+  ownerPhone?: string;
   // Locataire
   address?: string;
   clientName?: string;
@@ -342,9 +343,10 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
 
   const regieRows: TableRow[] = [
     infoRow('Propriétaire', data.ownerName || '—'),
+    infoRow('Téléphone propriétaire', data.ownerPhone || '—'),
     infoRow('Régie', data.regieName || '—'),
-    infoRow('Téléphone de contact', data.regiePhone || '—'),
-    infoRow('Email de contact', data.regieEmail || '—'),
+    infoRow('Téléphone régie', data.regiePhone || '—'),
+    infoRow('Email régie', data.regieEmail || '—'),
   ];
 
   children.push(
@@ -355,16 +357,17 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
     })
   );
 
-  // ═══ 4. LOCATAIRE ═══
-  children.push(blueBanner('Locataire — Adresse de l’immeuble'));
+  // ═══ 4. ADRESSE DE L'IMMEUBLE ═══
+  children.push(blueBanner('Adresse de l’immeuble'));
 
   const locataireRows: TableRow[] = [
-    infoRow('Dans l’immeuble', data.address || '—'),
-    infoRow('Locataire', data.clientName || '—'),
-    infoRow('Téléphone', data.clientPhone || '—'),
-    infoRow('Email', data.clientEmail || '—'),
+    infoRow('Adresse', data.address || '—'),
     infoRow('Clés', data.keysInfo || '—'),
   ];
+  // Show locataire-specific rows only if we actually have separate tenant data
+  if (data.clientName) locataireRows.splice(1, 0, infoRow('Locataire', data.clientName));
+  if (data.clientPhone) locataireRows.splice(2, 0, infoRow('Téléphone locataire', data.clientPhone));
+  if (data.clientEmail) locataireRows.splice(3, 0, infoRow('Email locataire', data.clientEmail));
 
   children.push(
     new Table({

@@ -68,11 +68,14 @@ async function buildDepannageDocx(r: any): Promise<{ buffer: Buffer; filename: s
     regieName: regie.name || undefined,
     regiePhone: regie.phone || undefined,
     regieEmail: regie.email_contact || undefined,
-    ownerName: undefined,
+    // In Richoz workflow, the "client" on the intervention IS the property owner.
+    ownerName: clientInfo.name || undefined,
+    ownerPhone: clientInfo.phone || undefined,
     address: intervention.address || undefined,
-    clientName: clientInfo.name || undefined,
-    clientPhone: clientInfo.phone || undefined,
-    clientEmail: clientInfo.email || undefined,
+    // Tenant-specific data isn't tracked separately yet — leave blank.
+    clientName: undefined,
+    clientPhone: undefined,
+    clientEmail: undefined,
     keysInfo: intervention.keys_info || undefined,
     technicianName: [technician.first_name, technician.last_name].filter(Boolean).join(' ') || '—',
     technicianPhone: technician.phone || undefined,
