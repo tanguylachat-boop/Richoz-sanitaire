@@ -35,7 +35,7 @@ async function fetchReport(id: string) {
     .from('reports')
     .select(
       `*, technician:users!reports_technician_id_fkey(id, first_name, last_name, phone),
-       intervention:interventions(id, title, description, address, date_planned, work_order_number, intervention_type, client_info, regie:regies(id, name, phone, email))`
+       intervention:interventions(id, title, description, address, date_planned, work_order_number, intervention_type, client_info, regie:regies(id, name, phone, email_contact))`
     )
     .eq('id', id)
     .single();
@@ -67,7 +67,7 @@ async function buildDepannageDocx(r: any): Promise<{ buffer: Buffer; filename: s
     workOrderNumber: intervention.work_order_number || undefined,
     regieName: regie.name || undefined,
     regiePhone: regie.phone || undefined,
-    regieEmail: regie.email || undefined,
+    regieEmail: regie.email_contact || undefined,
     ownerName: undefined,
     address: intervention.address || undefined,
     clientName: clientInfo.name || undefined,
