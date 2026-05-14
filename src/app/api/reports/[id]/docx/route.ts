@@ -35,7 +35,7 @@ async function fetchReport(id: string) {
     .from('reports')
     .select(
       `*, technician:users!reports_technician_id_fkey(id, first_name, last_name, phone),
-       intervention:interventions(id, title, description, address, date_planned, work_order_number, intervention_type, client_info, regie:regies(id, name, phone, email_contact))`
+       intervention:interventions(id, title, description, address, date_planned, work_order_number, intervention_type, client_info, keys_info, regie:regies(id, name, phone, email_contact))`
     )
     .eq('id', id)
     .single();
@@ -72,6 +72,8 @@ async function buildDepannageDocx(r: any): Promise<{ buffer: Buffer; filename: s
     address: intervention.address || undefined,
     clientName: clientInfo.name || undefined,
     clientPhone: clientInfo.phone || undefined,
+    clientEmail: clientInfo.email || undefined,
+    keysInfo: intervention.keys_info || undefined,
     technicianName: [technician.first_name, technician.last_name].filter(Boolean).join(' ') || '—',
     technicianPhone: technician.phone || undefined,
     datePlanned: intervention.date_planned ? fmtDate(intervention.date_planned) : undefined,
@@ -84,6 +86,7 @@ async function buildDepannageDocx(r: any): Promise<{ buffer: Buffer; filename: s
     suppliesText: r.supplies_text || undefined,
     photosBefore: hasCats ? before : uncategorized,
     photosAfter: hasCats ? after : [],
+    clientSignature: r.client_signature || null,
   };
 
   const buffer = await generateReportDocxBuffer(data);

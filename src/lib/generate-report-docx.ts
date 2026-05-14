@@ -50,6 +50,8 @@ export interface ReportData {
   // Photos (URLs)
   photosBefore?: { url: string; caption?: string }[];
   photosAfter?: { url: string; caption?: string }[];
+  // Signature (data URL or public URL)
+  clientSignature?: string | null;
 }
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -316,12 +318,12 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   // ═══ 3. PROPRIÉTAIRE & RÉGIE ═══
   children.push(blueBanner('Propriétaire & Régie'));
 
-  const regieRows: TableRow[] = [];
-  if (data.ownerName) regieRows.push(infoRow('Propriétaire', data.ownerName));
-  if (data.regieName) regieRows.push(infoRow('Régie', data.regieName));
-  if (data.regiePhone) regieRows.push(infoRow('Téléphone', data.regiePhone));
-  if (data.regieEmail) regieRows.push(infoRow('Email', data.regieEmail));
-  if (regieRows.length === 0) regieRows.push(infoRow('Régie', data.regieName || '—'));
+  const regieRows: TableRow[] = [
+    infoRow('Propriétaire', data.ownerName || '—'),
+    infoRow('Régie', data.regieName || '—'),
+    infoRow('Téléphone de contact', data.regiePhone || '—'),
+    infoRow('Email de contact', data.regieEmail || '—'),
+  ];
 
   children.push(
     new Table({
@@ -332,15 +334,15 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   );
 
   // ═══ 4. LOCATAIRE ═══
-  children.push(blueBanner('Locataire'));
+  children.push(blueBanner('Locataire — Adresse de l’immeuble'));
 
-  const locataireRows: TableRow[] = [];
-  if (data.address) locataireRows.push(infoRow('Adresse', data.address));
-  if (data.clientName) locataireRows.push(infoRow('Locataire', data.clientName));
-  if (data.clientPhone) locataireRows.push(infoRow('Téléphone', data.clientPhone));
-  if (data.clientEmail) locataireRows.push(infoRow('Email', data.clientEmail));
-  if (data.keysInfo) locataireRows.push(infoRow('Clés', data.keysInfo));
-  if (locataireRows.length === 0) locataireRows.push(infoRow('Adresse', data.address || '—'));
+  const locataireRows: TableRow[] = [
+    infoRow('Dans l’immeuble', data.address || '—'),
+    infoRow('Locataire', data.clientName || '—'),
+    infoRow('Téléphone', data.clientPhone || '—'),
+    infoRow('Email', data.clientEmail || '—'),
+    infoRow('Clés', data.keysInfo || '—'),
+  ];
 
   children.push(
     new Table({
@@ -467,6 +469,31 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   children.push(blueBanner('Photos Après'));
   const afterPhotos = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après');
   children.push(...afterPhotos);
+
+  // ═══ 9. SIGNATURE CLIENT ═══
+  children.push(blueBanner('Signature Client'));
+  if (data.clientSignature) {
+    const sigData = await downloadImage(data.clientSignature);
+    if (sigData) {
+      children.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new ImageRun({
+              data: sigData,
+              transformation: { width: 300, height: 110 },
+              type: 'png',
+            }),
+          ],
+          spacing: { after: 100 },
+        })
+      );
+    } else {
+      children.push(placeholder('Signature non disponible'));
+    }
+  } else {
+    children.push(placeholder('Non signé'));
+  }
 
   // ═══ DOCUMENT ═══
   const doc = new Document({
