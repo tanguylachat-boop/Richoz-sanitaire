@@ -207,15 +207,36 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   const supabase = createAdminClient();
 
   let docxBuffer: Buffer;
+  let fileName = 'report.docx';
   try {
     const form = await req.formData();
     const file = form.get('file');
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
     }
+    if (file instanceof File && file.name) fileName = file.name;
     docxBuffer = Buffer.from(await file.arrayBuffer());
   } catch {
     return NextResponse.json({ error: 'Invalid multipart body' }, { status: 400 });
+  }
+
+  // Reject anything that isn't a real .docx (zip starts with PK\x03\x04)
+  const isZip =
+    docxBuffer.length > 4 &&
+    docxBuffer[0] === 0x50 &&
+    docxBuffer[1] === 0x4b &&
+    docxBuffer[2] === 0x03 &&
+    docxBuffer[3] === 0x04;
+  if (!isZip) {
+    const looksLikePdf = docxBuffer.slice(0, 4).toString('utf8') === '%PDF';
+    return NextResponse.json(
+      {
+        error: looksLikePdf
+          ? 'Le fichier envoyé est un PDF. Merci d’uploader le fichier Word (.docx) édité, pas le PDF.'
+          : `Format de fichier non supporté (${fileName}). Seul un fichier Word .docx est accepté.`,
+      },
+      { status: 400 }
+    );
   }
 
   try {
