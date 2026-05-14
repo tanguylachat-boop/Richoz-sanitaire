@@ -4,7 +4,8 @@ import type { Invoice, InvoiceStatus } from '@/types/database';
 import Link from 'next/link';
 import { InvoiceStatusSelect } from '@/components/invoices/InvoiceStatusSelect';
 import { InvoiceFilterButton } from '@/components/invoices/InvoiceFilterButton';
-import { FileText, Search, ExternalLink, Send, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Search, ExternalLink, Send, CheckCircle, Clock, AlertTriangle, RefreshCcw, Plus } from 'lucide-react';
+import { SyncBexioButton } from '@/components/invoices/SyncBexioButton';
 
 const VALID_FILTERS = ['generated', 'sent', 'paid', 'overdue'] as const;
 const OVERDUE_DAYS = 30;
@@ -70,15 +71,36 @@ export default async function InvoicesPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: allInvoicesData } = await (supabase as any)
     .from('invoices')
-    .select('status, amount_total');
+    .select('status, amount_total, due_date, payment_status');
 
-  const allInvoices = (allInvoicesData as Pick<Invoice, 'status' | 'amount_total'>[] | null) ?? [];
+  const allInvoices = (allInvoicesData as (Pick<Invoice, 'status' | 'amount_total'> & {
+    due_date: string | null;
+    payment_status: string | null;
+  })[] | null) ?? [];
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const overdueCount = allInvoices.filter(
+    (i) =>
+      (i.payment_status === 'overdue' ||
+        (i.status === 'sent' && i.due_date && i.due_date < todayISO))
+  ).length;
+
+  // Count interventions ready to bill but without an invoice yet
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: toBillData } = await (supabase as any)
+    .from('interventions')
+    .select('id, invoices(id)')
+    .eq('status', 'ready_to_bill');
+  const toBillCount = ((toBillData as { id: string; invoices: { id: string }[] }[] | null) || [])
+    .filter((r) => !r.invoices || r.invoices.length === 0).length;
 
   const stats = {
     total: allInvoices.length,
     generated: allInvoices.filter((i) => i.status === 'generated').length,
     sent: allInvoices.filter((i) => i.status === 'sent').length,
     paid: allInvoices.filter((i) => i.status === 'paid').length,
+    overdue: overdueCount,
+    toBill: toBillCount,
     totalAmount: allInvoices.reduce((acc, i) => acc + (i.amount_total || 0), 0),
     paidAmount: allInvoices
       .filter((i) => i.status === 'paid')
@@ -87,6 +109,46 @@ export default async function InvoicesPage({
 
   return (
     <div className="space-y-6">
+      {/* Action banner : à facturer + sync Bexio */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/invoices/to-bill"
+          className={`flex items-center justify-between gap-4 rounded-2xl border p-5 shadow-sm transition-colors ${
+            stats.toBill > 0
+              ? 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 hover:border-amber-300'
+              : 'bg-white border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${stats.toBill > 0 ? 'bg-amber-100' : 'bg-gray-100'}`}>
+              <Plus className={`w-5 h-5 ${stats.toBill > 0 ? 'text-amber-700' : 'text-gray-500'}`} />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                {stats.toBill} intervention{stats.toBill !== 1 ? 's' : ''} à facturer
+              </p>
+              <p className="text-sm text-gray-500">
+                Rapports validés en attente de création de facture Bexio
+              </p>
+            </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-gray-400" />
+        </Link>
+
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
+              <RefreshCcw className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Synchronisation Bexio</p>
+              <p className="text-sm text-gray-500">Mise à jour automatique toutes les 30 min</p>
+            </div>
+          </div>
+          <SyncBexioButton />
+        </div>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm">
@@ -125,17 +187,24 @@ export default async function InvoicesPage({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm">
+        <Link
+          href="/invoices?status=overdue"
+          className={`rounded-2xl border p-5 shadow-sm transition-colors ${
+            stats.overdue > 0
+              ? 'bg-red-50 border-red-200 hover:border-red-300'
+              : 'bg-white border-gray-200/80 hover:border-gray-300'
+          }`}
+        >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stats.overdue > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
+              <AlertTriangle className={`w-6 h-6 ${stats.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">{formatCHF(stats.paidAmount)}</p>
-              <p className="text-sm text-gray-500">Encaissé</p>
+              <p className={`text-2xl font-bold ${stats.overdue > 0 ? 'text-red-700' : 'text-gray-900'}`}>{stats.overdue}</p>
+              <p className="text-sm text-gray-500">En retard</p>
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* Header Actions */}

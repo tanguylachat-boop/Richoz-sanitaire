@@ -62,7 +62,17 @@
       "Bash(git diff:*)",
       "Bash(git rev-list:*)",
       "Bash(wc:*)",
-      "mcp__plugin_supabase_supabase__apply_migration"
+      "mcp__plugin_supabase_supabase__apply_migration",
+      "Read(//private/tmp/ref-rapport/word/**)",
+      "Read(//tmp/ref-rapport/word/**)",
+      "Bash(rm -rf /tmp/refdoc)",
+      "Bash(mkdir /tmp/refdoc)",
+      "Bash(unzip -q /tmp/ref.docx -d /tmp/refdoc)",
+      "Bash(cp \"/Users/tanguylachat/Downloads/Rapport_intervention 5.docx\" /Users/tanguylachat/n8n/ics-sanitaire/.tmp-ref.docx)",
+      "Bash(unzip -q .tmp-ref.docx -d .tmp-ref)",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "Bash(unzip -q .tmp-out.docx -d .tmp-out)",
+      "Bash(xxd)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,0 +1,19 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-bexio-invoices",
+      "schedule": "*/30 * * * *"
+    }
+  ],
+  "functions": {
+    "src/app/api/cron/sync-bexio-invoices/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/reports/[id]/docx/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/piquet-report-docx/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
