@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { fr } from 'date-fns/locale';
+
+const TZ = 'Europe/Zurich';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import { generateReportDocxBuffer, type ReportData } from '@/lib/generate-report-docx';
 import { generateChantierDocxBuffer, type ChantierReportData } from '@/lib/docx/chantier';
@@ -14,7 +16,7 @@ const STORAGE_BUCKET = 'documents';
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    return format(new Date(iso), "d MMMM yyyy 'à' HH:mm", { locale: fr });
+    return formatInTimeZone(new Date(iso), TZ, "d MMMM yyyy 'à' HH:mm", { locale: fr });
   } catch {
     return iso || '—';
   }
