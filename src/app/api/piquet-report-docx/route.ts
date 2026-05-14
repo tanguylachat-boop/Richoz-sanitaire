@@ -1,7 +1,4 @@
 import { NextResponse } from 'next/server';
-import { formatInTimeZone } from 'date-fns-tz';
-import { fr } from 'date-fns/locale';
-
 const TZ = 'Europe/Zurich';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import { generatePiquetDocxBuffer, type PiquetReportData } from '@/lib/docx/piquet';
@@ -15,7 +12,19 @@ const STORAGE_BUCKET = 'documents';
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    return formatInTimeZone(new Date(iso), TZ, "d MMMM yyyy 'à' HH:mm", { locale: fr });
+    const d = new Date(iso);
+    const date = d.toLocaleDateString('fr-CH', {
+      timeZone: TZ,
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const time = d.toLocaleTimeString('fr-CH', {
+      timeZone: TZ,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `${date} à ${time}`;
   } catch {
     return iso || '—';
   }
