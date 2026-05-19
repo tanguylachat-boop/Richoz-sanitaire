@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { formatCHF } from '@/lib/utils';
+import { CreateBexioInvoiceButton } from '@/components/invoices/CreateBexioInvoiceButton';
 import {
   ChevronLeft,
   Building,
@@ -9,7 +10,6 @@ import {
   Calendar,
   Clock,
   FileText,
-  Plus,
 } from 'lucide-react';
 
 interface ReadyIntervention {
@@ -41,7 +41,7 @@ export default async function ToBillPage() {
        invoices(id),
        reports(id, work_duration_minutes, supplies_text, text_content)`
     )
-    .eq('status', 'ready_to_bill')
+    .in('status', ['ready_to_bill', 'billing_in_progress'])
     .order('date_planned', { ascending: true });
 
   if (error) {
@@ -164,14 +164,7 @@ export default async function ToBillPage() {
                     <FileText className="w-3.5 h-3.5" />
                     Voir le rapport
                   </Link>
-                  <button
-                    disabled
-                    title="Disponible en Phase 2"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors ml-auto"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Créer facture Bexio
-                  </button>
+                  <CreateBexioInvoiceButton interventionId={r.id} />
                 </div>
               </div>
             );

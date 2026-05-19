@@ -4,7 +4,9 @@ import type { BexioInvoice, BexioInvoiceCreate } from './types';
 const BASE = '/2.0/kb_invoice';
 
 export async function listInvoices(limit = 500): Promise<BexioInvoice[]> {
-  return bexioList<BexioInvoice>(`${BASE}?order_by=is_valid_from_desc`, limit);
+  // Bexio's kb_invoice endpoint rejects most order_by values with 400.
+  // We sort client-side in the cron after fetching.
+  return bexioList<BexioInvoice>(BASE, limit);
 }
 
 export async function getInvoice(id: number): Promise<BexioInvoice> {
