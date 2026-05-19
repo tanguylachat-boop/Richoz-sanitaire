@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-bexio-invoices",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 6 * * *"
     }
   ],
   "functions": {
