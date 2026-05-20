@@ -9,6 +9,7 @@ export const maxDuration = 60;
 const HOURLY_RATE_CHF = 110;
 const VAT_RATE = 8.1;
 const PAYMENT_DAYS = 30;
+const HOUR_UNIT_ID = 2; // Bexio /2.0/unit → "h" (id 2 is the default Stunde/heure unit)
 
 interface Material {
   name?: string;
@@ -119,7 +120,7 @@ function buildPositions(
     positions.push({
       type: 'KbPositionCustom',
       amount: hours,
-      unit_name: 'h',
+      unit_id: HOUR_UNIT_ID,
       tax_id: taxId,
       text: `Main d'œuvre — ${minutes} min`,
       unit_price: HOURLY_RATE_CHF.toFixed(2),
@@ -323,12 +324,9 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const err = e as Error & { status?: number; body?: unknown };
-    const bodyStr = JSON.stringify(err.body ?? {});
-    console.error(`[BEXIO-ERR] status=${err.status} message=${err.message}`);
-    // Split body into 80-char chunks so the Vercel logs preview shows it all
-    for (let i = 0; i < bodyStr.length; i += 80) {
-      console.error(`[BEXIO-BODY-${String(i / 80).padStart(2, '0')}] ${bodyStr.slice(i, i + 80)}`);
-    }
+    console.error(
+      `[BEXIO-ERR] status=${err.status} message=${err.message} body=${JSON.stringify(err.body)}`
+    );
     return NextResponse.json(
       {
         error: 'Échec création facture Bexio',
