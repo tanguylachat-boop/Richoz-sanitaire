@@ -254,7 +254,7 @@ export async function POST(req: Request) {
       title: titleParts.join(' — '),
       contact_id: bexioContactId,
       user_id: bexioUserId,
-      mwst_type: 0, // net incl. (TVA exclue, ajoutée sur le total)
+      mwst_type: 1, // tax excluded: unit_price is net, VAT added on top
       mwst_is_net: true,
       show_position_taxes: false,
       is_valid_from: today,
@@ -323,11 +323,19 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const err = e as Error & { status?: number; body?: unknown };
-    console.error('Bexio invoice creation failed', err);
+    console.error(
+      'Bexio invoice creation failed:',
+      err.message,
+      'status=',
+      err.status,
+      'body=',
+      JSON.stringify(err.body)
+    );
     return NextResponse.json(
       {
         error: 'Échec création facture Bexio',
         detail: err.message,
+        status: err.status,
         bexio: err.body,
       },
       { status: 500 }
