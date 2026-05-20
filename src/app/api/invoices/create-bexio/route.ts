@@ -1,21 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
 import { Contacts, Invoices, Taxes } from '@/lib/bexio';
-import { BEXIO_STATUS_TO_PAYMENT, type BexioInvoicePosition } from '@/lib/bexio/types';
+import { BEXIO_STATUS_TO_PAYMENT } from '@/lib/bexio/types';
+import {
+  HOURLY_RATE_CHF,
+  VAT_RATE,
+  PAYMENT_DAYS,
+  toBexioPositions,
+  type MaterialInput,
+} from '@/lib/invoice-positions';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
-
-const HOURLY_RATE_CHF = 110;
-const VAT_RATE = 8.1;
-const PAYMENT_DAYS = 30;
-const HOUR_UNIT_ID = 2; // Bexio /2.0/unit → "h" (id 2 is the default Stunde/heure unit)
-
-interface Material {
-  name?: string;
-  quantity?: number;
-  unit_price?: number;
-}
 
 interface Regie {
   id: string;
@@ -31,7 +27,7 @@ interface Report {
   id: string;
   work_duration_minutes: number | null;
   supplies_text: string | null;
-  materials_used: Material[] | null;
+  materials_used: MaterialInput[] | null;
   text_content: string | null;
 }
 
@@ -46,6 +42,14 @@ interface Intervention {
   regie: Regie | null;
   reports: Report[];
   invoices: { id: string }[];
+}
+
+interface CreateBody {
+  intervention_id?: string;
+  // Optional overrides from the preview UI
+  work_duration_minutes?: number;
+  hourly_rate_chf?: number;
+  materials?: MaterialInput[];
 }
 
 function todayZurichISO(): string {
@@ -74,9 +78,10 @@ async function resolveBexioContact(
 ): Promise<number> {
   if (regie.bexio_contact_id) return regie.bexio_contact_id;
 
-  // Try to find an existing contact by exact name match first.
   const found = await Contacts.searchContacts(regie.name);
-  const exact = found.find((c) => c.name_1.trim().toLowerCase() === regie.name.trim().toLowerCase());
+  const exact = found.find(
+    (c) => c.name_1.trim().toLowerCase() === regie.name.trim().toLowerCase()
+  );
   if (exact) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
@@ -86,13 +91,11 @@ async function resolveBexioContact(
     return exact.id;
   }
 
-  // Otherwise create one. Bexio expects address fields split, but we only
-  // have a free-text address; pass the whole string as `address`.
   const created = await Contacts.createContact({
-    contact_type_id: 1, // company
+    contact_type_id: 1,
     name_1: regie.name,
     address: regie.address || undefined,
-    country_id: 1, // Switzerland
+    country_id: 1,
     mail: regie.billing_email || regie.email_contact || undefined,
     user_id: bexioUserId,
     owner_id: bexioUserId,
@@ -107,60 +110,8 @@ async function resolveBexioContact(
   return created.id;
 }
 
-function buildPositions(
-  report: Report,
-  discountPct: number,
-  taxId: number | undefined
-): BexioInvoicePosition[] {
-  const positions: BexioInvoicePosition[] = [];
-
-  const minutes = report.work_duration_minutes || 0;
-  if (minutes > 0) {
-    const hours = +(minutes / 60).toFixed(2);
-    positions.push({
-      type: 'KbPositionCustom',
-      amount: hours,
-      unit_id: HOUR_UNIT_ID,
-      tax_id: taxId,
-      text: `Main d'œuvre — ${minutes} min`,
-      unit_price: HOURLY_RATE_CHF.toFixed(2),
-      discount_in_percent: discountPct || 0,
-    });
-  }
-
-  const materials = Array.isArray(report.materials_used) ? report.materials_used : [];
-  for (const m of materials) {
-    if (!m?.name) continue;
-    const qty = Number(m.quantity) || 1;
-    const price = Number(m.unit_price) || 0;
-    positions.push({
-      type: 'KbPositionCustom',
-      amount: qty,
-      tax_id: taxId,
-      text: m.name,
-      unit_price: price.toFixed(2),
-      discount_in_percent: discountPct || 0,
-    });
-  }
-
-  // Fallback: free-text supplies without prices → one position priced at 0
-  // so the admin can edit it directly in Bexio before sending.
-  if (materials.length === 0 && report.supplies_text?.trim()) {
-    positions.push({
-      type: 'KbPositionCustom',
-      amount: 1,
-      tax_id: taxId,
-      text: `Fournitures : ${report.supplies_text.trim()}`,
-      unit_price: '0.00',
-      discount_in_percent: discountPct || 0,
-    });
-  }
-
-  return positions;
-}
-
 export async function POST(req: Request) {
-  let body: { intervention_id?: string };
+  let body: CreateBody;
   try {
     body = await req.json();
   } catch {
@@ -226,6 +177,21 @@ export async function POST(req: Request) {
     );
   }
 
+  // Resolve final draft: prefer body overrides, fall back to report data
+  const workMinutes =
+    typeof body.work_duration_minutes === 'number'
+      ? body.work_duration_minutes
+      : report.work_duration_minutes || 0;
+  const hourlyRate =
+    typeof body.hourly_rate_chf === 'number' && body.hourly_rate_chf > 0
+      ? body.hourly_rate_chf
+      : HOURLY_RATE_CHF;
+  const materials: MaterialInput[] = Array.isArray(body.materials)
+    ? body.materials.filter((m) => m && m.name?.trim())
+    : Array.isArray(report.materials_used)
+      ? report.materials_used.filter((m) => m && m.name?.trim())
+      : [];
+
   try {
     const bexioContactId = await resolveBexioContact(iv.regie, supabase, bexioUserId);
 
@@ -235,7 +201,11 @@ export async function POST(req: Request) {
     }
 
     const discountPct = Number(iv.regie.discount_percentage) || 0;
-    const positions = buildPositions(report, discountPct, tax?.id);
+    const positions = toBexioPositions(
+      { work_duration_minutes: workMinutes, hourly_rate_chf: hourlyRate, materials },
+      discountPct,
+      tax?.id
+    );
 
     if (positions.length === 0) {
       return NextResponse.json(
@@ -255,7 +225,7 @@ export async function POST(req: Request) {
       title: titleParts.join(' — '),
       contact_id: bexioContactId,
       user_id: bexioUserId,
-      mwst_type: 1, // tax excluded: unit_price is net, VAT added on top
+      mwst_type: 1,
       mwst_is_net: true,
       show_position_taxes: false,
       is_valid_from: today,
@@ -264,6 +234,21 @@ export async function POST(req: Request) {
       api_reference: `intervention:${iv.id}`,
       positions,
     });
+
+    // Back-sync edited values into the report so the PDF/audit trail stays consistent
+    if (
+      body.work_duration_minutes !== undefined ||
+      body.materials !== undefined
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('reports')
+        .update({
+          work_duration_minutes: workMinutes,
+          materials_used: materials,
+        })
+        .eq('id', report.id);
+    }
 
     const status = BEXIO_STATUS_TO_PAYMENT[created.kb_item_status_id] ?? 'draft';
     const subtotal = Number(created.total_net) || 0;
@@ -298,7 +283,6 @@ export async function POST(req: Request) {
 
     if (insertError) {
       console.error('Local invoice insert failed after Bexio create', insertError);
-      // Bexio invoice already exists — return its id so the user can recover.
       return NextResponse.json(
         {
           error: 'Facture créée dans Bexio mais échec d\'enregistrement local',
@@ -315,12 +299,48 @@ export async function POST(req: Request) {
       .update({ status: 'billed' })
       .eq('id', iv.id);
 
+    // Fetch the Bexio-generated PDF and upload to Supabase Storage so the
+    // admin can preview it directly in the dashboard. Failure here is
+    // non-blocking — the invoice is already created.
+    let pdfUrl: string | null = null;
+    try {
+      const pdfBuffer = await Invoices.downloadPdf(created.id);
+      const path = `invoices/${invoiceRow.id}.pdf`;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: uploadError } = await (supabase as any).storage
+        .from('documents')
+        .upload(path, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Bexio PDF upload to Supabase failed', uploadError);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: pub } = (supabase as any).storage
+          .from('documents')
+          .getPublicUrl(path);
+        pdfUrl = pub?.publicUrl ?? null;
+        if (pdfUrl) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any)
+            .from('invoices')
+            .update({ pdf_url: pdfUrl })
+            .eq('id', invoiceRow.id);
+        }
+      }
+    } catch (pdfErr) {
+      console.error('Bexio PDF fetch failed', pdfErr);
+    }
+
     return NextResponse.json({
       ok: true,
       invoice_id: invoiceRow?.id,
       bexio_id: created.id,
       bexio_number: created.document_nr,
       total,
+      pdf_url: pdfUrl,
     });
   } catch (e) {
     const err = e as Error & { status?: number; body?: unknown };

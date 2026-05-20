@@ -124,6 +124,28 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
+      {/* PDF viewer inline */}
+      {invoice.pdf_url && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">PDF de la facture</h2>
+            <a
+              href={invoice.pdf_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:text-blue-800"
+            >
+              Ouvrir dans un nouvel onglet ↗
+            </a>
+          </div>
+          <iframe
+            src={invoice.pdf_url}
+            className="w-full h-[80vh] bg-gray-50"
+            title={`Facture ${invoice.invoice_number}`}
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Client */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
