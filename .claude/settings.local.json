@@ -72,7 +72,11 @@
       "Bash(unzip -q .tmp-ref.docx -d .tmp-ref)",
       "mcp__plugin_supabase_supabase__execute_sql",
       "Bash(unzip -q .tmp-out.docx -d .tmp-out)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "mcp__claude_ai_n8n__search_workflows",
+      "mcp__plugin_vercel-plugin_vercel__list_deployments",
+      "mcp__plugin_vercel-plugin_vercel__get_runtime_logs",
+      "mcp__plugin_vercel-plugin_vercel__get_deployment"
     ]
   },
   "enableAllProjectMcpServers": true,

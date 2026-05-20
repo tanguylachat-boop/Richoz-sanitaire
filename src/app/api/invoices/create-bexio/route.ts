@@ -323,14 +323,12 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const err = e as Error & { status?: number; body?: unknown };
-    console.error(
-      'Bexio invoice creation failed:',
-      err.message,
-      'status=',
-      err.status,
-      'body=',
-      JSON.stringify(err.body)
-    );
+    const bodyStr = JSON.stringify(err.body ?? {});
+    console.error(`[BEXIO-ERR] status=${err.status} message=${err.message}`);
+    // Split body into 80-char chunks so the Vercel logs preview shows it all
+    for (let i = 0; i < bodyStr.length; i += 80) {
+      console.error(`[BEXIO-BODY-${String(i / 80).padStart(2, '0')}] ${bodyStr.slice(i, i + 80)}`);
+    }
     return NextResponse.json(
       {
         error: 'Échec création facture Bexio',
