@@ -17,7 +17,8 @@ export const COL_LABEL_DXA = 2880; // ~30%
 export const COL_VALUE_DXA = 6720; // ~70%
 
 export const RED = 'C0392B';
-export const BLUE = '2C3E87';
+export const BLUE = '1F4E9C';
+export const GREEN = '6FB23A';
 export const GRAY = '666666';
 export const WHITE = 'FFFFFF';
 
@@ -136,11 +137,11 @@ export function brandHeader(): Paragraph[] {
   return [
     new Paragraph({
       children: [
-        new TextRun({ text: 'RICHOZ ', bold: true, size: 36, color: RED, font: 'Calibri' }),
-        new TextRun({ text: 'SANITAIRE', bold: true, size: 36, color: BLUE, font: 'Calibri' }),
+        new TextRun({ text: 'RICHOZ ', bold: true, size: 48, color: BLUE, font: 'Calibri' }),
+        new TextRun({ text: 'SANITAIRE', bold: true, size: 48, color: GREEN, font: 'Calibri' }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 50 },
+      spacing: { after: 80 },
     }),
   ];
 }

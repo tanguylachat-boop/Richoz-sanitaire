@@ -8,14 +8,14 @@ import {
   WidthType,
   AlignmentType,
   BorderStyle,
+  Header,
   Footer,
   PageNumber,
   Packer,
   ShadingType,
-  TabStopPosition,
-  TabStopType,
   ImageRun,
 } from 'docx';
+import { buildWatermarkParagraph } from './docx/watermark';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,76 +56,61 @@ export interface ReportData {
 }
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
+// Matched against the Richoz reference PDF (1 823 591.pdf)
 
-const RED = 'C0392B';
-const BLUE = '2C3E87';
-const BLUE_LIGHT = 'D6E4F0';
+const BLUE = '1F4E9C';        // RICHOZ + section ribbons (royal blue)
+const GREEN = '6FB23A';        // SANITAIRE (vivid leaf green)
 const GRAY = '666666';
 const WHITE = 'FFFFFF';
 
-// A4 layout in twips (twentieths of a point). Word renders tables sized
-// with PERCENTAGE inconsistently, so we use absolute DXA widths.
+// A4 layout in twips (twentieths of a point).
 const PAGE_WIDTH_DXA = 9600;
-const COL_LABEL_DXA = 2880;
-const COL_VALUE_DXA = 6720;
+const COL_LABEL_DXA = 3200;
+const COL_VALUE_DXA = 6400;
+
+// Footer text reused on every page
+const COMPANY_FOOTER =
+  'RICHOZ SANITAIRE   50 Route de Chancy   1213 Petit-Lancy   info@richoz-sanitaire.ch   +41 22 313 00 27';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Blue banner with white text (like the Richoz PDF) */
-function blueBanner(text: string): Paragraph {
+/**
+ * Centered blue section banner (white text on blue), matching the Richoz
+ * PDF section headers like "Bon de travail numéro : 1 823 591".
+ */
+function blueBanner(text: string, valueSuffix?: string): Paragraph {
+  const children = [
+    new TextRun({ text, bold: true, size: 24, color: WHITE, font: 'Calibri' }),
+  ];
+  if (valueSuffix) {
+    children.push(
+      new TextRun({ text: '   ', size: 24, color: WHITE, font: 'Calibri' }),
+      new TextRun({ text: valueSuffix, size: 22, color: WHITE, font: 'Calibri' })
+    );
+  }
   return new Paragraph({
-    children: [
-      new TextRun({
-        text: `  ${text}`,
-        bold: true,
-        size: 22,
-        color: WHITE,
-        font: 'Calibri',
-      }),
-    ],
+    children,
     shading: { type: ShadingType.SOLID, color: BLUE },
-    spacing: { before: 300, after: 150 },
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 280, after: 140 },
   });
 }
 
-/** Red bold section title (Constat, Analyse...) */
-function redSectionTitle(text: string): Paragraph {
+/** Blue sub-section header with optional emoji icon, like "🏠 Propriétaire & Régie" */
+function sectionLabel(icon: string, text: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({
-        text,
-        bold: true,
-        size: 22,
-        color: RED,
-        font: 'Calibri',
-      }),
+      new TextRun({ text: `${icon} `, size: 22, font: 'Segoe UI Emoji' }),
+      new TextRun({ text, bold: true, size: 22, color: BLUE, font: 'Calibri' }),
     ],
-    spacing: { before: 200, after: 80 },
-  });
-}
-
-/** Bold underlined sub-section title (Investigations, Conclusion...) */
-function underlinedTitle(text: string): Paragraph {
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text,
-        bold: true,
-        underline: {},
-        size: 20,
-        font: 'Calibri',
-      }),
-    ],
-    spacing: { before: 200, after: 80 },
+    spacing: { before: 120, after: 60 },
   });
 }
 
 /** Normal body text */
 function bodyText(text: string): Paragraph {
   return new Paragraph({
-    children: [
-      new TextRun({ text, size: 20, font: 'Calibri' }),
-    ],
+    children: [new TextRun({ text, size: 20, font: 'Calibri' })],
     spacing: { after: 60 },
   });
 }
@@ -133,26 +118,28 @@ function bodyText(text: string): Paragraph {
 /** Gray italic placeholder */
 function placeholder(text: string): Paragraph {
   return new Paragraph({
-    children: [
-      new TextRun({ text, size: 20, font: 'Calibri', italics: true, color: '999999' }),
-    ],
+    children: [new TextRun({ text, size: 20, font: 'Calibri', italics: true, color: '999999' })],
     spacing: { after: 60 },
   });
 }
 
-/** Info row inside a bordered table */
-function infoRow(label: string, value: string): TableRow {
+function noBorders() {
+  const none = { style: BorderStyle.NONE, size: 0, color: WHITE };
+  return { top: none, bottom: none, left: none, right: none };
+}
+
+/** Label/value row used inside the info tables under each section */
+function labelValueRow(label: string, value: string): TableRow {
   return new TableRow({
     children: [
       new TableCell({
         children: [
           new Paragraph({
-            children: [new TextRun({ text: label, bold: true, size: 18, font: 'Calibri', color: GRAY })],
+            children: [new TextRun({ text: label, size: 20, font: 'Calibri', color: GRAY })],
           }),
         ],
         width: { size: COL_LABEL_DXA, type: WidthType.DXA },
         borders: noBorders(),
-        shading: { type: ShadingType.SOLID, color: 'F8F8F8' },
       }),
       new TableCell({
         children: [
@@ -167,46 +154,6 @@ function infoRow(label: string, value: string): TableRow {
   });
 }
 
-function noBorders() {
-  const none = { style: BorderStyle.NONE, size: 0, color: WHITE };
-  return { top: none, bottom: none, left: none, right: none };
-}
-
-/** Split textContent into structured sections if possible */
-function parseStructuredContent(text: string): {
-  constat: string;
-  investigations: string;
-  analyse: string;
-  conclusion: string;
-} | null {
-  // Try to detect section markers in the text
-  const lowerText = text.toLowerCase();
-  if (
-    lowerText.includes('constat') ||
-    lowerText.includes('investigation') ||
-    lowerText.includes('analyse') ||
-    lowerText.includes('conclusion')
-  ) {
-    // Parse sections using regex
-    const sections = { constat: '', investigations: '', analyse: '', conclusion: '' };
-    const patterns = [
-      { key: 'constat' as const, regex: /(?:constat[^\n]*?[:]\s*\n?)([\s\S]*?)(?=(?:investigation|analyse|conclusion)|$)/i },
-      { key: 'investigations' as const, regex: /(?:investigation[^\n]*?[:]\s*\n?)([\s\S]*?)(?=(?:analyse|conclusion)|$)/i },
-      { key: 'analyse' as const, regex: /(?:analyse[^\n]*?[:]\s*\n?)([\s\S]*?)(?=(?:conclusion)|$)/i },
-      { key: 'conclusion' as const, regex: /(?:conclusion[^\n]*?[:]\s*\n?)([\s\S]*?)$/i },
-    ];
-    for (const { key, regex } of patterns) {
-      const match = text.match(regex);
-      if (match) sections[key] = match[1].trim();
-    }
-    if (sections.constat || sections.investigations || sections.analyse || sections.conclusion) {
-      return sections;
-    }
-  }
-  return null;
-}
-
-/** Download an image and return as ArrayBuffer, or null on failure */
 async function downloadImage(url: string): Promise<ArrayBuffer | null> {
   try {
     const response = await fetch(url);
@@ -217,41 +164,18 @@ async function downloadImage(url: string): Promise<ArrayBuffer | null> {
   }
 }
 
-/** Build photo paragraphs with embedded images + individual labels */
 async function buildPhotoSection(
   photos: { url: string; caption?: string }[],
   emptyText: string,
-  labelPrefix?: string,
 ): Promise<(Paragraph | Table)[]> {
   const result: (Paragraph | Table)[] = [];
-
   if (!photos || photos.length === 0) {
     result.push(placeholder(emptyText));
     return result;
   }
-
   const total = photos.length;
   for (let i = 0; i < photos.length; i++) {
     const photo = photos[i];
-
-    if (labelPrefix) {
-      result.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `${labelPrefix} — Photo ${i + 1}/${total}`,
-              bold: true,
-              size: 18,
-              font: 'Calibri',
-              color: BLUE,
-            }),
-          ],
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 100, after: 40 },
-        })
-      );
-    }
-
     const imageData = await downloadImage(photo.url);
     if (imageData) {
       result.push(
@@ -264,17 +188,15 @@ async function buildPhotoSection(
             }),
           ],
           alignment: AlignmentType.CENTER,
-          spacing: { after: 80 },
+          spacing: { before: 80, after: 40 },
         })
       );
-    }
-    if (photo.caption) {
       result.push(
         new Paragraph({
           children: [
             new TextRun({
-              text: photo.caption,
-              size: 18,
+              text: `Photo ${i + 1} / ${total}${photo.caption ? ' — ' + photo.caption : ''}`,
+              size: 16,
               font: 'Calibri',
               italics: true,
               color: GRAY,
@@ -284,208 +206,150 @@ async function buildPhotoSection(
           spacing: { after: 120 },
         })
       );
-    } else if (!imageData) {
-      // Fallback: show URL text if image couldn't be downloaded
+    } else {
       result.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `[Image non disponible: ${photo.url.split('/').pop() || 'photo'}]`,
-              size: 18,
-              font: 'Calibri',
-              italics: true,
-              color: '999999',
-            }),
-          ],
-          spacing: { after: 80 },
-        })
+        placeholder(`[Image non disponible: ${photo.url.split('/').pop() || 'photo'}]`)
       );
     }
   }
-
   return result;
 }
 
-// ─── Main generator ──────────────────────────────────────────────────────────
+// ─── Document assembly ───────────────────────────────────────────────────────
 
 async function buildReportDocument(data: ReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [];
 
-  // ═══ 1. HEADER ═══
+  // ═══ 1. TITRE PRINCIPAL — RICHOZ (bleu) + SANITAIRE (vert) ═══
   children.push(
     new Paragraph({
       children: [
-        new TextRun({ text: 'RICHOZ ', bold: true, size: 36, color: RED, font: 'Calibri' }),
-        new TextRun({ text: 'SANITAIRE', bold: true, size: 36, color: BLUE, font: 'Calibri' }),
+        new TextRun({ text: 'RICHOZ ', bold: true, size: 56, color: BLUE, font: 'Calibri' }),
+        new TextRun({ text: 'SANITAIRE', bold: true, size: 56, color: GREEN, font: 'Calibri' }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 50 },
+      spacing: { before: 0, after: 100 },
     })
   );
 
+  // ═══ 2. SOUS-TITRE avec emojis sirène ═══
   children.push(
     new Paragraph({
       children: [
+        new TextRun({ text: '🚨  ', size: 28, font: 'Segoe UI Emoji' }),
         new TextRun({ text: "Rapport d'intervention", bold: true, size: 28, color: BLUE, font: 'Calibri' }),
+        new TextRun({ text: '  🚨', size: 28, font: 'Segoe UI Emoji' }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
+      spacing: { after: 240 },
     })
   );
 
-  // ═══ 2. BON DE TRAVAIL ═══
-  if (data.workOrderNumber) {
-    children.push(blueBanner(`Bon de travail N° ${data.workOrderNumber}`));
-  }
+  // ═══ 3. BANDEAU "Bon de travail numéro" — TOUT EN HAUT ═══
+  children.push(blueBanner('Bon de travail numéro :', data.workOrderNumber || '—'));
 
-  // ═══ 3. PROPRIÉTAIRE & RÉGIE ═══
-  children.push(blueBanner('Propriétaire & Régie'));
-
-  const regieRows: TableRow[] = [
-    infoRow('Propriétaire', data.ownerName || '—'),
-    infoRow('Téléphone propriétaire', data.ownerPhone || '—'),
-    infoRow('Régie', data.regieName || '—'),
-    infoRow('Téléphone régie', data.regiePhone || '—'),
-    infoRow('Email régie', data.regieEmail || '—'),
-  ];
-
+  // ═══ 4. PROPRIÉTAIRE & RÉGIE ═══
+  children.push(sectionLabel('🏠', 'Propriétaire & Régie'));
   children.push(
     new Table({
-      rows: regieRows,
-      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
-      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
-    })
-  );
-
-  // ═══ 4. ADRESSE DE L'IMMEUBLE ═══
-  children.push(blueBanner('Adresse de l’immeuble'));
-
-  const locataireRows: TableRow[] = [
-    infoRow('Adresse', data.address || '—'),
-    infoRow('Clés', data.keysInfo || '—'),
-  ];
-  // Show locataire-specific rows only if we actually have separate tenant data
-  if (data.clientName) locataireRows.splice(1, 0, infoRow('Locataire', data.clientName));
-  if (data.clientPhone) locataireRows.splice(2, 0, infoRow('Téléphone locataire', data.clientPhone));
-  if (data.clientEmail) locataireRows.splice(3, 0, infoRow('Email locataire', data.clientEmail));
-
-  children.push(
-    new Table({
-      rows: locataireRows,
-      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
-      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
-    })
-  );
-
-  // ═══ 5. DESCRIPTION DE L'INTERVENTION ═══
-  children.push(blueBanner("Description de l'intervention"));
-
-  // Technicien info
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'Technicien : ', bold: true, size: 20, font: 'Calibri', color: GRAY }),
-        new TextRun({ text: data.technicianName, size: 20, font: 'Calibri' }),
-        ...(data.technicianPhone
-          ? [
-              new TextRun({ text: ` — ${data.technicianPhone}`, size: 20, font: 'Calibri', color: GRAY }),
-            ]
-          : []),
+      rows: [
+        labelValueRow('Propriétaire :', data.ownerName || ''),
+        labelValueRow('Régie :', data.regieName || ''),
+        labelValueRow('Téléphone de contact :', data.ownerPhone || data.regiePhone || ''),
+        labelValueRow('Email de contact :', data.regieEmail || ''),
       ],
-      spacing: { after: 150 },
+      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
+      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
     })
   );
 
-  // Try structured content parsing
-  const structured = data.textContent ? parseStructuredContent(data.textContent) : null;
+  // ═══ 5. BANDEAU "Locataire" ═══
+  children.push(blueBanner('Locataire'));
+  children.push(sectionLabel('🏢', "Adresse de l'immeuble"));
+  children.push(
+    new Table({
+      rows: [
+        labelValueRow("Dans l'immeuble :", data.address || ''),
+        labelValueRow('Chez :', data.clientName ? `Madame / Monsieur ${data.clientName}` : ''),
+        labelValueRow('Téléphone :', data.clientPhone || ''),
+        labelValueRow('Email :', data.clientEmail || ''),
+        labelValueRow('Clés :', data.keysInfo || ''),
+      ],
+      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
+      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
+    })
+  );
 
-  if (structured) {
-    // Structured sections matching Richoz PDF format
-    redSectionTitle("Constat à l'arrivée") && children.push(redSectionTitle("Constat à l'arrivée"));
-    if (structured.constat) {
-      for (const line of structured.constat.split('\n')) {
-        if (line.trim()) children.push(bodyText(line));
-      }
-    } else {
-      children.push(placeholder('(à compléter)'));
-    }
-
-    children.push(underlinedTitle('Investigations réalisées'));
-    if (structured.investigations) {
-      for (const line of structured.investigations.split('\n')) {
-        if (line.trim()) children.push(bodyText(line));
-      }
-    } else {
-      children.push(placeholder('(à compléter)'));
-    }
-
-    children.push(redSectionTitle('Analyse de la situation'));
-    if (structured.analyse) {
-      for (const line of structured.analyse.split('\n')) {
-        if (line.trim()) children.push(bodyText(line));
-      }
-    } else {
-      children.push(placeholder('(à compléter)'));
-    }
-
-    children.push(underlinedTitle('Conclusion'));
-    if (structured.conclusion) {
-      for (const line of structured.conclusion.split('\n')) {
-        if (line.trim()) children.push(bodyText(line));
-      }
-    } else {
-      children.push(placeholder('(à compléter)'));
+  // ═══ 6. DESCRIPTION DE L'INTERVENTION ═══
+  children.push(blueBanner("Description de l'intervention"));
+  if (data.textContent && data.textContent.trim()) {
+    for (const line of data.textContent.split('\n')) {
+      if (line.trim()) children.push(bodyText(line));
+      else children.push(new Paragraph({ spacing: { after: 60 } }));
     }
   } else {
-    // Unstructured: render description as plain text (no fake sub-sections)
-    if (data.textContent) {
-      for (const line of data.textContent.split('\n')) {
-        if (line.trim()) children.push(bodyText(line));
-      }
-    } else {
-      children.push(placeholder('(à compléter)'));
-    }
+    children.push(placeholder('(à compléter)'));
   }
 
-  // ═══ 5b. FOURNITURES ═══
-  if (data.suppliesText) {
+  // ═══ 6b. FOURNITURES (optionnel) ═══
+  if (data.suppliesText && data.suppliesText.trim()) {
     children.push(blueBanner('Fournitures utilisées'));
     for (const line of data.suppliesText.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
     }
   }
 
-  // ═══ 6. DATE DE L'INTERVENTION ═══
+  // ═══ 7. DATE DE L'INTERVENTION ═══
   children.push(blueBanner("Date de l'intervention"));
-
-  const dateRows: TableRow[] = [];
-  if (data.datePlanned) dateRows.push(infoRow('Date planifiée', data.datePlanned));
-  dateRows.push(infoRow('Rapport soumis le', data.createdAt));
-  dateRows.push(infoRow('Terminée', data.isCompleted ? 'Oui' : 'Non'));
-  if (data.workDurationMinutes) {
-    dateRows.push(infoRow('Durée de travail', `${data.workDurationMinutes} min (${(data.workDurationMinutes / 60).toFixed(1)}h)`));
-  }
-  dateRows.push(infoRow('Facturable', data.isBillable ? 'Oui' : `Non${data.billableReason ? ` — ${data.billableReason}` : ''}`));
-
   children.push(
-    new Table({
-      rows: dateRows,
-      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
-      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Le : ', bold: true, size: 22, font: 'Calibri', color: BLUE }),
+        new TextRun({ text: data.datePlanned || data.createdAt, size: 22, font: 'Calibri' }),
+      ],
+      spacing: { before: 80, after: 40 },
     })
   );
+  children.push(
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Terminée : ', bold: true, size: 22, font: 'Calibri', color: BLUE }),
+        new TextRun({
+          text: data.isCompleted ? 'Oui' : `Non${data.billableReason ? ` — ${data.billableReason}` : ''}`,
+          size: 22,
+          font: 'Calibri',
+        }),
+      ],
+      spacing: { after: 40 },
+    })
+  );
+  if (data.workDurationMinutes) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Durée : ', bold: true, size: 22, font: 'Calibri', color: BLUE }),
+          new TextRun({
+            text: `${data.workDurationMinutes} min (${(data.workDurationMinutes / 60).toFixed(1)} h)`,
+            size: 22,
+            font: 'Calibri',
+          }),
+        ],
+        spacing: { after: 100 },
+      })
+    );
+  }
 
-  // ═══ 7. PHOTOS AVANT ═══
+  // ═══ 8. PHOTOS AVANT ═══
   children.push(blueBanner('Photos Avant'));
-  const beforePhotos = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant', 'Avant');
-  children.push(...beforePhotos);
+  const before = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant');
+  children.push(...before);
 
-  // ═══ 8. PHOTOS APRÈS ═══
+  // ═══ 9. PHOTOS APRÈS ═══
   children.push(blueBanner('Photos Après'));
-  const afterPhotos = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après', 'Après');
-  children.push(...afterPhotos);
+  const after = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après');
+  children.push(...after);
 
-  // ═══ 9. SIGNATURE CLIENT ═══
+  // ═══ 10. SIGNATURE CLIENT ═══
   children.push(blueBanner('Signature Client'));
   if (data.clientSignature) {
     const sigData = await downloadImage(data.clientSignature);
@@ -496,11 +360,11 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
           children: [
             new ImageRun({
               data: sigData,
-              transformation: { width: 300, height: 110 },
+              transformation: { width: 320, height: 120 },
               type: 'png',
             }),
           ],
-          spacing: { after: 100 },
+          spacing: { before: 120, after: 100 },
         })
       );
     } else {
@@ -510,44 +374,44 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
     children.push(placeholder('Non signé'));
   }
 
-  // ═══ DOCUMENT ═══
-  const doc = new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: { top: 800, right: 900, bottom: 800, left: 900 },
-          },
-        },
-        children,
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: 'RICHOZ SANITAIRE — 50 Route de Chancy, 1213 Petit-Lancy — info@richoz-sanitaire.ch — 022 792 10 63 — Page ',
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                ],
-                alignment: AlignmentType.CENTER,
-              }),
-            ],
-          }),
-        },
-      },
+  // ═══ HEADER (watermark + bandeau adresse) ═══
+  const headerChildren: Paragraph[] = [
+    buildWatermarkParagraph(),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({ text: COMPANY_FOOTER, size: 14, font: 'Calibri', color: BLUE }),
+      ],
+    }),
+  ];
+
+  // ═══ FOOTER (Page X sur Y) ═══
+  const footer = new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ text: 'Page ', size: 14, font: 'Calibri', color: GRAY }),
+          new TextRun({ children: [PageNumber.CURRENT], size: 14, font: 'Calibri', color: GRAY }),
+          new TextRun({ text: ' sur ', size: 14, font: 'Calibri', color: GRAY }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 14, font: 'Calibri', color: GRAY }),
+        ],
+      }),
     ],
   });
 
-  return doc;
+  return new Document({
+    sections: [
+      {
+        properties: {
+          page: { margin: { top: 1200, right: 900, bottom: 800, left: 900 } },
+        },
+        children,
+        headers: { default: new Header({ children: headerChildren }) },
+        footers: { default: footer },
+      },
+    ],
+  });
 }
 
 /** Browser variant: returns Blob */
