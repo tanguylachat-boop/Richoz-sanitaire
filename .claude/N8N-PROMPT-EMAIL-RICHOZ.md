@@ -139,27 +139,34 @@ Frontend tightening appliqué (2026-05-21) :
 Le parser fallback `src/lib/parse-extracted-data.ts` reste actif pour les
 anciens emails (528 historiques avec extraction dans `description`).
 
-## Étapes d'activation
+## État des patches live (2026-05-21 19:30 UTC)
 
-1. **Régénérer la N8N_API_KEY** dans n8n (Settings → API) — la clé actuelle
-   utilisée par le MCP est expirée (auth fail 401). Soit la mettre à jour
-   dans la config Claude Desktop, soit me la copier-coller ici.
+✅ **Workflow `[MASTER] INBOX_ROUTER` (SkSyB6FBW0p1NZfp) — patché**
+- Node "AI - Extract Info1" : 17 attributes (vs 8 avant), nouveau systemPromptTemplate (3617 chars) avec règles Fwd + sender inconnu + PDF priority
+- Node "Code in JavaScript2" : propage les 17 champs dans `extracted_data`, normalise les phones suisses, force `email_type='intervention'` si work_order détecté
 
-2. Ouvrir le workflow `Email Richoz` (ID `O76zvkDVEHxJV9Er`)
+✅ **Workflow `[RELAY] Client Template — IMAP to Master` (IOqYKYXFHK86RnqR) — patché**
+- Node "Has PDF?" : leftValue cast en string + typeValidation=loose. Avant : 5 executions en erreur consécutives ("Wrong type: 'false' is a boolean but was expecting a string") — depuis 3h le relay ne forwardait plus aucun email vers INBOX_ROUTER.
 
-3. Remplacer le prompt système du node AI Agent par le bloc ci-dessus
+⚠️ Le workflow original `Email Richoz` (O76zvkDVEHxJV9Er) est désactivé depuis longtemps.
 
-4. Tester sur un des 3 emails ratés :
-   - `ljhyun@gmail.com` / "Fwd: GEROFINANCE..."
-   - `muhamed.mustajbegovic@grrsa.ch` / "Bon de travail Réf. : 2026 133 096"
-   - `sam.insightestimaters@gmail.com` / "Demande de vérification quantités"
+## Vérification
 
-5. Vérifier que le node Supabase Insert (`email_inbox`) mappe bien
-   `extracted_data.work_order_number` → colonne dédiée `work_order_number`
-   et `extracted_data.regie_name` → résolution `regie_id`
+```bash
+# Recent executions of the relay (devrait avoir des "success" dans la prochaine heure)
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  "https://primary-production-66b7.up.railway.app/api/v1/executions?workflowId=IOqYKYXFHK86RnqR&limit=5" \
+  | jq '.data[] | {startedAt, status, id}'
 
-6. Réactiver le workflow et surveiller les premières executions
+# Recent executions of INBOX_ROUTER
+curl -s -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  "https://primary-production-66b7.up.railway.app/api/v1/executions?workflowId=SkSyB6FBW0p1NZfp&limit=5" \
+  | jq '.data[] | {startedAt, status, id}'
+
+# Latest emails inserted in email_inbox
+psql ... -c "SELECT received_at, from_email, subject, email_type, extracted_data->>'keys_info' as keys, extracted_data->>'owner_name' as owner FROM email_inbox ORDER BY received_at DESC LIMIT 5;"
 ```
+
 
 ## Backfill des emails historiques
 
