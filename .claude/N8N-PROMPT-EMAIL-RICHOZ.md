@@ -1,129 +1,182 @@
-# Nouveau prompt IA pour le workflow n8n « Email Richoz »
+# Prompt IA — workflow n8n « Email Richoz »
 
-**Workflow concerné :** `Email Richoz` (ID `O76zvkDVEHxJV9Er`)
+**Workflow :** `Email Richoz` (ID `O76zvkDVEHxJV9Er`)
+**Node concerné :** AI Agent / OpenAI Chat Model qui produit `extracted_data` avant l'insert dans `email_inbox`.
 
-**Node à modifier :** le node LangChain / OpenAI / Agent qui produit le champ `extracted_data` avant l'insert dans `email_inbox`.
+## Diagnostic — audit du 2026-05-21
 
-## Diagnostic
+Sur un échantillon de 8 emails récents, **3 patterns d'erreur** identifiés :
 
-Sur les 528 emails intervention reçus les 14 derniers jours :
+### Pattern A — Extraction vide quand sender non-régie
+Quand l'expéditeur n'est pas dans la liste des régies (ex: `ljhyun@gmail.com` qui forward un Gerofinance, `sam.insightestimaters@gmail.com`, `muhamed.mustajbegovic@grrsa.ch`), l'IA retourne juste un titre et tous les autres champs vides — alors que le **body contient les infos**.
 
-| Champ | Manquant | % |
-|---|---|---|
-| address | 319 | 60% |
-| tenant_name | 464 | 88% |
-| tenant_phone | 463 | 88% |
-| **tenant_email** | **528** | **100%** |
-| **keys_info** | **528** | **100%** |
-| **owner_name** | **528** | **100%** |
-| work_order_number | 333 | 63% |
+Exemple réel : email forwardé "Fwd: GEROFINANCE - RÉGIE DU RHÔNE SA Bon de travail Réf. : 2026 133 096, du 13.05.2026" → `address`, `tenant_name`, `keys_info`, `regie_name` tous vides. La référence `2026 133 096` est même dans le sujet.
 
-L'IA actuelle noie les infos d'accès et de facturation dans `description` sous forme libre "3. ACCÈS / CLÉS : …", ce qui empêche le pré-remplissage automatique du formulaire « Planifier l'intervention » côté dashboard.
+### Pattern B — Misclassification "info" sur intervention claire
+Email avec `work_order_number` extrait + `tenant_phone`, `address`, `owner_name` complets → classé `email_type: "info"`. Cause probable : sender ressemble à un domaine promotionnel (`leroymerlin@mail.leroymerlin.fr`).
+
+### Pattern C — Pas de fallback sur le contenu structuré
+Quand un PDF "Bon de travail" est en pièce jointe, l'IA ignore le PDF et se contente du body texte qui peut être vide ou un cover letter.
 
 ## Nouveau prompt système (à copier tel quel dans le node IA)
 
 ```
 Tu es l'assistant d'extraction de bons d'intervention pour Richoz Sanitaire
-(plomberie à Genève). Analyse l'email fourni (sujet + corps + pièces jointes si
-présentes) et retourne un JSON strict avec TOUS les champs suivants. Si une
-info est absente de l'email, mets une chaîne vide "" — ne mets JAMAIS "Non
-mentionné" ou "N/A".
+(plomberie à Genève). Analyse l'email fourni (sujet + corps + pièces jointes)
+et retourne un JSON strict. Tu DOIS extraire TOUT ce qui est extractible —
+même si l'expéditeur n'est pas connu, même si l'email est un forward (Fwd:),
+même si l'info principale est dans une pièce jointe PDF.
 
 FORMAT DE RÉPONSE (JSON strict, sans markdown, sans commentaire) :
 {
   "email_type": "intervention" | "info" | "facture" | "devis" | "autre",
   "title": "titre court (max 80 caractères) — jamais vide",
   "priority": "normal" | "urgent" | "urgence_absolue",
-  "regie_name": "nom exact de la régie expéditrice (ex: SPG, Bory, Régie Dupuis)",
-  "work_order_number": "numéro de bon de travail SANS préfixe # (ex: 1781998)",
+  "regie_name": "nom exact de la régie (ex: SPG, Bory, Gerofinance, Régie du Rhône)",
+  "work_order_number": "numéro de bon SANS préfixe ni espaces (ex: 1822870, 2026133096)",
 
-  "address": "adresse complète de l'intervention incluant étage et appartement",
+  "address": "adresse complète intervention avec étage et appartement",
   "postal_code": "code postal suisse (4 chiffres)",
   "city": "ville",
 
   "tenant_name": "nom prénom du locataire",
-  "tenant_phone": "téléphone du locataire au format +41 XX XXX XX XX",
+  "tenant_phone": "téléphone locataire en +41 XX XXX XX XX",
   "tenant_email": "email du locataire",
 
-  "owner_name": "nom du propriétaire ou de la fondation propriétaire",
-  "billing_address": "adresse complète de facturation si différente du chantier",
+  "owner_name": "nom du propriétaire / fondation",
+  "billing_address": "adresse complète de facturation",
 
-  "keys_info": "localisation des clés en une phrase (ex: 'chez le locataire', 'clés chez le concierge au RDC', 'code porte 1234', 'boîte à clés sur porte d'entrée code 5678')",
+  "keys_info": "localisation précise des clés (ex: 'chez le concierge M. Dupont au RDC', 'code porte 1234')",
 
-  "description": "description courte du problème UNIQUEMENT — 1 à 3 phrases. Ne mets PAS d'infos déjà présentes dans les autres champs (adresse, clés, facturation). Ne structure pas en 1./2./3.",
+  "description": "description du PROBLÈME uniquement, 1 à 3 phrases. PAS d'infos déjà dans les autres champs, PAS de structure 1./2./3.",
 
-  "financial_limit_chf": "montant maximum autorisé en CHF (nombre entier, 0 si non spécifié)",
-  "deadline": "date butoir au format YYYY-MM-DD si mentionnée, sinon chaîne vide"
+  "financial_limit_chf": 0,
+  "deadline": ""
 }
 
-RÈGLES D'EXTRACTION :
+═══════════ RÈGLES D'EXTRACTION (lis et applique TOUTES) ═══════════
 
-1. work_order_number : cherche « bon de travail », « OT », « #1234567 », « numéro de dossier », « référence ». Extrais SEULEMENT les chiffres.
+1. ⚠️ NE JAMAIS RETOURNER DE CHAMPS VIDES SI LE BODY OU LE PDF CONTIENT L'INFO.
+   Si le sender est inconnu mais le body contient une régie, une adresse, un
+   numéro de bon → extrais-les. La règle « si je ne reconnais pas, je laisse
+   vide » est INTERDITE.
 
-2. tenant_phone : formate TOUJOURS en +41 XX XXX XX XX. Les numéros suisses
-   commencent par 0 → remplace par +41. Un numéro « 078 656 17 30 » devient
-   « +41 78 656 17 30 ».
+2. FORWARD (Fwd:, Re: Fwd:, "FW:"). Si l'email est un forward :
+   - Cherche dans le body la signature originale : « De : », « From: »,
+     « Expéditeur : »
+   - Le vrai expéditeur est celui du message original, pas le forwarder
+   - Le sujet original (souvent recopié) contient le bon de travail
+   - Si tu vois « Bon de travail Réf. : 2026 133 096 » dans le sujet ou body,
+     extrais 2026133096 (sans espaces) dans work_order_number
 
-3. keys_info : cherche « clés », « accès », « code », « boîte à clés »,
-   « concierge », « interphone ». Sois précis — « chez le locataire » n'est PAS
-   la même chose que « chez le concierge au 2e étage, M. Dupont ».
+3. CLASSIFICATION email_type :
+   - "intervention" = action terrain demandée : réparation, vérification,
+     dégât, fuite, panne, devis chantier, demande de RDV technicien.
+   - 💡 SI work_order_number détecté → email_type = "intervention" toujours.
+   - 💡 SI regie_name détecté + body parle d'un problème technique → "intervention".
+   - "info" = newsletter, pub, confirmation auto, RH interne. Pas de PDF
+     bon de travail, pas de numéro de référence régie.
+   - "facture" = pièce jointe est une facture entrante d'un fournisseur.
+   - "devis" = devis entrant d'un fournisseur.
 
-4. address : inclus TOUJOURS l'étage et le numéro d'appartement s'ils sont
-   mentionnés (ex: « Chemin d'Archamps 31, 2e étage app. 4, 1257 Croix-de-Rozon »).
+4. PIÈCE JOINTE PDF. Si l'email a une pièce jointe (souvent un bon de
+   travail) → PARSE LE PDF EN PRIORITÉ. Le body est souvent un cover
+   letter sans détail. Le PDF contient : adresse, locataire, téléphone,
+   propriétaire, clés, limites financières.
 
-5. priority : « urgent » = fuite active, panne chauffe-eau en hiver, eau coupée.
-   « urgence_absolue » = inondation, dégât des eaux en cours, risque sanitaire
-   immédiat. Sinon « normal ».
+5. work_order_number : cherche « bon de travail », « OT », « Réf. : »,
+   « référence », « N° dossier », « numéro de bon », « #1234567 ».
+   Extrais SEULEMENT les chiffres, supprime les espaces internes.
+   Exemples :
+     « Bon de travail Réf. : 2026 133 096 »  → "2026133096"
+     « OT n°1822870 »                         → "1822870"
+     « #1781998 »                             → "1781998"
 
-6. regie_name : extrais le nom tel qu'écrit dans l'email (ne modifie pas la
-   casse). Si plusieurs régies mentionnées, prends l'expéditeur.
+6. tenant_phone : TOUJOURS format +41 XX XXX XX XX.
+   « 078 656 17 30 » → « +41 78 656 17 30 »
+   « 0227881122 »    → « +41 22 788 11 22 »
 
-7. email_type : « intervention » si une action sur site est demandée.
-   « info » pour les confirmations, newsletters, publicités, documents
-   administratifs. « facture » pour les factures reçues. « devis » si c'est
-   un devis fournisseur entrant.
+7. keys_info : sois précis et complet.
+     ✗ « chez le locataire » (trop vague — ce n'est PAS une info)
+     ✓ « clés chez le concierge M. Dupont au 2e étage, sonner appt 4 »
+     ✓ « code porte d'entrée 1234, boîte à clés A23 code 5678 »
+     ✓ « locataire présent, à appeler 1h avant »
+   Si vraiment aucune info → laisse vide "".
 
-8. description : MAX 3 phrases. Résume le problème. N'inclus JAMAIS
-   les sections « 1. PROBLÈME », « 2. FACTURATION » — ces infos vont dans les
-   champs dédiés.
+8. address : inclus étage + numéro d'appartement quand mentionnés.
+     « Chemin d'Archamps 31, 2e étage app. 4, 1257 Croix-de-Rozon »
 
-9. Si l'email contient une pièce jointe (PDF bon de travail), extrais en
-   PRIORITÉ depuis la pièce jointe plutôt que du corps de l'email.
+9. priority :
+   - "urgence_absolue" = inondation active, dégât eau en cours, risque
+     sanitaire immédiat, mots-clés « URGENT URGENT », « immédiat »
+   - "urgent" = fuite active visible, panne chauffe-eau en hiver, eau coupée
+   - "normal" = tout le reste
 
-Si l'email n'est clairement pas une intervention (newsletter, spam, confirmation
-automatique), retourne simplement :
-{ "email_type": "info", "title": "<sujet de l'email>", "priority": "normal" }
+10. description : MAX 3 phrases factuelles sur le problème uniquement.
+    JAMAIS « 1. PROBLÈME : ... 2. FACTURATION : ... » — ces infos vont
+    dans leurs champs dédiés.
+
+═══════════ CAS DE REJET RAPIDE ═══════════
+
+Si l'email est clairement non-pertinent (newsletter sans pièce jointe, pub
+boutique, notification système d'un service tiers) :
+{ "email_type": "info", "title": "<sujet>", "priority": "normal" }
+
+⚠️ Mais s'il a UNE PIÈCE JOINTE PDF ou s'il parle d'une intervention dans
+le body → analyse normalement, même si le sender semble douteux. Mieux
+vaut un faux positif "intervention" qu'un faux négatif.
 ```
 
 ## Côté dashboard
 
-Un parser de fallback a été ajouté dans `src/lib/parse-extracted-data.ts` qui
-extrait `keys_info` / `owner_name` / `problem` depuis `description` quand ils
-sont manquants — pour que les 528 emails déjà reçus se pré-remplissent
-correctement sans retraiter l'IA.
+Frontend tightening appliqué (2026-05-21) :
+- Le bouton "Planifier" n'apparaît plus sur les emails `info`, même avec
+  un work_order détecté
+- Pour les info-emails suspects (régie matchée OU bon détecté), une bannière
+  jaune apparaît avec un bouton "Convertir en intervention" qui flippe
+  `email_type` à `intervention` dans Supabase (override manuel)
 
-Une fois le nouveau prompt déployé dans n8n, les nouveaux emails auront les
-champs directement structurés et le parser devient un no-op (il ne fait rien
-si les champs existent déjà).
+Le parser fallback `src/lib/parse-extracted-data.ts` reste actif pour les
+anciens emails (528 historiques avec extraction dans `description`).
 
 ## Étapes d'activation
 
-1. Ouvrir le workflow n8n `Email Richoz` (ID `O76zvkDVEHxJV9Er`)
-2. Trouver le node d'extraction IA (probablement un node « AI Agent » ou
-   « OpenAI Chat Model »)
-3. Remplacer le prompt système par celui ci-dessus
-4. Vérifier que le node suivant (Supabase Insert sur `email_inbox`) mappe les
-   nouveaux champs :
-   - `extracted_data.billing_address` → (garde dans le JSONB)
-   - `extracted_data.financial_limit_chf` → (garde dans le JSONB)
-   - `work_order_number` → colonne dédiée `email_inbox.work_order_number`
-5. Tester sur 1 email avec `n8n_test_workflow`
-6. Activer le workflow et laisser tomber quelques emails pour valider
-7. Vérifier côté dashboard que le form « Planifier » se pré-remplit
+1. **Régénérer la N8N_API_KEY** dans n8n (Settings → API) — la clé actuelle
+   utilisée par le MCP est expirée (auth fail 401). Soit la mettre à jour
+   dans la config Claude Desktop, soit me la copier-coller ici.
 
-## Erreurs d'exécution
+2. Ouvrir le workflow `Email Richoz` (ID `O76zvkDVEHxJV9Er`)
 
-Pour diagnostiquer les erreurs : active l'option « MCP access » dans les
-settings du workflow `O76zvkDVEHxJV9Er` pour que je puisse lire les executions
-et les nodes qui échouent. Alternativement, copie-colle le message d'erreur
-exact que tu vois dans n8n.
+3. Remplacer le prompt système du node AI Agent par le bloc ci-dessus
+
+4. Tester sur un des 3 emails ratés :
+   - `ljhyun@gmail.com` / "Fwd: GEROFINANCE..."
+   - `muhamed.mustajbegovic@grrsa.ch` / "Bon de travail Réf. : 2026 133 096"
+   - `sam.insightestimaters@gmail.com` / "Demande de vérification quantités"
+
+5. Vérifier que le node Supabase Insert (`email_inbox`) mappe bien
+   `extracted_data.work_order_number` → colonne dédiée `work_order_number`
+   et `extracted_data.regie_name` → résolution `regie_id`
+
+6. Réactiver le workflow et surveiller les premières executions
+```
+
+## Backfill des emails historiques
+
+Si on veut re-extraire l'IA sur les ~528 emails déjà reçus :
+
+```bash
+# Liste les emails intervention avec extraction incomplète
+SELECT id, from_email, subject
+FROM email_inbox
+WHERE email_type IN ('intervention', 'info')
+  AND (
+    extracted_data->>'address' = '' OR extracted_data->>'address' IS NULL
+  )
+  AND received_at > '2026-05-01'
+ORDER BY received_at DESC
+LIMIT 50;
+```
+
+Pour chacun, re-envoyer via le webhook n8n d'extraction (ou faire un node n8n
+« replay » qui prend un `email_inbox_id` et re-process).

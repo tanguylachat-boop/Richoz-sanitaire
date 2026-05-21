@@ -191,6 +191,20 @@ export default function InboxPage() {
     toast.success(status === 'processed' ? 'Email marqué comme traité' : 'Email ignoré');
   };
 
+  const promoteToIntervention = async (emailId: string) => {
+    // Manual override when the AI mis-classified an intervention as "info"
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('email_inbox')
+      .update({ email_type: 'intervention' })
+      .eq('id', emailId);
+    if (error) { toast.error('Échec du reclassement'); return; }
+    setEmails((prev) =>
+      prev.map((e) => (e.id === emailId ? { ...e, email_type: 'intervention' } : e))
+    );
+    toast.success('Email marqué comme intervention');
+  };
+
   const handleInterventionSuccess = async () => {
     if (selectedEmail) await updateEmailStatus(selectedEmail.id, 'processed');
     setIsPlanModalOpen(false);
@@ -247,6 +261,7 @@ export default function InboxPage() {
                   onView={() => handleViewDetail(email)}
                   onIgnore={() => updateEmailStatus(email.id, 'ignored')}
                   onArchive={() => updateEmailStatus(email.id, 'processed')}
+                  onPromote={() => promoteToIntervention(email.id)}
                   showActions={statusFilter === 'new'}
                 />
               ))}
@@ -257,7 +272,7 @@ export default function InboxPage() {
 
       {/* Modal: Detail */}
       <Modal isOpen={isDetailModalOpen} onClose={() => { setIsDetailModalOpen(false); setSelectedEmail(null); }} title="Détail de l'email" size="lg">
-        {selectedEmail && <EmailDetailView email={selectedEmail} regies={regies} onPlan={() => { setIsDetailModalOpen(false); handlePlanIntervention(selectedEmail); }} onIgnore={() => { updateEmailStatus(selectedEmail.id, 'ignored'); setIsDetailModalOpen(false); setSelectedEmail(null); }} onArchive={() => { updateEmailStatus(selectedEmail.id, 'processed'); setIsDetailModalOpen(false); setSelectedEmail(null); }} showActions={statusFilter === 'new'} />}
+        {selectedEmail && <EmailDetailView email={selectedEmail} regies={regies} onPlan={() => { setIsDetailModalOpen(false); handlePlanIntervention(selectedEmail); }} onIgnore={() => { updateEmailStatus(selectedEmail.id, 'ignored'); setIsDetailModalOpen(false); setSelectedEmail(null); }} onArchive={() => { updateEmailStatus(selectedEmail.id, 'processed'); setIsDetailModalOpen(false); setSelectedEmail(null); }} onPromote={() => { promoteToIntervention(selectedEmail.id); }} showActions={statusFilter === 'new'} />}
       </Modal>
 
       {/* Modal: Planification SPLIT VIEW — email à gauche, formulaire + calendrier à droite */}
@@ -313,11 +328,13 @@ function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
 
 // ─── Email Card ──────────────────────────────────────────────────────────────
 
-function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, showActions = true }: { email: EmailInbox; regieName?: string | null; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; showActions?: boolean; }) {
+function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, onPromote, showActions = true }: { email: EmailInbox; regieName?: string | null; onPlan: () => void; onView: () => void; onIgnore: () => void; onArchive: () => void; onPromote?: () => void; showActions?: boolean; }) {
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
   const isUrgent = !isInfo && isEmailUrgent(email);
   const timeAgo = formatDistanceToNow(new Date(email.received_at), { addSuffix: true, locale: fr });
+  // Suspect false-negative: AI marked it "info" but a work order or regie matched
+  const looksLikeIntervention = isInfo && (!!email.work_order_number || !!email.regie_id);
 
   return (
     <div className={`px-5 py-4 hover:bg-blue-50/40 transition-colors group cursor-pointer ${isInfo ? 'bg-gray-50/30' : ''}`} onClick={onView}>
@@ -351,7 +368,16 @@ function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, show
             <>
               <button onClick={onIgnore} title="Ignorer" className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><XCircle className="w-4 h-4" /></button>
               <button onClick={onArchive} title="Archiver" className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Archive className="w-4 h-4" /></button>
-              {(!isInfo || email.work_order_number || email.regie_id) && (
+              {looksLikeIntervention && onPromote && (
+                <button
+                  onClick={onPromote}
+                  title="L'IA a classé cet email en 'info' mais une régie/bon a matché — convertir en intervention"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors"
+                >
+                  Convertir en intervention
+                </button>
+              )}
+              {!isInfo && (
                 <button onClick={onPlan} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"><CalendarPlus className="w-4 h-4" />Planifier</button>
               )}
             </>
@@ -365,10 +391,11 @@ function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, show
 
 // ─── Email Detail View (simplifié — montre le mail complet) ───────────────────
 
-function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActions }: { email: EmailInbox; regies: Regie[]; onPlan: () => void; onIgnore: () => void; onArchive: () => void; showActions: boolean; }) {
+function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, onPromote, showActions }: { email: EmailInbox; regies: Regie[]; onPlan: () => void; onIgnore: () => void; onArchive: () => void; onPromote?: () => void; showActions: boolean; }) {
   const regie = regies.find((r) => r.id === email.regie_id);
   const emailType = getEmailType(email);
   const isInfo = emailType === 'info';
+  const looksLikeIntervention = isInfo && (!!email.work_order_number || !!email.regie_id);
 
   return (
     <div className="space-y-5">
@@ -482,6 +509,20 @@ function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActio
         </div>
       </div>
 
+      {/* Misclassification hint */}
+      {looksLikeIntervention && onPromote && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <p className="text-amber-900 font-medium">Cet email est classé en « info » mais une régie ou un bon de travail a été détecté.</p>
+            <p className="text-amber-700 text-xs mt-0.5">Convertis-le en intervention pour activer la planification.</p>
+          </div>
+          <button onClick={onPromote} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-sm">
+            Convertir en intervention
+          </button>
+        </div>
+      )}
+
       {/* Actions */}
       {showActions && (
         <div className="flex items-center justify-between pt-4 border-t border-gray-100">
@@ -489,7 +530,7 @@ function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActio
             <button onClick={onIgnore} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-white border border-gray-200 hover:bg-red-50 rounded-lg transition-colors"><XCircle className="w-4 h-4" />Ignorer</button>
             <button onClick={onArchive} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"><Archive className="w-4 h-4" />Archiver</button>
           </div>
-          {(!isInfo || email.work_order_number || email.regie_id) && (
+          {!isInfo && (
             <button onClick={onPlan} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"><CalendarPlus className="w-4 h-4" />Planifier l&apos;intervention</button>
           )}
         </div>

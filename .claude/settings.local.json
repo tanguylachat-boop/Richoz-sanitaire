@@ -76,7 +76,10 @@
       "mcp__claude_ai_n8n__search_workflows",
       "mcp__plugin_vercel-plugin_vercel__list_deployments",
       "mcp__plugin_vercel-plugin_vercel__get_runtime_logs",
-      "mcp__plugin_vercel-plugin_vercel__get_deployment"
+      "mcp__plugin_vercel-plugin_vercel__get_deployment",
+      "Bash(pdftoppm -png -r 300 \"/Users/tanguylachat/Downloads/1 823 591.pdf\" public/templates/water-drop-page -f 6 -l 6)",
+      "mcp__n8n-mcp__n8n_health_check",
+      "mcp__n8n-mcp__n8n_get_workflow"
     ]
   },
   "enableAllProjectMcpServers": true,
