@@ -47,7 +47,12 @@ interface TechnicianOption {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  annual_leave_weeks?: number | null;
 }
+
+// Used for the per-tech remaining-hours summary cards. Same constants as RH stats.
+const LEAVE_DAYS_PER_WEEK = 5;
+const LEAVE_HOURS_PER_DAY = 8;
 
 export default function LeaveManagementPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -98,13 +103,43 @@ export default function LeaveManagementPage() {
     const loadTechnicians = async () => {
       const { data } = await supabase
         .from('users')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name, email, annual_leave_weeks')
         .eq('role', 'technician')
         .order('last_name');
       if (data) setTechnicians(data as TechnicianOption[]);
     };
     loadTechnicians();
   }, []);
+
+  // Approved "conge" leaves this year per technician (for remaining-hours cards)
+  const [approvedThisYear, setApprovedThisYear] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const loadApproved = async () => {
+      const year = new Date().getFullYear();
+      const { data } = await supabase
+        .from('leave_requests')
+        .select('technician_id, start_date, end_date, leave_type')
+        .eq('status', 'approved')
+        .eq('leave_type', 'conge')
+        .lte('start_date', `${year}-12-31`)
+        .gte('end_date', `${year}-01-01`);
+      if (!data) return;
+      const yearStart = new Date(`${year}-01-01T00:00:00`);
+      const yearEnd = new Date(`${year}-12-31T23:59:59`);
+      const totals: Record<string, number> = {};
+      for (const l of data as { technician_id: string; start_date: string; end_date: string }[]) {
+        const s = new Date(l.start_date + 'T00:00:00');
+        const e = new Date(l.end_date + 'T23:59:59');
+        const effS = s < yearStart ? yearStart : s;
+        const effE = e > yearEnd ? yearEnd : e;
+        if (effS > effE) continue;
+        const days = eachDayOfInterval({ start: effS, end: effE }).length;
+        totals[l.technician_id] = (totals[l.technician_id] || 0) + days;
+      }
+      setApprovedThisYear(totals);
+    };
+    loadApproved();
+  }, [requests]);
 
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);
@@ -402,6 +437,39 @@ export default function LeaveManagementPage() {
           </button>
         </div>
       </div>
+
+      {/* Remaining hours per technician (current year) */}
+      {technicians.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-emerald-600" />
+            Heures de congé restantes — {new Date().getFullYear()}
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {technicians.map((t) => {
+              const weeks = t.annual_leave_weeks ?? 5;
+              const allowedHours = weeks * LEAVE_DAYS_PER_WEEK * LEAVE_HOURS_PER_DAY;
+              const usedDays = approvedThisYear[t.id] || 0;
+              const remainingHours = allowedHours - usedDays * LEAVE_HOURS_PER_DAY;
+              const remainingDays = remainingHours / LEAVE_HOURS_PER_DAY;
+              const isExhausted = remainingHours <= 0;
+              const isLow = !isExhausted && remainingHours <= allowedHours * 0.2;
+              const name = t.first_name && t.last_name ? `${t.first_name} ${t.last_name}` : t.email;
+              const bg = isExhausted ? 'bg-red-50 border-red-200' : isLow ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200';
+              const fg = isExhausted ? 'text-red-700' : isLow ? 'text-amber-700' : 'text-emerald-700';
+              return (
+                <div key={t.id} className={`rounded-lg border p-3 ${bg}`}>
+                  <p className="text-xs font-medium text-gray-700 truncate" title={name}>{name}</p>
+                  <p className={`text-2xl font-bold mt-1 ${fg}`}>{remainingHours}h</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    ≈ {remainingDays.toFixed(1)} j. · solde {weeks} sem.
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Create-leave-for-technician form */}
       {showCreateForm && (

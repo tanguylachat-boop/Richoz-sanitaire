@@ -17,13 +17,14 @@ interface UpdateUserPayload {
   role: UserRole;
   interventionTypePreference?: 'depannage' | 'chantier';
   calendarColor?: string | null;
+  annualLeaveWeeks?: number;
 }
 
 export async function updateUser(payload: UpdateUserPayload) {
   const auth = await requireAdminOrSecretary();
   if (!auth.authorized) return { success: false, error: auth.error };
 
-  const { id, firstName, lastName, email, phone, birthDate, role, interventionTypePreference, calendarColor } = payload;
+  const { id, firstName, lastName, email, phone, birthDate, role, interventionTypePreference, calendarColor, annualLeaveWeeks } = payload;
 
   if (!firstName?.trim() || !lastName?.trim()) {
     return { success: false, error: 'Le nom et le prénom sont requis.' };
@@ -51,6 +52,7 @@ export async function updateUser(payload: UpdateUserPayload) {
         role,
         intervention_type_preference: role === 'technician' ? (interventionTypePreference || 'depannage') : null,
         calendar_color: role === 'technician' ? (calendarColor || null) : null,
+        annual_leave_weeks: typeof annualLeaveWeeks === 'number' && annualLeaveWeeks >= 0 ? Math.round(annualLeaveWeeks) : 5,
       })
       .eq('id', id);
 

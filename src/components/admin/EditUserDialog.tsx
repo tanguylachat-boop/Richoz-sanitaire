@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { updateUser } from '@/app/(dashboard)/admin/users/actions';
 import type { User, UserRole } from '@/types/database';
-import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake, Wrench, Palette } from 'lucide-react';
+import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake, Wrench, Palette, Palmtree } from 'lucide-react';
 import { TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
@@ -39,6 +39,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
     role: user.role as UserRole,
     interventionTypePreference: (user.intervention_type_preference || 'depannage') as 'depannage' | 'chantier',
     calendarColor: (user as Record<string, unknown>).calendar_color as string || '',
+    annualLeaveWeeks: ((user as Record<string, unknown>).annual_leave_weeks as number) ?? 5,
   });
 
   const [fieldError, setFieldError] = useState('');
@@ -53,6 +54,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
       role: user.role,
       interventionTypePreference: (user.intervention_type_preference || 'depannage') as 'depannage' | 'chantier',
       calendarColor: (user as Record<string, unknown>).calendar_color as string || '',
+      annualLeaveWeeks: ((user as Record<string, unknown>).annual_leave_weeks as number) ?? 5,
     });
     setFieldError('');
   };
@@ -93,6 +95,7 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
         role: form.role,
         interventionTypePreference: form.role === 'technician' ? form.interventionTypePreference : undefined,
         calendarColor: form.role === 'technician' ? (form.calendarColor || null) : null,
+        annualLeaveWeeks: form.annualLeaveWeeks,
       });
 
       if (result.success) {
@@ -192,20 +195,41 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              <span className="flex items-center gap-1.5">
-                <Cake className="w-3.5 h-3.5" />
-                Date de naissance
-              </span>
-            </label>
-            <input
-              type="date"
-              value={form.birthDate}
-              onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-              disabled={isPending}
-              className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Cake className="w-3.5 h-3.5" />
+                  Date de naissance
+                </span>
+              </label>
+              <input
+                type="date"
+                value={form.birthDate}
+                onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+                disabled={isPending}
+                className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Palmtree className="w-3.5 h-3.5" />
+                  Semaines de congés / an
+                </span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={52}
+                step={1}
+                value={form.annualLeaveWeeks}
+                onChange={(e) => setForm({ ...form, annualLeaveWeeks: Math.max(0, Math.min(52, parseInt(e.target.value) || 0)) })}
+                disabled={isPending}
+                className="w-full h-10 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+              />
+              <p className="text-xs text-gray-500 mt-1">≈ {form.annualLeaveWeeks * 5} jours / {form.annualLeaveWeeks * 5 * 8}h</p>
+            </div>
           </div>
 
           <div>

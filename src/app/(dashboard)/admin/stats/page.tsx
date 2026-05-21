@@ -22,7 +22,13 @@ interface TechRow {
   last_name: string | null;
   email: string;
   is_active: boolean;
+  annual_leave_weeks: number | null;
 }
+
+// Swiss working assumptions for the leave balance:
+// 1 week = 5 working days, 1 day = 8 hours.
+const DAYS_PER_WEEK = 5;
+const HOURS_PER_DAY = 8;
 
 type StatsByTech = Record<string, Record<LeaveType, number>>;
 
@@ -63,7 +69,7 @@ export default function AdminStatsPage() {
         .gte('end_date', startStr),
       supabase
         .from('users')
-        .select('id, first_name, last_name, email, is_active')
+        .select('id, first_name, last_name, email, is_active, annual_leave_weeks')
         .in('role', ['technician', 'secretary', 'admin'])
         .order('last_name'),
     ]);
@@ -112,15 +118,22 @@ export default function AdminStatsPage() {
   }, [stats]);
 
   const handleExportCSV = () => {
-    const header = ['Nom', 'Email', ...LEAVE_TYPE_ORDER.map((t) => LEAVE_TYPES[t].label), 'Total'];
+    const header = ['Nom', 'Email', 'Solde annuel (sem.)', 'Solde annuel (h)', ...LEAVE_TYPE_ORDER.map((t) => LEAVE_TYPES[t].label), 'Total jours', 'Heures restantes'];
     const rows = technicians.map((t) => {
       const s = stats[t.id] || ({} as Record<LeaveType, number>);
       const total = LEAVE_TYPE_ORDER.reduce((sum, lt) => sum + (s[lt] || 0), 0);
+      const weeks = t.annual_leave_weeks ?? 5;
+      const allowedHours = weeks * DAYS_PER_WEEK * HOURS_PER_DAY;
+      const usedCongeDays = s.conge || 0;
+      const remainingHours = allowedHours - usedCongeDays * HOURS_PER_DAY;
       return [
         getTechName(t),
         t.email,
+        String(weeks),
+        String(allowedHours),
         ...LEAVE_TYPE_ORDER.map((lt) => String(s[lt] || 0)),
         String(total),
+        String(remainingHours),
       ];
     });
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(',')).join('\n');
@@ -199,23 +212,35 @@ export default function AdminStatsPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Employé</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Solde / an</th>
                   {LEAVE_TYPE_ORDER.map((lt) => (
                     <th key={lt} className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">
                       {LEAVE_TYPES[lt].emoji} {LEAVE_TYPES[lt].label}
                     </th>
                   ))}
-                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Total</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Total j.</th>
+                  <th className="px-3 py-3 text-center text-xs font-semibold text-emerald-700 uppercase whitespace-nowrap">Heures restantes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {technicians.map((t) => {
                   const s = stats[t.id] || ({} as Record<LeaveType, number>);
                   const total = LEAVE_TYPE_ORDER.reduce((sum, lt) => sum + (s[lt] || 0), 0);
+                  const weeks = t.annual_leave_weeks ?? 5;
+                  const allowedHours = weeks * DAYS_PER_WEEK * HOURS_PER_DAY;
+                  const usedCongeDays = s.conge || 0;
+                  const remainingHours = allowedHours - usedCongeDays * HOURS_PER_DAY;
+                  const isLow = remainingHours <= allowedHours * 0.2;
+                  const isExhausted = remainingHours <= 0;
                   return (
                     <tr key={t.id} className={!t.is_active ? 'opacity-50' : ''}>
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {getTechName(t)}
                         {!t.is_active && <span className="ml-2 text-xs text-gray-400">(inactif)</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center text-xs text-gray-500">
+                        <span className="font-medium text-gray-700">{weeks} sem.</span>
+                        <span className="block text-gray-400">({allowedHours}h)</span>
                       </td>
                       {LEAVE_TYPE_ORDER.map((lt) => (
                         <td key={lt} className="px-3 py-3 text-center text-gray-700">
@@ -223,12 +248,18 @@ export default function AdminStatsPage() {
                         </td>
                       ))}
                       <td className="px-3 py-3 text-center font-semibold text-gray-900">{total}</td>
+                      <td className={`px-3 py-3 text-center font-bold ${isExhausted ? 'text-red-700' : isLow ? 'text-amber-700' : 'text-emerald-700'}`}>
+                        {remainingHours}h
+                        <span className="block text-xs font-normal opacity-70">
+                          ≈ {(remainingHours / HOURS_PER_DAY).toFixed(1)} j.
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
                 {technicians.length === 0 && (
                   <tr>
-                    <td colSpan={LEAVE_TYPE_ORDER.length + 2} className="px-4 py-12 text-center text-gray-400">
+                    <td colSpan={LEAVE_TYPE_ORDER.length + 4} className="px-4 py-12 text-center text-gray-400">
                       Aucun employé trouvé
                     </td>
                   </tr>

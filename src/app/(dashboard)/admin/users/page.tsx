@@ -208,6 +208,12 @@ export default async function UsersPage() {
                             <span>{userItem.phone}</span>
                           </div>
                         )}
+                        {(userItem as Record<string, unknown>).annual_leave_weeks != null && (
+                          <div className="flex items-center gap-1.5 text-emerald-700">
+                            <span>🌴</span>
+                            <span>{(userItem as Record<string, unknown>).annual_leave_weeks as number} sem. / an</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

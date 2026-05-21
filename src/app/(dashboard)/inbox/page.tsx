@@ -331,8 +331,11 @@ function EmailCard({ email, regieName, onPlan, onView, onIgnore, onArchive, show
             {email.status === 'ignored' && <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded flex-shrink-0">IGNORÉ</span>}
             {regieName && <span className="px-2 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded flex-shrink-0 flex items-center gap-1"><Building2 className="w-3 h-3" />{regieName}</span>}
             <h4 className={`font-medium truncate group-hover:text-blue-700 transition-colors ${isInfo ? 'text-gray-700' : 'text-gray-900'}`}>
-              {email.subject || 'Sans objet'}
+              {email.work_order_number ? `Bon N° ${email.work_order_number}` : email.subject || 'Sans objet'}
             </h4>
+            {email.work_order_number && email.subject && (
+              <span className="text-xs text-gray-400 truncate hidden sm:inline-block max-w-xs">— {email.subject}</span>
+            )}
           </div>
           <p className="text-sm text-gray-500 mb-1.5">De : {email.from_name || email.from_email}</p>
           {email.body_text && <p className="text-sm text-gray-400 truncate max-w-lg">{email.body_text.substring(0, 120)}...</p>}
@@ -374,7 +377,12 @@ function EmailDetailView({ email, regies, onPlan, onIgnore, onArchive, showActio
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             {isInfo ? <span className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full flex-shrink-0">INFO</span> : <span className="px-2.5 py-1 text-xs font-medium bg-blue-50 text-blue-600 rounded-full flex-shrink-0">INTERVENTION</span>}
-            <h3 className="text-lg font-semibold text-gray-900">{email.subject || 'Sans objet'}</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {email.work_order_number ? `Bon N° ${email.work_order_number}` : email.subject || 'Sans objet'}
+            </h3>
+            {email.work_order_number && email.subject && (
+              <span className="text-sm text-gray-500 truncate">— {email.subject}</span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4 text-sm text-gray-500">

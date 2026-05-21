@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { PhotoUploader } from './PhotoUploader';
 import { SignatureCanvas } from './SignatureCanvas';
+import { GoogleReviewsQR } from './GoogleReviewsQR';
 import { cn } from '@/lib/utils';
 import type { Intervention, Report, Product } from '@/types/database';
 import {
@@ -611,6 +612,9 @@ export function ReportForm({
           existingSignature={clientSignature}
         />
       </div>
+
+      {/* ===== QR CODE AVIS GOOGLE ===== */}
+      <GoogleReviewsQR />
 
       {/* ===== ACTIONS FIXES EN BAS ===== */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-area-pb z-50">
