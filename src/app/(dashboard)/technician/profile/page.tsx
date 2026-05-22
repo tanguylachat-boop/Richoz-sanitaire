@@ -5,6 +5,7 @@ import { User, Mail, Phone, Shield, Loader2, Save, CheckCircle, Bell, BellOff, B
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { registerPushSubscription, unregisterPushSubscription } from '@/lib/push-notifications';
+import { ChangePasswordSection } from '@/components/profile/ChangePasswordSection';
 
 interface UserProfile {
   id: string;
@@ -298,6 +299,9 @@ export default function TechnicianProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Change password */}
+      <ChangePasswordSection />
 
       {/* Save button */}
       <button

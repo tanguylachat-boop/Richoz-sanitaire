@@ -172,7 +172,11 @@ export function Sidebar({ user, className }: SidebarProps) {
 
       {/* User Section */}
       <div className="p-4 border-t border-gray-200">
-        <div className="flex items-center gap-3 mb-3">
+        <Link
+          href={isTechnician ? '/technician/profile' : '/profile'}
+          className="flex items-center gap-3 mb-3 hover:bg-gray-50 rounded-lg p-1 -m-1 transition-colors"
+          title="Mon profil"
+        >
           <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center">
             <span className="text-sm font-semibold text-blue-600">
               {user.first_name.charAt(0)}{user.last_name.charAt(0)}
@@ -184,7 +188,7 @@ export function Sidebar({ user, className }: SidebarProps) {
             </p>
             <p className="text-xs text-gray-500 truncate">{user.email}</p>
           </div>
-        </div>
+        </Link>
         <button
           onClick={handleLogout}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
