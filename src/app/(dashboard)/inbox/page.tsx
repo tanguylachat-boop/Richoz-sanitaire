@@ -19,6 +19,8 @@ import {
   Paperclip,
   Image as ImageIcon,
   Download,
+  Search,
+  X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -93,6 +95,7 @@ export default function InboxPage() {
 
   const [urgentFilterActive, setUrgentFilterActive] = useState(false);
   const [regieFilter, setRegieFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<EmailInbox | null>(null);
@@ -164,16 +167,36 @@ export default function InboxPage() {
   const sortByDateDesc = (a: EmailInbox, b: EmailInbox) =>
     new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
 
+  // Build a regie name lookup map for EmailCard badges and search
+  const regieNameMap = new Map(regies.map((r) => [r.id, r.name]));
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredEmails = enrichedEmails.filter((email) => {
     if (urgentFilterActive && !isEmailUrgent(email)) return false;
     if (regieFilter && email.regie_id !== regieFilter) return false;
+    if (normalizedQuery) {
+      const haystack = [
+        email.work_order_number,
+        email.subject,
+        email.from_email,
+        email.from_name,
+        email.body_text,
+        email.extracted_data?.title,
+        email.extracted_data?.address,
+        email.extracted_data?.tenant_name,
+        email.extracted_data?.tenant_phone,
+        email.extracted_data?.description,
+        email.regie_id ? regieNameMap.get(email.regie_id) : null,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (!haystack.includes(normalizedQuery)) return false;
+    }
     return true;
   });
 
   const chronologicalEmails = filteredEmails.sort(sortByDateDesc);
-
-  // Build a regie name lookup map for EmailCard badges
-  const regieNameMap = new Map(regies.map((r) => [r.id, r.name]));
 
   const totalEmails = enrichedEmails.length;
   const regieEmails = enrichedEmails.filter((e) => e.regie_id).length;
@@ -223,8 +246,30 @@ export default function InboxPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-gray-900">Boîte de réception</h2>
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">Boîte de réception</h2>
+          <div className="relative flex-1 lg:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher : N° bon, sujet, expéditeur, locataire, adresse…"
+              className="w-full h-10 pl-9 pr-9 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                title="Effacer la recherche"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <select
             value={regieFilter || ''}
