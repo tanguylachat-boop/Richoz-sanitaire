@@ -112,7 +112,10 @@ export default function InboxPage() {
     const { data: techData } = await supabase.from('users').select('id, first_name, last_name, email, intervention_type_preference').eq('role', 'technician').order('last_name');
     if (techData) setTechnicians(techData);
 
-    let query = supabase.from('email_inbox').select('id, received_at, from_email, from_name, subject, body_text, body_html, extracted_data, regie_id, work_order_number, status, category, email_type, attachment_urls').order('received_at', { ascending: false });
+    // ⚠️ NE PAS charger body_html ici : c'est le plus gros champ (~86 MB sur ~1260 emails,
+    // jusqu'à 9.5 MB pour un seul mail avec images inline). Il n'est utilisé que dans les
+    // modales Détail / Planification — on le charge à la demande via hydrateEmailBody().
+    let query = supabase.from('email_inbox').select('id, received_at, from_email, from_name, subject, body_text, extracted_data, regie_id, work_order_number, status, category, email_type, attachment_urls').order('received_at', { ascending: false });
     if (statusFilter !== 'all') query = query.eq('status', statusFilter);
 
     const { data: emailsData, error: emailsError } = await query;
@@ -122,6 +125,16 @@ export default function InboxPage() {
   }, [statusFilter]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Charge body_html à la demande (1 seule ligne) — il n'est pas dans la requête liste.
+  // Met en cache le résultat dans la liste pour que les ré-ouvertures soient instantanées.
+  const hydrateEmailBody = useCallback(async (email: EmailInbox) => {
+    if (email.body_html !== undefined) return; // déjà chargé (ou inséré via realtime)
+    const { data } = await supabase.from('email_inbox').select('body_html').eq('id', email.id).single();
+    const html = (data as { body_html: string | null } | null)?.body_html ?? null;
+    setEmails((prev) => prev.map((e) => (e.id === email.id ? { ...e, body_html: html } : e)));
+    setSelectedEmail((cur) => (cur && cur.id === email.id ? { ...cur, body_html: html } : cur));
+  }, [supabase]);
 
   useEffect(() => {
     const channel = supabase.channel('email_inbox_changes').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'email_inbox' }, (payload) => {
@@ -143,9 +156,10 @@ export default function InboxPage() {
         autoOpenHandled.current = true;
         setSelectedEmail(targetEmail);
         setIsDetailModalOpen(true);
+        void hydrateEmailBody(targetEmail);
       }
     }
-  }, [searchParams, emails]);
+  }, [searchParams, emails, hydrateEmailBody]);
 
   const findRegieByEmail = (fromEmail: string): string | null => {
     if (!fromEmail) return null;
@@ -203,8 +217,8 @@ export default function InboxPage() {
   const urgentEmails = enrichedEmails.filter(isEmailUrgent).length;
   const infoEmails = enrichedEmails.filter((e) => getEmailType(e) === 'info').length;
 
-  const handlePlanIntervention = (email: EmailInbox) => { setSelectedEmail(email); setIsPlanModalOpen(true); };
-  const handleViewDetail = (email: EmailInbox) => { setSelectedEmail(email); setIsDetailModalOpen(true); };
+  const handlePlanIntervention = (email: EmailInbox) => { setSelectedEmail(email); setIsPlanModalOpen(true); void hydrateEmailBody(email); };
+  const handleViewDetail = (email: EmailInbox) => { setSelectedEmail(email); setIsDetailModalOpen(true); void hydrateEmailBody(email); };
 
   const updateEmailStatus = async (emailId: string, status: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
