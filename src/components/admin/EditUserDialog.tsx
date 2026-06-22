@@ -4,9 +4,9 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
-import { updateUser } from '@/app/(dashboard)/admin/users/actions';
+import { updateUser, deleteUser } from '@/app/(dashboard)/admin/users/actions';
 import type { User, UserRole } from '@/types/database';
-import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake, Wrench, Palette, Palmtree } from 'lucide-react';
+import { Loader2, User as UserIcon, Mail, Phone, Shield, Cake, Wrench, Palette, Palmtree, Trash2, AlertTriangle } from 'lucide-react';
 import { TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
 
 const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = [
@@ -28,6 +28,8 @@ interface EditUserDialogProps {
 export function EditUserDialog({ user, children }: EditUserDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const router = useRouter();
 
   const [form, setForm] = useState({
@@ -61,14 +63,36 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
 
   const handleOpen = () => {
     resetForm();
+    setConfirmDelete(false);
     setIsOpen(true);
   };
 
   const handleClose = () => {
-    if (!isPending) {
+    if (!isPending && !isDeleting) {
       setIsOpen(false);
+      setConfirmDelete(false);
       resetForm();
     }
+  };
+
+  const handleDelete = () => {
+    startDeleteTransition(async () => {
+      const result = await deleteUser({ id: user.id });
+
+      if (result.success) {
+        if (result.deactivated) {
+          toast.success('Collaborateur désactivé : il a un historique (rapports, etc.), son compte est conservé mais son accès est révoqué.');
+        } else {
+          toast.success('Collaborateur supprimé.');
+        }
+        setIsOpen(false);
+        setConfirmDelete(false);
+        router.refresh();
+      } else {
+        setFieldError(result.error || 'Erreur lors de la suppression.');
+        toast.error(result.error || 'Erreur lors de la suppression.');
+      }
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -365,14 +389,14 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
             <button
               type="button"
               onClick={handleClose}
-              disabled={isPending}
+              disabled={isPending || isDeleting}
               className="flex-1 py-2.5 px-4 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Annuler
             </button>
             <button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isDeleting}
               className="flex-1 py-2.5 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isPending ? (
@@ -384,6 +408,59 @@ export function EditUserDialog({ user, children }: EditUserDialogProps) {
                 'Enregistrer'
               )}
             </button>
+          </div>
+
+          {/* Danger zone — supprimer le collaborateur */}
+          <div className="pt-4 mt-2 border-t border-gray-100">
+            {!confirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={isPending || isDeleting}
+                className="w-full py-2.5 px-4 border border-red-200 text-red-600 rounded-xl font-medium hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Supprimer le collaborateur
+              </button>
+            ) : (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-red-700">
+                    <p className="font-medium">Supprimer {user.first_name} {user.last_name} ?</p>
+                    <p className="mt-1 text-red-600/90">
+                      Son accès sera révoqué immédiatement. S&apos;il a déjà un historique (rapports,
+                      interventions…), son compte sera désactivé plutôt qu&apos;effacé afin de conserver les données.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={isDeleting}
+                    className="flex-1 py-2.5 px-4 border border-gray-200 bg-white text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex-1 py-2.5 px-4 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Suppression...
+                      </>
+                    ) : (
+                      'Confirmer la suppression'
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </form>
       </Modal>

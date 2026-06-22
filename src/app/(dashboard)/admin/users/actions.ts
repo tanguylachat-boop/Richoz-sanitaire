@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import type { UserRole } from '@/types/database';
-import { requireAdminOrSecretary } from '@/lib/auth-guard';
+import { requireAdminOrSecretary, requireAdmin } from '@/lib/auth-guard';
 
 const VALID_ROLES: UserRole[] = ['admin', 'secretary', 'technician'];
 
@@ -164,6 +164,87 @@ export async function createUser(payload: CreateUserPayload) {
     return { success: true };
   } catch (err) {
     console.error('createUser unexpected error:', err);
+    return { success: false, error: 'Erreur serveur inattendue.' };
+  }
+}
+
+interface DeleteUserResult {
+  success: boolean;
+  error?: string;
+  /** true when the user could not be hard-deleted (linked history) and was deactivated instead. */
+  deactivated?: boolean;
+}
+
+/**
+ * Delete a collaborator (e.g. a fired employee).
+ *
+ * Admin-only and destructive. A full hard-delete (auth account + profile) is
+ * attempted first. If the collaborator already has linked records (reports,
+ * piquet reports, etc. protected by RESTRICT/NO ACTION foreign keys), the row
+ * cannot be erased without losing business history — so we fall back to a soft
+ * delete: the profile is deactivated and the auth account is banned, which
+ * revokes access immediately while preserving the historical data.
+ */
+export async function deleteUser(payload: { id: string }): Promise<DeleteUserResult> {
+  const auth = await requireAdmin();
+  if (!auth.authorized) return { success: false, error: auth.error };
+
+  const { id } = payload;
+  if (!id) return { success: false, error: 'Utilisateur introuvable.' };
+  if (id === auth.userId) {
+    return { success: false, error: 'Vous ne pouvez pas supprimer votre propre compte.' };
+  }
+
+  try {
+    const supabase = createClient();
+
+    // 1) Try to hard-delete the profile row first. Foreign keys with
+    // RESTRICT / NO ACTION (reports, piquet_reports, quotes, ...) will block
+    // this for any collaborator who already has history.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: profileError } = await (supabase as any)
+      .from('users')
+      .delete()
+      .eq('id', id);
+
+    if (profileError) {
+      // 23503 = foreign_key_violation → collaborator has linked records.
+      if (profileError.code === '23503') {
+        // Soft delete: deactivate the profile and ban the auth account so the
+        // fired collaborator loses access while history stays intact.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: deactivateError } = await (supabase as any)
+          .from('users')
+          .update({ is_active: false })
+          .eq('id', id);
+
+        if (deactivateError) {
+          console.error('Deactivate user error:', deactivateError);
+          return { success: false, error: 'Impossible de désactiver le collaborateur.' };
+        }
+
+        // Ban the auth account (~100 years) to revoke login. Non-blocking.
+        await supabase.auth.admin.updateUserById(id, { ban_duration: '876000h' });
+
+        revalidatePath('/admin/users');
+        return { success: true, deactivated: true };
+      }
+
+      console.error('Delete user profile error:', profileError);
+      return { success: false, error: 'Erreur lors de la suppression du collaborateur.' };
+    }
+
+    // 2) Profile removed → delete the auth account. Non-blocking: the profile
+    // is already gone, an orphaned auth account would just be unusable.
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(id);
+    if (authDeleteError) {
+      console.error('Delete auth user error (profile already removed):', authDeleteError);
+    }
+
+    revalidatePath('/admin/users');
+    return { success: true, deactivated: false };
+  } catch (err) {
+    console.error('deleteUser unexpected error:', err);
     return { success: false, error: 'Erreur serveur inattendue.' };
   }
 }
