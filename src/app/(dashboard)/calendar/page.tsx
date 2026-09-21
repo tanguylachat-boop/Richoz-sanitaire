@@ -1,5 +1,7 @@
 'use client';
 
+import { buildInterventionDates, calendarDate, isCalendarDate, isClockTime } from '@/lib/intervention-dates';
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Calendar, Loader2, Pencil, Trash2, X as XIcon, Droplets } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -43,7 +45,7 @@ const VIEW_TABS: { value: CalendarView; label: string; icon: typeof CalendarDays
   { value: 'day', label: 'Jour', icon: Calendar },
 ];
 
-export default function CalendarPage() {
+export default function CalendarPage({ searchParams }: { searchParams?: { intervention?: string } }) {
   const [view, setView] = useState<CalendarView>('week');
   const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -185,6 +187,19 @@ export default function CalendarPage() {
       setDetailIntervention(data as Intervention);
     }
   };
+  useEffect(() => {
+    const id = searchParams?.intervention;
+    if (!id) return;
+    let active = true;
+    const client = createClient();
+    void client.from('interventions').select('*, technician:users!interventions_technician_id_fkey(id, first_name, last_name, calendar_color)')
+      .eq('id', id).single().then(({ data, error }) => {
+        if (!active) return;
+        if (error || !data) toast.error('Intervention inaccessible.');
+        else setDetailIntervention(data as Intervention);
+      });
+    return () => { active = false; };
+  }, [searchParams?.intervention]);
   const handleEditFromDetail = () => { if (detailIntervention) { setSelectedIntervention(detailIntervention); setDetailIntervention(null); setIsEditModalOpen(true); } };
   const handleCreateSuccess = () => { setIsCreateModalOpen(false); fetchInterventions(); };
   const handleEditSuccess = () => { setIsEditModalOpen(false); setSelectedIntervention(null); fetchInterventions(); };
@@ -492,8 +507,8 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     if (usersData) {
       const year = new Date().getFullYear();
       const bdays: BirthdayEntry[] = usersData
-        .filter((u: { birth_date: string | null }) => u.birth_date)
-        .map((u: { id: string; first_name: string; last_name: string; birth_date: string }) => {
+        .filter((u): u is typeof u & { birth_date: string } => typeof u.birth_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(u.birth_date))
+        .map((u) => {
           const [, m, d] = u.birth_date.split('-');
           return { user_id: u.id, first_name: u.first_name || '', last_name: u.last_name || '', date: `${year}-${m}-${d}` };
         });
@@ -552,13 +567,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
     setIsLoading(true);
     try {
       const isChantier = formData.intervention_type === 'chantier';
-      let datePlanned = null;
-      if (formData.date_planned) {
-        const ds = isChantier
-          ? `${formData.date_planned}T07:00:00`
-          : formData.time_planned ? `${formData.date_planned}T${formData.time_planned}:00` : `${formData.date_planned}T09:00:00`;
-        datePlanned = new Date(ds).toISOString();
-      }
+      const dates = buildInterventionDates(formData);
       const ci: Record<string, string> = {};
       if (formData.client_name) ci.name = formData.client_name;
       if (formData.client_phone) ci.phone = formData.client_phone;
@@ -581,7 +590,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: insertedData, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null, address: formData.address,
-        date_planned: datePlanned, estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
+        date_planned: dates.date_planned, estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         status: 'planifie', priority: formData.priority,
         technician_id: formData.technician_id || null, regie_id: formData.regie_id || null,
         work_order_number: formData.work_order_number || null,
@@ -589,9 +598,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
         client_id: resolvedClientId,
         source_type: 'manual', intervention_type: formData.intervention_type,
         keys_info: formData.keys_info || null,
-        date_end: formData.intervention_type === 'chantier' && formData.date_end
-          ? new Date(`${formData.date_end}T18:00:00`).toISOString()
-          : null,
+        date_end: dates.date_end,
       }).select('id');
       if (error) throw new Error(error.message);
 
@@ -644,7 +651,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
       onSuccess();
     } catch (err) {
       console.error('Error creating intervention:', err);
-      toast.error("Erreur lors de la création");
+      toast.error(err instanceof Error ? err.message : 'Impossible d’enregistrer l’intervention.');
     } finally { setIsLoading(false); }
   };
 
@@ -653,7 +660,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
   const ic = 'w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
   const sc = `${ic} bg-white`;
 
-  const calendarSelectedSlot: SelectedSlot | null = formData.date_planned && formData.time_planned
+  const calendarSelectedSlot: SelectedSlot | null = isCalendarDate(formData.date_planned) && isClockTime(formData.time_planned)
     ? { date: formData.date_planned, time: formData.time_planned, durationMinutes: formData.estimated_duration_minutes || 60, title: formData.title || 'Nouvelle' }
     : null;
 
@@ -690,16 +697,16 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">N° Bon de travail</label><input type="text" name="work_order_number" value={formData.work_order_number} onChange={handleChange} className={ic} placeholder="Ex: #1723245" /></div>
           </div>
           <div className={`p-3 rounded-lg border ${formData.date_planned ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-            {formData.date_planned ? (<p className="text-sm text-green-800">📅 <strong>{format(new Date(formData.date_planned), 'EEEE d MMMM', { locale: fr })}</strong> à <strong>{formData.time_planned || '09:00'}</strong></p>) : (<p className="text-sm text-amber-800">👆 Cliquez sur un créneau libre dans le calendrier →</p>)}
+            {isCalendarDate(formData.date_planned) ? (<p className="text-sm text-green-800">📅 <strong>{format(calendarDate(formData.date_planned)!, 'EEEE d MMMM', { locale: fr })}</strong> à <strong>{formData.time_planned || '09:00'}</strong></p>) : (<p className="text-sm text-amber-800">👆 Cliquez sur un créneau libre dans le calendrier →</p>)}
           </div>
           {formData.intervention_type === 'chantier' ? (
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date début</label><input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label><input type="date" name="date_end" value={formData.date_end} onChange={handleChange} className={ic} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date début</label><input type="date" onInvalid={() => toast.error("Saisissez une date de début complète et valide.")} name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label><input type="date" name="date_end" min={formData.date_planned || undefined} value={formData.date_end} onChange={handleChange} className={ic} /></div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" onInvalid={() => toast.error("Saisissez une date de début complète et valide.")} name="date_planned" value={formData.date_planned} onChange={handleChange} className={ic} /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Heure</label><input type="time" name="time_planned" step="1800" value={formData.time_planned} onChange={handleChange} className={ic} /></div>
             </div>
           )}

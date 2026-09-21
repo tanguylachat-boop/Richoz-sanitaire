@@ -1,0 +1,244 @@
+TAP version 13
+# Subtest: BUG-01: mobile RH link is available to admin only
+ok 1 - BUG-01: mobile RH link is available to admin only
+  ---
+  duration_ms: 70.087
+  type: 'test'
+  ...
+# Subtest: BUG-01: server route access for admin
+ok 2 - BUG-01: server route access for admin
+  ---
+  duration_ms: 28.772
+  type: 'test'
+  ...
+# Subtest: BUG-01: server route access for secretary
+ok 3 - BUG-01: server route access for secretary
+  ---
+  duration_ms: 21.183833
+  type: 'test'
+  ...
+# Subtest: BUG-01: server route access for technician
+ok 4 - BUG-01: server route access for technician
+  ---
+  duration_ms: 19.6135
+  type: 'test'
+  ...
+# Subtest: BUG-01: server route access for missing profile
+ok 5 - BUG-01: server route access for missing profile
+  ---
+  duration_ms: 12.012791
+  type: 'test'
+  ...
+# Subtest: BUG-01: no session cannot access statistics
+ok 6 - BUG-01: no session cannot access statistics
+  ---
+  duration_ms: 10.096042
+  type: 'test'
+  ...
+# Subtest: BUG-01: auth outage gives an explicit error without exposing statistics
+ok 7 - BUG-01: auth outage gives an explicit error without exposing statistics
+  ---
+  duration_ms: 6.519583
+  type: 'test'
+  ...
+# Subtest: BUG-01: explicit statistics state — populated
+ok 8 - BUG-01: explicit statistics state — populated
+  ---
+  duration_ms: 938.779375
+  type: 'test'
+  ...
+# Subtest: BUG-01: explicit statistics state — empty
+ok 9 - BUG-01: explicit statistics state — empty
+  ---
+  duration_ms: 36.245791
+  type: 'test'
+  ...
+# Subtest: BUG-01: explicit statistics state — no leaves
+ok 10 - BUG-01: explicit statistics state — no leaves
+  ---
+  duration_ms: 89.56975
+  type: 'test'
+  ...
+# Subtest: BUG-01: explicit statistics state — sql error
+ok 11 - BUG-01: explicit statistics state — sql error
+  ---
+  duration_ms: 40.448208
+  type: 'test'
+  ...
+# Subtest: BUG-01: explicit statistics state — offline
+ok 12 - BUG-01: explicit statistics state — offline
+  ---
+  duration_ms: 21.317375
+  type: 'test'
+  ...
+# Subtest: BUG-02: rejects incomplete/impossible dates without formatting exceptions
+ok 13 - BUG-02: rejects incomplete/impossible dates without formatting exceptions
+  ---
+  duration_ms: 1.862875
+  type: 'test'
+  ...
+# Subtest: BUG-02: Zurich winter/summer, midnight and clock changes round-trip
+ok 14 - BUG-02: Zurich winter/summer, midnight and clock changes round-trip
+  ---
+  duration_ms: 258.432875
+  type: 'test'
+  ...
+# Subtest: BUG-02: chantier end ordering and existing 07:00/18:00 defaults
+ok 15 - BUG-02: chantier end ordering and existing 07:00/18:00 defaults
+  ---
+  duration_ms: 3.067209
+  type: 'test'
+  ...
+# Subtest: BUG-02: real InterventionForm handlers preserve fields, reject partial date, create and reopen
+ok 16 - BUG-02: real InterventionForm handlers preserve fields, reject partial date, create and reopen
+  ---
+  duration_ms: 152.517959
+  type: 'test'
+  ...
+# Subtest: BUG-02: real PlanificationSplitView handlers preserve fields, reject partial date, create and reopen
+ok 17 - BUG-02: real PlanificationSplitView handlers preserve fields, reject partial date, create and reopen
+  ---
+  duration_ms: 1731.834458
+  type: 'test'
+  ...
+# Subtest: BUG-02: real CreateInterventionSplitView handlers preserve fields, reject partial date, create and reopen
+ok 18 - BUG-02: real CreateInterventionSplitView handlers preserve fields, reject partial date, create and reopen
+  ---
+  duration_ms: 151.942333
+  type: 'test'
+  ...
+# Subtest: BUG-03: feedback is displayed fully and preserved on draft/resubmission
+ok 19 - BUG-03: feedback is displayed fully and preserved on draft/resubmission
+  ---
+  duration_ms: 109.195291
+  type: 'test'
+  ...
+# Subtest: BUG-03: new and legacy notification links target the report form, including chantier
+ok 20 - BUG-03: new and legacy notification links target the report form, including chantier
+  ---
+  duration_ms: 4.303666
+  type: 'test'
+  ...
+# Subtest: BUG-03: report scoped loading — owner
+ok 21 - BUG-03: report scoped loading — owner
+  ---
+  duration_ms: 54.459292
+  type: 'test'
+  ...
+# Subtest: BUG-03: report scoped loading — reload
+ok 22 - BUG-03: report scoped loading — reload
+  ---
+  duration_ms: 19.928333
+  type: 'test'
+  ...
+# Subtest: BUG-03: report scoped loading — other technician
+ok 23 - BUG-03: report scoped loading — other technician
+  ---
+  duration_ms: 28.184042
+  type: 'test'
+  ...
+# Subtest: BUG-03: report scoped loading — wrong report
+ok 24 - BUG-03: report scoped loading — wrong report
+  ---
+  duration_ms: 34.535333
+  type: 'test'
+  ...
+# Subtest: BUG-03: report scoped loading — no session
+ok 25 - BUG-03: report scoped loading — no session
+  ---
+  duration_ms: 39.697209
+  type: 'test'
+  ...
+# Subtest: BUG-03: report scoped loading — report error
+ok 26 - BUG-03: report scoped loading — report error
+  ---
+  duration_ms: 19.047958
+  type: 'test'
+  ...
+# Subtest: BUG-03: secretary return → notification → exact report, from src/app/(dashboard)/reports/validate/[id]/page.tsx
+ok 27 - BUG-03: secretary return → notification → exact report, from src/app/(dashboard)/reports/validate/[id]/page.tsx
+  ---
+  duration_ms: 73.008375
+  type: 'test'
+  ...
+# Subtest: BUG-03: secretary return → notification → exact report, from src/app/(dashboard)/reports/validate/page.tsx
+ok 28 - BUG-03: secretary return → notification → exact report, from src/app/(dashboard)/reports/validate/page.tsx
+  ---
+  duration_ms: 67.032
+  type: 'test'
+  ...
+# Subtest: PDF: upload, relist, authenticated download, idempotent retry and delete (mock storage)
+ok 29 - PDF: upload, relist, authenticated download, idempotent retry and delete (mock storage)
+  ---
+  duration_ms: 105.241875
+  type: 'test'
+  ...
+# Subtest: PDF: assigned technician reads, cannot upload/delete; other technician denied even with key
+ok 30 - PDF: assigned technician reads, cannot upload/delete; other technician denied even with key
+  ---
+  duration_ms: 25.183041
+  type: 'test'
+  ...
+# Subtest: PDF: invalid content, oversized input, traversal, inactive/no session, and storage failure
+ok 31 - PDF: invalid content, oversized input, traversal, inactive/no session, and storage failure
+  ---
+  duration_ms: 75.060167
+  type: 'test'
+  ...
+# Subtest: PDF component: multi-file partial failure, named retry and reload without touching intervention data
+ok 32 - PDF component: multi-file partial failure, named retry and reload without touching intervention data
+  ---
+  duration_ms: 58.501
+  type: 'test'
+  ...
+# Subtest: Photos: five selected, remove one, append second selection, reject individual invalid images
+ok 33 - Photos: five selected, remove one, append second selection, reject individual invalid images
+  ---
+  duration_ms: 93.632292
+  type: 'test'
+  ...
+# Subtest: Photos: concurrent selection cannot overwrite the pending batch; size/type validated
+ok 34 - Photos: concurrent selection cannot overwrite the pending batch; size/type validated
+  ---
+  duration_ms: 22.606875
+  type: 'test'
+  ...
+# Subtest: Photos: partial upload, retained successes, stable paths, retry without duplicates (mock storage)
+ok 35 - Photos: partial upload, retained successes, stable paths, retry without duplicates (mock storage)
+  ---
+  duration_ms: 12.930625
+  type: 'test'
+  ...
+# Subtest: Photos: lost storage response recovered by comparing bytes
+ok 36 - Photos: lost storage response recovered by comparing bytes
+  ---
+  duration_ms: 8.560458
+  type: 'test'
+  ...
+# Subtest: Report handlers: partial failure + database failure + retry + reopen preserve existing photos, captions and text
+ok 37 - Report handlers: partial failure + database failure + retry + reopen preserve existing photos, captions and text
+  ---
+  duration_ms: 149.814
+  type: 'test'
+  ...
+# Subtest: Private photo route: owner/staff allowed, other technician, anonymous and traversal denied (mock storage)
+ok 38 - Private photo route: owner/staff allowed, other technician, anonymous and traversal denied (mock storage)
+  ---
+  duration_ms: 22.729542
+  type: 'test'
+  ...
+# Subtest: DOCX neighbor: private photos resolved to bytes and foreign attachment rejected (mock storage, no conversion)
+ok 39 - DOCX neighbor: private photos resolved to bytes and foreign attachment rejected (mock storage, no conversion)
+  ---
+  duration_ms: 23.623667
+  type: 'test'
+  ...
+1..39
+# tests 39
+# suites 0
+# pass 39
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4485.126167

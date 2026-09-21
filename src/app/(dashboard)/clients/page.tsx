@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Search, Users as UsersIcon, Loader2, Phone, MapPin, Building2 } from 'lucide-react';
+import { Plus, Search, Users as UsersIcon, Loader2, Phone, MapPin, Building2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -128,13 +128,22 @@ export default function ClientsListPage() {
             <p className="text-sm text-gray-500">{clients.length} fiche{clients.length > 1 ? 's' : ''}</p>
           </div>
         </div>
-        <Link
-          href="/clients/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nouveau client
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/clients/import"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Importer Bexio
+          </Link>
+          <Link
+            href="/clients/new"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nouveau client
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row gap-3">

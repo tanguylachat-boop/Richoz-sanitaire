@@ -16,7 +16,9 @@ export async function normalizeImage(
 
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const sourceUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(sourceUrl);
       let { width, height } = img;
 
       // Scale down if needed
@@ -36,7 +38,7 @@ export async function normalizeImage(
 
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        resolve(file); // fallback to original
+        reject(new Error('Impossible de préparer cette image sur cet appareil.'));
         return;
       }
 
@@ -45,7 +47,7 @@ export async function normalizeImage(
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            resolve(file);
+            reject(new Error('Impossible de préparer cette image sur cet appareil.'));
             return;
           }
           const normalized = new File([blob], file.name, {
@@ -59,9 +61,9 @@ export async function normalizeImage(
       );
     };
 
-    img.onerror = () => reject(new Error('Failed to load image'));
+    img.onerror = () => { URL.revokeObjectURL(sourceUrl); reject(new Error('Image illisible sur cet appareil.')); };
 
     // createObjectURL + Image auto-applies EXIF orientation in modern browsers
-    img.src = URL.createObjectURL(file);
+    img.src = sourceUrl;
   });
 }

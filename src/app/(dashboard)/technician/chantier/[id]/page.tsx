@@ -1,5 +1,7 @@
 'use client';
 
+import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -27,6 +29,7 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import type { Report, User as UserRow } from '@/types/database';
 import { normalizeImage } from '@/lib/normalize-image';
 import { sendPush } from '@/lib/send-push';
 import { computeChantierProgress } from '@/lib/chantier-progress';
@@ -229,7 +232,7 @@ export default function ChantierDetailPage() {
         .eq('intervention_id', interventionId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle();
+        .maybeSingle<Pick<Report, 'status' | 'revision_requested' | 'revision_message'>>();
       if (reportData) {
         setReportStatus(reportData.status);
         if (reportData.revision_requested && reportData.revision_message) {
@@ -241,7 +244,7 @@ export default function ChantierDetailPage() {
     }
 
     setIsLoading(false);
-  }, [interventionId]);
+  }, [interventionId, router, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -285,7 +288,7 @@ export default function ChantierDetailPage() {
       if (error) throw error;
 
       // Notify admins
-      const { data: admins, error: adminsErr } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      const { data: admins, error: adminsErr } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']).returns<Pick<UserRow, 'id'>[]>();
       if (adminsErr) console.error('Failed to fetch admins for notification:', adminsErr);
       if (admins && admins.length > 0) {
         const notifs = admins.filter(a => a.id !== user.id).map(a => ({
@@ -338,7 +341,7 @@ export default function ChantierDetailPage() {
       if (error) throw error;
 
       // Notify admins
-      const { data: admins2, error: adminsErr2 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      const { data: admins2, error: adminsErr2 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']).returns<Pick<UserRow, 'id'>[]>();
       if (adminsErr2) console.error('Failed to fetch admins for notification:', adminsErr2);
       if (admins2 && admins2.length > 0) {
         const notifs = admins2.filter(a => a.id !== user.id).map(a => ({
@@ -409,7 +412,7 @@ export default function ChantierDetailPage() {
       }
 
       // Notify admins (don't break flow on failure)
-      const { data: admins3, error: adminsErr3 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
+      const { data: admins3, error: adminsErr3 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']).returns<Pick<UserRow, 'id'>[]>();
       if (adminsErr3) console.error('Failed to fetch admins for notification:', adminsErr3);
       if (admins3 && admins3.length > 0) {
         const notifs3 = admins3.filter(a => a.id !== user.id).map(a => ({
@@ -922,6 +925,7 @@ export default function ChantierDetailPage() {
       )}
 
       {/* ═══ TAB: Photos ═══ */}
+      {activeTab === 'overview' && <ChantierDocuments key={interventionId} interventionId={interventionId} />}
       {activeTab === 'photos' && (
         <div className="space-y-4">
           {/* Upload section */}

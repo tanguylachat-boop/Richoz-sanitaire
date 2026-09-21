@@ -1,0 +1,64 @@
+ M .claude/settings.local.json
+ M middleware.ts
+ M next.config.js
+ M package-lock.json
+ M package.json
+ M src/app/(dashboard)/admin/stats/page.tsx
+ M src/app/(dashboard)/admin/users/page.tsx
+ M src/app/(dashboard)/calendar/page.tsx
+ M src/app/(dashboard)/chantiers/[id]/page.tsx
+ M src/app/(dashboard)/clients/[id]/page.tsx
+ M src/app/(dashboard)/reports/layout.tsx
+ M src/app/(dashboard)/reports/validate/[id]/page.tsx
+ M src/app/(dashboard)/reports/validate/page.tsx
+ M src/app/(dashboard)/technician/chantier/[id]/page.tsx
+ M src/app/(dashboard)/technician/notifications/page.tsx
+ M src/app/(dashboard)/technician/report/[interventionId]/page.tsx
+ M src/app/(dashboard)/technician/today/page.tsx
+ M src/app/api/reports/[id]/docx/route.ts
+ M src/app/layout.tsx
+ M src/components/calendar/InterventionDetailSheet.tsx
+ M src/components/interventions/InterventionForm.tsx
+ M src/components/interventions/PlanificationSplitView.tsx
+ M src/components/layout/MobileNav.tsx
+ M src/components/reports/PhotoUploader.tsx
+ M src/components/reports/ReportForm.tsx
+ M src/components/reports/VoiceRecorder.tsx
+ M src/lib/auth-guard.ts
+ M src/lib/normalize-image.ts
+ M src/lib/push-notifications.ts
+ M src/lib/supabase/client.ts
+ M src/lib/supabase/server.ts
+ M src/types/database.ts
+ M supabase/migrations/00005_notifications.sql
+ M supabase/migrations/00008_intervention_reminders.sql
+ M supabase/migrations/00015_enable_realtime.sql
+ D supabase/migrations/00018b_clients_backfill.sql
+ D supabase/migrations/00022_invoices_pdf.sql
+?? .eslintrc.cjs
+?? .playwright-mcp/
+?? docs/
+?? scripts/prepare-local-validation.py
+?? src/app/(dashboard)/admin/stats/layout.tsx
+?? src/app/(dashboard)/reports/followup/
+?? src/app/api/cron/report-reminders/
+?? src/app/api/interventions/
+?? src/app/api/report-photos/
+?? src/app/fonts/
+?? src/components/documents/
+?? src/lib/chantier-documents.ts
+?? src/lib/intervention-dates.ts
+?? src/lib/report-access.ts
+?? src/lib/report-dictation.ts
+?? src/lib/report-feedback.ts
+?? src/lib/report-followup.ts
+?? src/lib/report-photos.ts
+?? src/types/supabase-ssr-compat.d.ts
+?? supabase/migrations/0000901_restore_application_schema.sql
+?? supabase/migrations/00024_chantier_documents.sql
+?? supabase/migrations/00025_report_workflow_access.sql
+?? supabase/migrations/00026_clients_backfill.sql
+?? supabase/migrations/00027_invoices_pdf.sql
+?? supabase/migrations/00028_verify_schema_and_photo_scope.sql
+?? supabase/migrations/00029_report_followup.sql
+?? tests/

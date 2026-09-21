@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: real reports: return, reconnect, correct draft, resubmit, secretary rereads historical feedback
+ok 1 - real reports: return, reconnect, correct draft, resubmit, secretary rereads historical feedback
+  ---
+  duration_ms: 13207.673583
+  type: 'test'
+  ...
+# Subtest: real reports: direct API rejects ownership, reassignment, feedback and validator forgery, invalid states
+ok 2 - real reports: direct API rejects ownership, reassignment, feedback and validator forgery, invalid states
+  ---
+  duration_ms: 4064.166791
+  type: 'test'
+  ...
+# Subtest: real notifications: correct recipient after reconnect; forged recipient/body updates refused
+ok 3 - real notifications: correct recipient after reconnect; forged recipient/body updates refused
+  ---
+  duration_ms: 1921.98
+  type: 'test'
+  ...
+# Subtest: real PDF HTTP + Storage: multiple, reconnect, owner access, direct denial, retry and deletion
+ok 4 - real PDF HTTP + Storage: multiple, reconnect, owner access, direct denial, retry and deletion
+  ---
+  duration_ms: 6022.665458
+  type: 'test'
+  ...
+# Subtest: real photos: partial upload failure, retry, persisted report, reconnect and direct Storage rights
+ok 5 - real photos: partial upload failure, retry, persisted report, reconnect and direct Storage rights
+  ---
+  duration_ms: 2960.664083
+  type: 'test'
+  ...
+# Subtest: real date persistence: Zurich winter/summer near midnight survives reconnect
+ok 6 - real date persistence: Zurich winter/summer near midnight survives reconnect
+  ---
+  duration_ms: 710.460417
+  type: 'test'
+  ...
+# Subtest: real HTTP stats: active admin allowed, secretary/technician/inactive/anonymous denied
+ok 7 - real HTTP stats: active admin allowed, secretary/technician/inactive/anonymous denied
+  ---
+  duration_ms: 1394.569875
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 33708.741

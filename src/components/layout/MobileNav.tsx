@@ -11,6 +11,7 @@ import {
   FileText,
   Inbox,
   Palmtree,
+  BarChart3,
 } from 'lucide-react';
 
 interface MobileNavProps {
@@ -34,7 +35,10 @@ const adminNav = [
 
 export function MobileNav({ role, className }: MobileNavProps) {
   const pathname = usePathname();
-  const navItems = role === 'technician' ? technicianNav : adminNav;
+  const navItems = role === 'technician' ? technicianNav : [
+    ...adminNav,
+    ...(role === 'admin' ? [{ href: '/admin/stats', label: 'Stats RH', icon: BarChart3 }] : []),
+  ];
 
   return (
     <nav

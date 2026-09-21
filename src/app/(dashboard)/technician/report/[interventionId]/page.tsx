@@ -31,7 +31,8 @@ interface CutoffReminder {
   reminder_type: string | null;
 }
 
-export default function TechnicianReportPage() {
+export default function TechnicianReportPage({ searchParams }: { searchParams?: { report_id?: string } }) {
+  const requestedReportId = searchParams?.report_id;
   const router = useRouter();
   const params = useParams();
   const interventionId = params.interventionId as string;
@@ -48,57 +49,75 @@ export default function TechnicianReportPage() {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setError(null);
+      setIntervention(null);
+      try {
       
-      // Get user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-      setUserId(user.id);
+        // Get user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+        setUserId(user.id);
 
-      // Fetch intervention
-      const { data: interventionData, error: intError } = await supabase
-        .from('interventions')
-        .select(`
-          *,
-          regie:regies(id, name, keyword),
-          reports(*)
-        `)
-        .eq('id', interventionId)
-        .single();
+        // Fetch intervention
+        const { data: interventionData, error: intError } = await supabase
+          .from('interventions')
+          .select(`
+            *,
+            regie:regies(id, name, keyword)
+          `)
+          .eq('id', interventionId)
+          .eq('technician_id', user.id)
+          .single();
 
-      if (intError || !interventionData) {
-        setError('Intervention non trouvée');
+        if (intError || !interventionData) {
+          setError('Intervention non trouvée');
+          setIsLoading(false);
+          return;
+        }
+
+        let reportsQuery = supabase.from('reports').select('*')
+          .eq('intervention_id', interventionId)
+          .eq('technician_id', user.id)
+          .order('created_at', { ascending: false });
+        if (requestedReportId) reportsQuery = reportsQuery.eq('id', requestedReportId);
+        const { data: reports, error: reportsError } = await reportsQuery;
+        if (reportsError) throw new Error('Impossible de charger le rapport et le retour du secrétariat.');
+        if (requestedReportId && !reports?.length) throw new Error('Rapport introuvable ou accès non autorisé.');
+        // Prefer a pending revision on direct/legacy links; explicit links select the exact report.
+        const ownReports = (reports || []) as Report[];
+        const selectedReport = ownReports.find(r => r.revision_requested) || ownReports[0];
+        setIntervention({ ...(interventionData as Intervention), reports: selectedReport ? [selectedReport] : [] });
+
+        // Fetch cutoff notices for this intervention (water cutoff reminders set by admin)
+        const { data: cutoffData } = await supabase
+          .from('intervention_reminders')
+          .select('id, reminder_date, message, reminder_type')
+          .eq('intervention_id', interventionId)
+          .eq('reminder_type', 'cutoff')
+          .order('reminder_date', { ascending: true });
+        setCutoffs((cutoffData as CutoffReminder[]) || []);
+
+        // Fetch products
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true)
+          .order('category')
+          .order('name');
+
+        setProducts(productsData || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Impossible de charger le rapport.');
+      } finally {
         setIsLoading(false);
-        return;
       }
-
-      setIntervention(interventionData as InterventionWithDetails);
-
-      // Fetch cutoff notices for this intervention (water cutoff reminders set by admin)
-      const { data: cutoffData } = await supabase
-        .from('intervention_reminders')
-        .select('id, reminder_date, message, reminder_type')
-        .eq('intervention_id', interventionId)
-        .eq('reminder_type', 'cutoff')
-        .order('reminder_date', { ascending: true });
-      setCutoffs((cutoffData as CutoffReminder[]) || []);
-
-      // Fetch products
-      const { data: productsData } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_active', true)
-        .order('category')
-        .order('name');
-
-      setProducts(productsData || []);
-      setIsLoading(false);
     };
 
     fetchData();
-  }, [interventionId, router, supabase]);
+  }, [interventionId, requestedReportId, router, supabase]);
 
   const openGoogleMaps = (address: string) => {
     const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
@@ -296,6 +315,7 @@ export default function TechnicianReportPage() {
         <h2 className="text-lg font-bold text-gray-900 mb-4">Rapport d&apos;intervention</h2>
         {userId && (
           <ReportForm
+            key={existingReport?.id || intervention.id}
             intervention={intervention}
             existingReport={existingReport}
             products={products}

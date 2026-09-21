@@ -1,0 +1,130 @@
+[
+  {
+    "file": "src/app/(dashboard)/admin/users/page.tsx",
+    "change": "modified"
+  },
+  {
+    "file": "src/app/(dashboard)/calendar/page.tsx",
+    "change": "modified"
+  },
+  {
+    "file": "src/app/(dashboard)/clients/[id]/page.tsx",
+    "change": "modified"
+  },
+  {
+    "file": "src/app/(dashboard)/technician/today/page.tsx",
+    "change": "modified"
+  },
+  {
+    "file": "src/app/fonts/Inter-latin.woff2",
+    "change": "added"
+  },
+  {
+    "file": "src/app/fonts/OFL.txt",
+    "change": "added"
+  },
+  {
+    "file": "src/app/layout.tsx",
+    "change": "modified"
+  },
+  {
+    "file": "src/components/interventions/PlanificationSplitView.tsx",
+    "change": "modified"
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "change": "modified"
+  },
+  {
+    "file": "src/lib/supabase/client.ts",
+    "change": "modified"
+  },
+  {
+    "file": "src/lib/supabase/server.ts",
+    "change": "modified"
+  },
+  {
+    "file": "src/types/database.ts",
+    "change": "modified"
+  },
+  {
+    "file": "src/types/supabase-ssr-compat.d.ts",
+    "change": "added"
+  },
+  {
+    "file": "tests/local-browser.cjs",
+    "change": "added"
+  },
+  {
+    "file": "tests/local-fixtures.cjs",
+    "change": "added"
+  },
+  {
+    "file": "tests/local-integration.test.cjs",
+    "change": "added"
+  },
+  {
+    "file": "tests/local-schema-compatibility.sql",
+    "change": "added"
+  },
+  {
+    "file": "supabase/.temp/cli-latest",
+    "change": "modified"
+  },
+  {
+    "file": "supabase/migrations/00005_notifications.sql",
+    "change": "modified"
+  },
+  {
+    "file": "supabase/migrations/00008_intervention_reminders.sql",
+    "change": "modified"
+  },
+  {
+    "file": "supabase/migrations/0000901_restore_application_schema.sql",
+    "change": "added"
+  },
+  {
+    "file": "supabase/migrations/00015_enable_realtime.sql",
+    "change": "modified"
+  },
+  {
+    "file": "supabase/migrations/00018b_clients_backfill.sql",
+    "change": "renamed (SQL retained)"
+  },
+  {
+    "file": "supabase/migrations/00022_invoices_pdf.sql",
+    "change": "renamed (SQL retained)"
+  },
+  {
+    "file": "supabase/migrations/00025_report_workflow_access.sql",
+    "change": "added"
+  },
+  {
+    "file": "supabase/migrations/00026_clients_backfill.sql",
+    "change": "added"
+  },
+  {
+    "file": "supabase/migrations/00027_invoices_pdf.sql",
+    "change": "added"
+  },
+  {
+    "file": "supabase/migrations/00028_verify_schema_and_photo_scope.sql",
+    "change": "added"
+  },
+  {
+    "file": "package.json",
+    "change": "modified"
+  },
+  {
+    "file": "package-lock.json",
+    "change": "modified"
+  },
+  {
+    "file": ".eslintrc.cjs",
+    "change": "added"
+  },
+  {
+    "file": "scripts/prepare-local-validation.py",
+    "change": "added"
+  }
+]

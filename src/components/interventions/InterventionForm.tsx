@@ -1,5 +1,9 @@
 'use client';
 
+import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
+
+import { buildInterventionDates, interventionDateFields } from '@/lib/intervention-dates';
+
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -64,36 +68,13 @@ export function InterventionForm({
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [regies, setRegies] = useState<Regie[]>([]);
 
-  // Parse existing date/time if editing
-  const getInitialDate = () => {
-    if (intervention?.date_planned) {
-      return intervention.date_planned.split('T')[0];
-    }
-    return '';
-  };
-
-  const getInitialTime = () => {
-    if (intervention?.date_planned) {
-      const timePart = intervention.date_planned.split('T')[1];
-      if (timePart) {
-        return timePart.substring(0, 5);
-      }
-    }
-    return '';
-  };
-
-  const getInitialDateEnd = () => {
-    if (intervention?.date_end) return intervention.date_end.split('T')[0];
-    return '';
-  };
-
   const [formData, setFormData] = useState({
     title: intervention?.title || '',
     description: intervention?.description || '',
     address: intervention?.address || '',
-    date_planned: getInitialDate(),
-    time_planned: getInitialTime(),
-    date_end: getInitialDateEnd(),
+    date_planned: interventionDateFields(intervention?.date_planned).date,
+    time_planned: interventionDateFields(intervention?.date_planned).time,
+    date_end: interventionDateFields(intervention?.date_end).date,
     estimated_duration_minutes: intervention?.estimated_duration_minutes || 60,
     priority: intervention?.priority || 0,
     technician_id: intervention?.technician_id || '',
@@ -169,16 +150,7 @@ export function InterventionForm({
     setIsLoading(true);
 
     try {
-      // Combine date and time
-      let datePlanned = null;
-      if (formData.date_planned) {
-        const dateStr = isChantier
-          ? `${formData.date_planned}T07:00:00`
-          : formData.time_planned
-            ? `${formData.date_planned}T${formData.time_planned}:00`
-            : `${formData.date_planned}T09:00:00`;
-        datePlanned = new Date(dateStr).toISOString();
-      }
+      const dates = buildInterventionDates(formData, intervention);
 
       // Prepare client_info JSON
       const clientInfo: Record<string, string> = {};
@@ -189,8 +161,8 @@ export function InterventionForm({
         title: formData.title,
         description: formData.description || null,
         address: formData.address,
-        date_planned: datePlanned,
-        date_end: isChantier && formData.date_end ? new Date(`${formData.date_end}T18:00:00`).toISOString() : null,
+        date_planned: dates.date_planned,
+        date_end: dates.date_end,
         estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         intervention_type: formData.intervention_type,
         status: isEditMode ? (intervention?.status || 'planifie') : 'planifie',
@@ -268,7 +240,7 @@ export function InterventionForm({
       onSuccess();
     } catch (error) {
       console.error('Error saving intervention:', error);
-      toast.error(isEditMode ? 'Erreur lors de la modification' : 'Erreur lors de la création');
+      toast.error(error instanceof Error ? error.message : 'Impossible d’enregistrer l’intervention.');
     } finally {
       setIsLoading(false);
     }
@@ -319,6 +291,7 @@ export function InterventionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {intervention?.id && intervention.intervention_type === 'chantier' && <ChantierDocuments key={intervention.id} interventionId={intervention.id} />}
       {/* Titre */}
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -461,13 +434,13 @@ export function InterventionForm({
             <label htmlFor="date_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
               Date début
             </label>
-            <input type="date" id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <input type="date" onInvalid={() => toast.error("Saisissez une date de début complète et valide.")} id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
           <div>
             <label htmlFor="date_end" className="block text-sm font-medium text-gray-700 mb-1.5">
               Date fin
             </label>
-            <input type="date" id="date_end" name="date_end" value={formData.date_end} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <input type="date" id="date_end" name="date_end" min={formData.date_planned || undefined} value={formData.date_end} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
         </div>
       ) : (
@@ -476,7 +449,7 @@ export function InterventionForm({
             <label htmlFor="date_planned" className="block text-sm font-medium text-gray-700 mb-1.5">
               Date prévue
             </label>
-            <input type="date" id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <input type="date" onInvalid={() => toast.error("Saisissez une date de début complète et valide.")} id="date_planned" name="date_planned" value={formData.date_planned} onChange={handleChange} className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
           <div>
             <label htmlFor="time_planned" className="block text-sm font-medium text-gray-700 mb-1.5">

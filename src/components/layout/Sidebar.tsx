@@ -21,6 +21,7 @@ import {
   HardHat,
   Clock,
   FileSignature,
+  MapPin,
   LogOut,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -45,6 +46,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   'history': History,
   'clock': Clock,
   'file-signature': FileSignature,
+  'map-pin': MapPin,
 };
 
 interface SidebarProps {

@@ -1,0 +1,9 @@
+BEGIN
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+NOTICE:  PASS real failure stage 1 -> rollback -> retry -> one notification and one history
+NOTICE:  PASS real failure stage 2 -> rollback -> retry -> one notification and one history
+DO
+ROLLBACK

@@ -19,5 +19,5 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at
 
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "notifications_all" ON notifications
+CREATE POLICY "notifications_all" ON notifications
   FOR ALL USING (true) WITH CHECK (true);

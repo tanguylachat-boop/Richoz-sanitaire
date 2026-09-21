@@ -1,0 +1,8 @@
+{
+  "app": "http://127.0.0.1:56300",
+  "supabase": "http://127.0.0.1:56321",
+  "replay_supabase": "http://127.0.0.1:57321",
+  "conversion_disabled": "http://127.0.0.1:56399",
+  "outbound": "system sandbox permits localhost only; browser routes also allow only app/Supabase",
+  "production_env_loaded": false
+}

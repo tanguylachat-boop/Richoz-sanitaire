@@ -1,0 +1,8 @@
+docker context show
+ desktop-linux
+docker context inspect --format '{{.Endpoints.docker.Host}}'
+ unix:///Users/tanguylachat/.docker/run/docker.sock
+docker info --format '{{.ServerVersion}}'
+ Sandbox: operation not permitted
+ Authorized retry, exit 1: Cannot connect to the Docker daemon at unix:///Users/tanguylachat/.docker/run/docker.sock. Is the docker daemon running?
+No local migration state could be read. No migration executed.

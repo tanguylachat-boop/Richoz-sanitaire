@@ -1,0 +1,19 @@
+{
+  "status": "Bilan consultable et calculé automatiquement en local",
+  "unit_and_simulated": {
+    "passed": 12,
+    "new": 9,
+    "lot3a_regressions": 3
+  },
+  "local_integration_groups": 7,
+  "lot3a_local_groups": 6,
+  "browser_groups": 5,
+  "typescript_exit": 0,
+  "eslint_errors": 0,
+  "eslint_warnings": 35,
+  "build_exit": 0,
+  "migrations_added": 0,
+  "lot3a_unchanged": true,
+  "automatic_reminders_activated": false,
+  "scheduled_distribution": false
+}

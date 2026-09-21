@@ -45,11 +45,11 @@ export async function requireAdmin(): Promise<
 
   const { data: profile } = await supabase
     .from('users')
-    .select('role')
+    .select('role, is_active')
     .eq('id', user.id)
-    .single();
+    .single<{ role: string; is_active: boolean }>();
 
-  if (!profile || (profile as { role: string }).role !== 'admin') {
+  if (!profile?.is_active || profile.role !== 'admin') {
     return { authorized: false, error: 'Accès réservé aux administrateurs.' };
   }
 

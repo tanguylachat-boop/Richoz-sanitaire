@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { format, formatDistanceToNow, eachDayOfInterval, isWithinInterval } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   Palmtree,
@@ -17,15 +17,25 @@ import {
   Trash2,
   MessageSquare,
   Plus,
+  History,
 } from 'lucide-react';
 import { sendPush } from '@/lib/send-push';
 import { LEAVE_TYPES, LEAVE_TYPE_ORDER, type LeaveType } from '@/lib/constants';
+import {
+  LEAVE_HOURS_PER_DAY,
+  annualAllowanceHours,
+  formatLeaveDuration,
+  leaveHours,
+  validateLeaveSpan,
+} from '@/lib/leave-duration';
 
 interface LeaveRequest {
   id: string;
   technician_id: string;
   start_date: string;
   end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   reason: string | null;
   leave_type: LeaveType;
   status: 'pending' | 'approved' | 'rejected';
@@ -40,6 +50,49 @@ interface LeaveRequest {
   };
 }
 
+interface LeaveHistoryRow {
+  id: string;
+  leave_request_id: string;
+  action: 'create' | 'update' | 'delete';
+  changed_at: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  changed_user: { first_name: string | null; last_name: string | null; email: string } | null;
+}
+
+// Message serveur du trigger anti-chevauchement (migration 00030).
+const OVERLAP_MARKER = 'CHEVAUCHEMENT_CONGE';
+
+const HISTORY_FIELDS: { key: string; label: string }[] = [
+  { key: 'start_date', label: 'Début' },
+  { key: 'end_date', label: 'Fin' },
+  { key: 'start_time', label: 'Heure début' },
+  { key: 'end_time', label: 'Heure fin' },
+  { key: 'leave_type', label: 'Type' },
+  { key: 'status', label: 'Statut' },
+  { key: 'reason', label: 'Motif' },
+  { key: 'rejection_reason', label: 'Motif du refus' },
+];
+
+const HISTORY_STATUS_LABELS: Record<string, string> = {
+  pending: 'En attente',
+  approved: 'Accepté',
+  rejected: 'Refusé',
+};
+
+function historyValueLabel(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const text = String(value);
+  if (key === 'leave_type' && LEAVE_TYPES[text as LeaveType]) return LEAVE_TYPES[text as LeaveType].label;
+  if (key === 'status') return HISTORY_STATUS_LABELS[text] || text;
+  if (key === 'start_time' || key === 'end_time') return text.slice(0, 5);
+  return text;
+}
+
+function formatTimeShort(time: string | null): string {
+  return time ? time.slice(0, 5) : '';
+}
+
 type TabFilter = 'pending' | 'all';
 
 interface TechnicianOption {
@@ -49,10 +102,6 @@ interface TechnicianOption {
   email: string;
   annual_leave_weeks?: number | null;
 }
-
-// Used for the per-tech remaining-hours summary cards. Same constants as RH stats.
-const LEAVE_DAYS_PER_WEEK = 5;
-const LEAVE_HOURS_PER_DAY = 8;
 
 export default function LeaveManagementPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -67,8 +116,23 @@ export default function LeaveManagementPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editStartDate, setEditStartDate] = useState('');
   const [editEndDate, setEditEndDate] = useState('');
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
   const [editReason, setEditReason] = useState('');
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Historique tab filters
+  const [filterTech, setFilterTech] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+
+  // Change history (leave_request_history) per request
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyRows, setHistoryRows] = useState<LeaveHistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   // Create-leave-for-technician state
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -77,12 +141,16 @@ export default function LeaveManagementPage() {
     technician_id: string;
     start_date: string;
     end_date: string;
+    start_time: string;
+    end_time: string;
     reason: string;
     leave_type: LeaveType;
   }>({
     technician_id: '',
     start_date: '',
     end_date: '',
+    start_time: '',
+    end_time: '',
     reason: '',
     leave_type: 'conge',
   });
@@ -111,30 +179,26 @@ export default function LeaveManagementPage() {
     loadTechnicians();
   }, []);
 
-  // Approved "conge" leaves this year per technician (for remaining-hours cards)
+  // Approved "conge" hours this year per technician (for remaining-hours cards).
+  // Durées via la règle partagée (leave-duration) : heures réelles pour les
+  // absences partielles, jours calendaires × 8h sinon — pas de double décompte,
+  // toujours recalculé depuis les lignes actuelles.
   const [approvedThisYear, setApprovedThisYear] = useState<Record<string, number>>({});
   useEffect(() => {
     const loadApproved = async () => {
       const year = new Date().getFullYear();
       const { data } = await supabase
         .from('leave_requests')
-        .select('technician_id, start_date, end_date, leave_type')
+        .select('technician_id, start_date, end_date, start_time, end_time, leave_type')
         .eq('status', 'approved')
         .eq('leave_type', 'conge')
         .lte('start_date', `${year}-12-31`)
         .gte('end_date', `${year}-01-01`);
       if (!data) return;
-      const yearStart = new Date(`${year}-01-01T00:00:00`);
-      const yearEnd = new Date(`${year}-12-31T23:59:59`);
+      const clip = { clipStart: `${year}-01-01`, clipEnd: `${year}-12-31` };
       const totals: Record<string, number> = {};
-      for (const l of data as { technician_id: string; start_date: string; end_date: string }[]) {
-        const s = new Date(l.start_date + 'T00:00:00');
-        const e = new Date(l.end_date + 'T23:59:59');
-        const effS = s < yearStart ? yearStart : s;
-        const effE = e > yearEnd ? yearEnd : e;
-        if (effS > effE) continue;
-        const days = eachDayOfInterval({ start: effS, end: effE }).length;
-        totals[l.technician_id] = (totals[l.technician_id] || 0) + days;
+      for (const l of data as { technician_id: string; start_date: string; end_date: string; start_time: string | null; end_time: string | null }[]) {
+        totals[l.technician_id] = (totals[l.technician_id] || 0) + leaveHours(l, clip);
       }
       setApprovedThisYear(totals);
     };
@@ -243,18 +307,35 @@ export default function LeaveManagementPage() {
     setEditingId(req.id);
     setEditStartDate(req.start_date);
     setEditEndDate(req.end_date);
+    setEditStartTime(formatTimeShort(req.start_time));
+    setEditEndTime(formatTimeShort(req.end_time));
     setEditReason(req.reason || '');
   };
 
   const handleEdit = async (requestId: string) => {
+    // Heures uniquement pour une absence sur un seul jour (voir migration 00030).
+    const sameDay = editStartDate === editEndDate;
+    const span = {
+      start_date: editStartDate,
+      end_date: editEndDate,
+      start_time: sameDay ? editStartTime || null : null,
+      end_time: sameDay ? editEndTime || null : null,
+    };
+    const validationError = validateLeaveSpan(span);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     setProcessingId(requestId);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('leave_requests')
         .update({
-          start_date: editStartDate,
-          end_date: editEndDate,
+          start_date: span.start_date,
+          end_date: span.end_date,
+          start_time: span.start_time,
+          end_time: span.end_time,
           reason: editReason || null,
         })
         .eq('id', requestId);
@@ -263,13 +344,42 @@ export default function LeaveManagementPage() {
 
       toast.success('Congé modifié');
       setEditingId(null);
+      if (historyOpenId === requestId) setHistoryOpenId(null);
       fetchRequests();
     } catch (error) {
       console.error('Error editing leave:', error);
-      toast.error('Erreur lors de la modification');
+      const message = error instanceof Error ? error.message : '';
+      toast.error(
+        message.includes(OVERLAP_MARKER)
+          ? 'Un congé de même type existe déjà sur cette période pour ce collaborateur'
+          : 'Erreur lors de la modification'
+      );
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const loadHistory = async (requestId: string) => {
+    if (historyOpenId === requestId) {
+      setHistoryOpenId(null);
+      return;
+    }
+    setHistoryOpenId(requestId);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    setHistoryRows([]);
+    const { data, error } = await supabase
+      .from('leave_request_history')
+      .select('id, leave_request_id, action, changed_at, old_values, new_values, changed_user:users!leave_request_history_changed_by_fkey(first_name, last_name, email)')
+      .eq('leave_request_id', requestId)
+      .order('changed_at', { ascending: false });
+    if (error) {
+      console.error('Error loading leave history:', error);
+      setHistoryError('Historique indisponible. Réessayez.');
+    } else {
+      setHistoryRows((data || []) as unknown as LeaveHistoryRow[]);
+    }
+    setHistoryLoading(false);
   };
 
   const handleCreateLeave = async (e: React.FormEvent) => {
@@ -283,20 +393,29 @@ export default function LeaveManagementPage() {
       toast.error('Dates de début et de fin obligatoires');
       return;
     }
-    if (new Date(createForm.start_date) > new Date(createForm.end_date)) {
-      toast.error('La date de fin doit être après la date de début');
+    const createSameDay = createForm.start_date === createForm.end_date;
+    const createSpan = {
+      start_date: createForm.start_date,
+      end_date: createForm.end_date,
+      start_time: createSameDay ? createForm.start_time || null : null,
+      end_time: createSameDay ? createForm.end_time || null : null,
+    };
+    const createValidation = validateLeaveSpan(createSpan);
+    if (createValidation) {
+      toast.error(createValidation);
       return;
     }
 
     setIsCreating(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('leave_requests')
         .insert({
           technician_id: createForm.technician_id,
-          start_date: createForm.start_date,
-          end_date: createForm.end_date,
+          start_date: createSpan.start_date,
+          end_date: createSpan.end_date,
+          start_time: createSpan.start_time,
+          end_time: createSpan.end_time,
           reason: createForm.reason || null,
           leave_type: createForm.leave_type,
           status: 'approved',
@@ -343,12 +462,17 @@ export default function LeaveManagementPage() {
       });
 
       toast.success(`Congé créé pour ${techName}`);
-      setCreateForm({ technician_id: '', start_date: '', end_date: '', reason: '', leave_type: 'conge' });
+      setCreateForm({ technician_id: '', start_date: '', end_date: '', start_time: '', end_time: '', reason: '', leave_type: 'conge' });
       setShowCreateForm(false);
       fetchRequests();
     } catch (error) {
       console.error('Error creating leave:', error);
-      toast.error('Erreur lors de la création du congé');
+      const message = error instanceof Error ? error.message : '';
+      toast.error(
+        message.includes(OVERLAP_MARKER)
+          ? 'Un congé de même type existe déjà sur cette période pour ce collaborateur'
+          : 'Erreur lors de la création du congé'
+      );
     } finally {
       setIsCreating(false);
     }
@@ -382,12 +506,48 @@ export default function LeaveManagementPage() {
     return tech.first_name || tech.last_name || tech.email;
   };
 
-  const getDurationDays = (start: string, end: string) => {
-    const diff = new Date(end).getTime() - new Date(start).getTime();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
-  };
-
   const pendingCount = requests.filter(r => r.status === 'pending').length;
+
+  // Historique filtré (onglet Historique uniquement ; l'onglet En attente reste inchangé)
+  const visibleRequests = useMemo(() => {
+    if (tab !== 'all') return requests;
+    return requests.filter((r) => {
+      if (filterTech && r.technician_id !== filterTech) return false;
+      if (filterType && r.leave_type !== filterType) return false;
+      if (filterStatus && r.status !== filterStatus) return false;
+      if (filterFrom && r.end_date < filterFrom) return false;
+      if (filterTo && r.start_date > filterTo) return false;
+      return true;
+    });
+  }, [tab, requests, filterTech, filterType, filterStatus, filterFrom, filterTo]);
+
+  // Résumé vacances (type "conge") sur les demandes filtrées : prises / à
+  // venir approuvées / en attente, + total sans solde approuvé. Le solde
+  // n'est affiché que pour un collaborateur précis (droits de base connus).
+  const summary = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    let takenHours = 0;
+    let upcomingHours = 0;
+    let pendingHours = 0;
+    let unpaidHours = 0;
+    for (const r of visibleRequests) {
+      const hours = leaveHours(r);
+      if (r.leave_type === 'conge') {
+        if (r.status === 'approved') {
+          if (r.start_date > today) upcomingHours += hours;
+          else takenHours += hours;
+        } else if (r.status === 'pending') {
+          pendingHours += hours;
+        }
+      }
+      if (r.leave_type === 'sans_solde' && r.status === 'approved') unpaidHours += hours;
+    }
+    const tech = filterTech ? technicians.find((t) => t.id === filterTech) : null;
+    const balanceHours = tech
+      ? annualAllowanceHours(tech.annual_leave_weeks) - (approvedThisYear[tech.id] || 0)
+      : null;
+    return { takenHours, upcomingHours, pendingHours, unpaidHours, balanceHours };
+  }, [visibleRequests, filterTech, technicians, approvedThisYear]);
 
   return (
     <div className="space-y-6">
@@ -448,9 +608,9 @@ export default function LeaveManagementPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {technicians.map((t) => {
               const weeks = t.annual_leave_weeks ?? 5;
-              const allowedHours = weeks * LEAVE_DAYS_PER_WEEK * LEAVE_HOURS_PER_DAY;
-              const usedDays = approvedThisYear[t.id] || 0;
-              const remainingHours = allowedHours - usedDays * LEAVE_HOURS_PER_DAY;
+              const allowedHours = annualAllowanceHours(t.annual_leave_weeks);
+              const usedHours = approvedThisYear[t.id] || 0;
+              const remainingHours = allowedHours - usedHours;
               const remainingDays = remainingHours / LEAVE_HOURS_PER_DAY;
               const isExhausted = remainingHours <= 0;
               const isLow = !isExhausted && remainingHours <= allowedHours * 0.2;
@@ -527,10 +687,39 @@ export default function LeaveManagementPage() {
                 />
               </div>
             </div>
+            {createForm.start_date && createForm.start_date === createForm.end_date && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Heure de début (absence partielle)</label>
+                  <input
+                    type="time"
+                    value={createForm.start_time}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, start_time: e.target.value }))}
+                    className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Heure de fin</label>
+                  <input
+                    type="time"
+                    value={createForm.end_time}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                    className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <p className="col-span-2 text-xs text-gray-500 -mt-2">
+                  Laisser vide pour une journée complète. Les heures ne sont possibles que sur un seul jour.
+                </p>
+              </div>
+            )}
             {createForm.start_date && createForm.end_date && (
               <div className="px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
-                📅 {getDurationDays(createForm.start_date, createForm.end_date)} jour
-                {getDurationDays(createForm.start_date, createForm.end_date) > 1 ? 's' : ''} d&apos;absence
+                📅 {formatLeaveDuration(leaveHours({
+                  start_date: createForm.start_date,
+                  end_date: createForm.end_date,
+                  start_time: createForm.start_date === createForm.end_date ? createForm.start_time || null : null,
+                  end_time: createForm.start_date === createForm.end_date ? createForm.end_time || null : null,
+                }))} d&apos;absence
               </div>
             )}
             <div>
@@ -576,33 +765,134 @@ export default function LeaveManagementPage() {
         </div>
       )}
 
+      {/* Filtres + résumé (onglet Historique) */}
+      {tab === 'all' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Collaborateur</label>
+              <select
+                value={filterTech}
+                onChange={(e) => setFilterTech(e.target.value)}
+                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Tous</option>
+                {technicians.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.first_name && t.last_name ? `${t.first_name} ${t.last_name}` : t.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Type</label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Tous</option>
+                {LEAVE_TYPE_ORDER.map((t) => (
+                  <option key={t} value={t}>{LEAVE_TYPES[t].label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Statut</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full h-9 px-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Tous</option>
+                <option value="pending">En attente</option>
+                <option value="approved">Accepté</option>
+                <option value="rejected">Refusé</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Du</label>
+              <input
+                type="date"
+                value={filterFrom}
+                onChange={(e) => setFilterFrom(e.target.value)}
+                className="w-full h-9 px-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Au</label>
+              <input
+                type="date"
+                value={filterTo}
+                onChange={(e) => setFilterTo(e.target.value)}
+                className="w-full h-9 px-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-3 border-t border-gray-100">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3">
+              <p className="text-xs text-gray-600">Vacances prises / en cours</p>
+              <p className="text-lg font-bold text-emerald-700">{formatLeaveDuration(summary.takenHours)}</p>
+            </div>
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+              <p className="text-xs text-gray-600">Vacances futures approuvées</p>
+              <p className="text-lg font-bold text-blue-700">{formatLeaveDuration(summary.upcomingHours)}</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+              <p className="text-xs text-gray-600">Vacances en attente</p>
+              <p className="text-lg font-bold text-amber-700">{formatLeaveDuration(summary.pendingHours)}</p>
+            </div>
+            <div className="rounded-lg bg-purple-50 border border-purple-200 p-3">
+              <p className="text-xs text-gray-600">Sans solde approuvé</p>
+              <p className="text-lg font-bold text-purple-700">{formatLeaveDuration(summary.unpaidHours)}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+              <p className="text-xs text-gray-600">Solde {new Date().getFullYear()}</p>
+              <p className="text-lg font-bold text-gray-900">
+                {summary.balanceHours === null ? '—' : formatLeaveDuration(Math.max(summary.balanceHours, 0))}
+              </p>
+              {summary.balanceHours === null && (
+                <p className="text-[11px] text-gray-400">Choisir un collaborateur</p>
+              )}
+              {summary.balanceHours !== null && summary.balanceHours < 0 && (
+                <p className="text-[11px] text-red-600">Dépassement de {formatLeaveDuration(-summary.balanceHours)}</p>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">
+            Durées selon la règle actuelle du logiciel : jours calendaires × {LEAVE_HOURS_PER_DAY} h, heures réelles pour les absences partielles. Seules les vacances (type Congé) sont déduites du solde ; les congés sans solde sont listés séparément pour la paie.
+          </p>
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-500">Chargement...</p>
         </div>
-      ) : requests.length === 0 ? (
+      ) : visibleRequests.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <CalendarDays className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {tab === 'pending' ? 'Aucune demande en attente' : 'Aucun historique de congés'}
+            {tab === 'pending' ? 'Aucune demande en attente' : 'Aucun congé pour ces filtres'}
           </h3>
           <p className="text-gray-500 max-w-sm mx-auto">
             {tab === 'pending'
               ? 'Les demandes de congé des techniciens apparaîtront ici.'
-              : 'L\'historique des congés traités apparaîtra ici.'}
+              : requests.length === 0
+                ? 'L\'historique des congés traités apparaîtra ici.'
+                : 'Élargissez les filtres pour voir plus de congés.'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {requests.map((req) => {
+          {visibleRequests.map((req) => {
             const isPending = req.status === 'pending';
             const isApproved = req.status === 'approved';
             const isRejected = req.status === 'rejected';
-            const days = getDurationDays(req.start_date, req.end_date);
             const isRejecting = rejectingId === req.id;
             const isProcessing = processingId === req.id;
 
@@ -647,7 +937,7 @@ export default function LeaveManagementPage() {
                       </div>
 
                       {/* Dates */}
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <div className="flex items-center gap-1.5 text-sm text-gray-700">
                           <CalendarDays className="w-4 h-4 text-gray-400" />
                           <span className="font-medium">
@@ -661,9 +951,14 @@ export default function LeaveManagementPage() {
                               </span>
                             </>
                           )}
+                          {req.start_time && req.end_time && (
+                            <span className="text-gray-500">
+                              {formatTimeShort(req.start_time)} → {formatTimeShort(req.end_time)}
+                            </span>
+                          )}
                         </div>
                         <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                          {days} jour{days > 1 ? 's' : ''}
+                          {formatLeaveDuration(leaveHours(req))}
                         </span>
                       </div>
 
@@ -686,12 +981,69 @@ export default function LeaveManagementPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
                       <span className="text-xs text-gray-400">
                         {formatDistanceToNow(new Date(req.created_at), { addSuffix: true, locale: fr })}
                       </span>
+                      <button
+                        onClick={() => loadHistory(req.id)}
+                        className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                        title="Historique des modifications"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        {historyOpenId === req.id ? 'Masquer' : 'Modifications'}
+                      </button>
                     </div>
                   </div>
+
+                  {/* Historique des modifications (journal serveur, lecture seule) */}
+                  {historyOpenId === req.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      {historyLoading ? (
+                        <p className="text-sm text-gray-500 flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Chargement de l&apos;historique...
+                        </p>
+                      ) : historyError ? (
+                        <p className="text-sm text-red-600">{historyError}</p>
+                      ) : historyRows.length === 0 ? (
+                        <p className="text-sm text-gray-500">Aucune modification enregistrée pour ce congé.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {historyRows.map((h) => {
+                            const author = h.changed_user
+                              ? `${h.changed_user.first_name || ''} ${h.changed_user.last_name || ''}`.trim() || h.changed_user.email
+                              : 'Système';
+                            const changes = h.action === 'update'
+                              ? HISTORY_FIELDS.filter(({ key }) => {
+                                  const before = h.old_values?.[key] ?? null;
+                                  const after = h.new_values?.[key] ?? null;
+                                  return JSON.stringify(before) !== JSON.stringify(after);
+                                })
+                              : [];
+                            return (
+                              <li key={h.id} className="text-xs bg-gray-50 rounded-lg px-3 py-2">
+                                <span className="font-medium text-gray-700">
+                                  {h.action === 'create' ? 'Création' : h.action === 'delete' ? 'Suppression' : 'Modification'}
+                                </span>
+                                <span className="text-gray-500">
+                                  {' '}par {author} · {format(new Date(h.changed_at), 'd MMM yyyy HH:mm', { locale: fr })}
+                                </span>
+                                {changes.length > 0 && (
+                                  <ul className="mt-1 space-y-0.5 text-gray-600">
+                                    {changes.map(({ key, label }) => (
+                                      <li key={key}>
+                                        {label} : {historyValueLabel(key, h.old_values?.[key])} → {historyValueLabel(key, h.new_values?.[key])}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   {/* Action buttons for pending */}
                   {isPending && !isRejecting && editingId !== req.id && cancellingId !== req.id && (
@@ -756,7 +1108,7 @@ export default function LeaveManagementPage() {
                   {/* Edit form */}
                   {editingId === req.id && (
                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                      <p className="text-sm font-medium text-gray-700">Modifier les dates du congé</p>
+                      <p className="text-sm font-medium text-gray-700">Modifier les dates et heures du congé</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">Date début</label>
@@ -777,6 +1129,46 @@ export default function LeaveManagementPage() {
                           />
                         </div>
                       </div>
+                      {editStartDate && editStartDate === editEndDate && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Heure début (absence partielle)</label>
+                            <input
+                              type="time"
+                              value={editStartTime}
+                              onChange={(e) => setEditStartTime(e.target.value)}
+                              className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Heure fin</label>
+                            <input
+                              type="time"
+                              value={editEndTime}
+                              onChange={(e) => setEditEndTime(e.target.value)}
+                              className="w-full h-9 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <p className="col-span-2 text-xs text-gray-500 -mt-1">
+                            Laisser vide pour une journée complète.
+                          </p>
+                        </div>
+                      )}
+                      {editStartDate && editEndDate && editStartDate !== editEndDate && (editStartTime || editEndTime) && (
+                        <p className="text-xs text-amber-600">
+                          Les heures seront ignorées : elles ne sont possibles que pour une absence sur un seul jour.
+                        </p>
+                      )}
+                      {editStartDate && editEndDate && (
+                        <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                          Durée : {formatLeaveDuration(leaveHours({
+                            start_date: editStartDate,
+                            end_date: editEndDate,
+                            start_time: editStartDate === editEndDate ? editStartTime || null : null,
+                            end_time: editStartDate === editEndDate ? editEndTime || null : null,
+                          }))}
+                        </p>
+                      )}
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Motif</label>
                         <input

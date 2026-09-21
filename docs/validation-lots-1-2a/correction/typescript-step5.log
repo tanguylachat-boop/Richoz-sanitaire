@@ -1,0 +1,2 @@
+src/types/database.ts(519,11): error TS2300: Duplicate identifier 'work_order_number'.
+src/types/database.ts(538,11): error TS2300: Duplicate identifier 'work_order_number'.

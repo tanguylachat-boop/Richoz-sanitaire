@@ -1,0 +1,15 @@
+{
+  "typescript_exit": 0,
+  "eslint_errors": 0,
+  "eslint_warnings": 35,
+  "build_exit": 0,
+  "unit_simulated_passed": 61,
+  "integration_groups_passed": 6,
+  "fault_rollback_cases_passed": 2,
+  "report_photo_regression_groups_passed": 3,
+  "browser_http_groups_passed": 5,
+  "automation": "local simulation and engine persistence tested; not scheduled or remotely activated",
+  "migration_md5": "f8123097bb4f3394c494cd57bc108576",
+  "app": "http://127.0.0.1:56300/reports/followup",
+  "local_only": true
+}

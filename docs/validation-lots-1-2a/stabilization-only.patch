@@ -1,0 +1,349 @@
+--- a/next.config.js
++++ b/next.config.js
+@@ -1,8 +1,5 @@
+ /** @type {import('next').NextConfig} */
+ const nextConfig = {
+-  typescript: {
+-    ignoreBuildErrors: true,
+-  },
+   images: {
+     remotePatterns: [
+       {
+--- a/src/lib/auth-guard.ts
++++ b/src/lib/auth-guard.ts
+@@ -45,11 +45,11 @@
+ 
+   const { data: profile } = await supabase
+     .from('users')
+-    .select('role')
++    .select('role, is_active')
+     .eq('id', user.id)
+-    .single();
++    .single<{ role: string; is_active: boolean }>();
+ 
+-  if (!profile || (profile as { role: string }).role !== 'admin') {
++  if (!profile?.is_active || profile.role !== 'admin') {
+     return { authorized: false, error: 'Accès réservé aux administrateurs.' };
+   }
+ 
+--- a/src/lib/report-access.ts
++++ b/src/lib/report-access.ts
+@@ -0,0 +1,26 @@
++import { createClient } from '@/lib/supabase/server';
++
++// Authorize with the request session before creating a privileged export client.
++export async function reportAccessFailure(id: string, writing: boolean): Promise<Response | null> {
++  try {
++    const supabase = createClient();
++    const { data: { user }, error: authError } = await supabase.auth.getUser();
++    if (authError || !user) return Response.json({ error: 'Connexion requise.' }, { status: 401 });
++    const { data: profile, error: profileError } = await supabase.from('users')
++      .select('role, is_active').eq('id', user.id)
++      .single<{ role: string; is_active: boolean }>();
++    if (profileError || !profile?.is_active) return Response.json({ error: 'Accès refusé.' }, { status: 403 });
++    const staff = ['admin', 'secretary'].includes(profile.role);
++    if (!staff && (writing || profile.role !== 'technician')) {
++      return Response.json({ error: 'Accès refusé.' }, { status: 403 });
++    }
++    const { data: report, error } = await supabase.from('reports')
++      .select('id, technician_id').eq('id', id).single<{ id: string; technician_id: string }>();
++    if (error || !report || (!staff && report.technician_id !== user.id)) {
++      return Response.json({ error: 'Rapport inaccessible.' }, { status: 403 });
++    }
++    return null;
++  } catch {
++    return Response.json({ error: 'Vérification des droits impossible.' }, { status: 503 });
++  }
++}
+--- a/src/app/api/report-photos/route.ts
++++ b/src/app/api/report-photos/route.ts
+@@ -12,6 +12,15 @@
+     if (!profile?.is_active || (path.split('/')[0] !== user.id && !['admin', 'secretary'].includes(profile.role))) {
+       return new Response('Accès refusé.', { status: 403 });
+     }
++    // A valid owner prefix alone does not prove attachment to an accessible report.
++    const { data: reports, error: reportError } = await supabase.from('reports')
++      .select('photos').eq('technician_id', path.split('/')[0])
++      .eq('intervention_id', path.split('/')[2]).returns<{ photos: unknown }[]>();
++    const attached = reports?.some(report => Array.isArray(report.photos) && report.photos.some(photo => {
++      const url = typeof photo === 'string' ? photo : photo?.url;
++      return typeof url === 'string' && privateReportPhotoPath(url) === path;
++    }));
++    if (reportError || !attached) return new Response('Photo inaccessible.', { status: 404 });
+     const { data, error } = await supabase.storage.from('photos').download(path);
+     if (error || !data) return new Response('Photo inaccessible.', { status: 404 });
+     return new Response(data, { headers: { 'Content-Type': data.type || 'image/jpeg', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
+--- a/src/app/api/reports/[id]/docx/route.ts
++++ b/src/app/api/reports/[id]/docx/route.ts
+@@ -1,4 +1,5 @@
+ import { privateReportPhotoPath } from '@/lib/report-photos';
++import { reportAccessFailure } from '@/lib/report-access';
+ import { NextResponse } from 'next/server';
+ const TZ = 'Europe/Zurich';
+ import { createClient as createAdminClient } from '@/lib/supabase/admin';
+@@ -203,10 +204,12 @@
+ 
+ export async function GET(_req: Request, ctx: { params: { id: string } }) {
+   const id = ctx.params.id;
+-  const r = await fetchReport(id);
+-  if (!r) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
++  const denied = await reportAccessFailure(id, false);
++  if (denied) return denied;
+ 
+   try {
++    const r = await fetchReport(id);
++    if (!r) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+     const isChantier = r.intervention?.intervention_type === 'chantier';
+     const { buffer, filename } = isChantier
+       ? await buildChantierDocx(r)
+@@ -222,14 +225,15 @@
+       },
+     });
+   } catch (e) {
+-    console.error('DOCX generation failed', e);
+-    return NextResponse.json({ error: 'Generation failed', detail: String(e) }, { status: 500 });
++    return NextResponse.json({ error: 'Generation failed' }, { status: 500 });
+   }
+ }
+ 
+ // Upload edited Word → convert to PDF → store → update report.pdf_url
+ export async function POST(req: Request, ctx: { params: { id: string } }) {
+   const id = ctx.params.id;
++  const denied = await reportAccessFailure(id, true);
++  if (denied) return denied;
+   const supabase = createAdminClient();
+ 
+   let docxBuffer: Buffer;
+--- a/src/app/(dashboard)/chantiers/[id]/page.tsx
++++ b/src/app/(dashboard)/chantiers/[id]/page.tsx
+@@ -29,6 +29,7 @@
+   Image as ImageIcon,
+ } from 'lucide-react';
+ import { createClient } from '@/lib/supabase/client';
++import type { Report } from '@/types/database';
+ import { toast } from 'sonner';
+ import { sendPush } from '@/lib/send-push';
+ import { computeChantierProgress } from '@/lib/chantier-progress';
+@@ -160,13 +161,13 @@
+           technician:users!interventions_technician_id_fkey(id, first_name, last_name, phone, email)
+         `)
+         .eq('id', interventionId)
+-        .single(),
++        .single<ChantierIntervention>(),
+ 
+       supabase
+         .from('chantier_details')
+         .select('*')
+         .eq('intervention_id', interventionId)
+-        .maybeSingle(),
++        .maybeSingle<ChantierDetails>(),
+ 
+       supabase
+         .from('chantier_messages')
+@@ -188,7 +189,7 @@
+       return;
+     }
+ 
+-    setIntervention(ivRes.data as unknown as ChantierIntervention);
++    setIntervention(ivRes.data);
+ 
+     if (detailsRes.data) {
+       const d = detailsRes.data as ChantierDetails;
+@@ -217,7 +218,8 @@
+       supabase
+         .from('reports')
+         .select('photos, created_at, technician:users!reports_technician_id_fkey(first_name, last_name)')
+-        .eq('intervention_id', interventionId),
++        .eq('intervention_id', interventionId)
++        .returns<(Pick<Report, 'photos' | 'created_at'> & { technician: { first_name: string; last_name: string } | null })[]>(),
+     ]);
+ 
+     const allPhotos: PhotoEntry[] = [];
+@@ -281,7 +283,7 @@
+ 
+     setPhotos(allPhotos);
+     setIsLoading(false);
+-  }, [interventionId]);
++  }, [interventionId, router, supabase]);
+ 
+   useEffect(() => { fetchData(); }, [fetchData]);
+ 
+--- a/src/app/(dashboard)/technician/chantier/[id]/page.tsx
++++ b/src/app/(dashboard)/technician/chantier/[id]/page.tsx
+@@ -29,6 +29,7 @@
+   CalendarDays,
+ } from 'lucide-react';
+ import { createClient } from '@/lib/supabase/client';
++import type { Report, User as UserRow } from '@/types/database';
+ import { normalizeImage } from '@/lib/normalize-image';
+ import { sendPush } from '@/lib/send-push';
+ import { computeChantierProgress } from '@/lib/chantier-progress';
+@@ -231,7 +232,7 @@
+         .eq('intervention_id', interventionId)
+         .order('created_at', { ascending: false })
+         .limit(1)
+-        .maybeSingle();
++        .maybeSingle<Pick<Report, 'status' | 'revision_requested' | 'revision_message'>>();
+       if (reportData) {
+         setReportStatus(reportData.status);
+         if (reportData.revision_requested && reportData.revision_message) {
+@@ -243,7 +244,7 @@
+     }
+ 
+     setIsLoading(false);
+-  }, [interventionId]);
++  }, [interventionId, router, supabase]);
+ 
+   useEffect(() => { fetchData(); }, [fetchData]);
+ 
+@@ -287,7 +288,7 @@
+       if (error) throw error;
+ 
+       // Notify admins
+-      const { data: admins, error: adminsErr } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
++      const { data: admins, error: adminsErr } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']).returns<Pick<UserRow, 'id'>[]>();
+       if (adminsErr) console.error('Failed to fetch admins for notification:', adminsErr);
+       if (admins && admins.length > 0) {
+         const notifs = admins.filter(a => a.id !== user.id).map(a => ({
+@@ -340,7 +341,7 @@
+       if (error) throw error;
+ 
+       // Notify admins
+-      const { data: admins2, error: adminsErr2 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
++      const { data: admins2, error: adminsErr2 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']).returns<Pick<UserRow, 'id'>[]>();
+       if (adminsErr2) console.error('Failed to fetch admins for notification:', adminsErr2);
+       if (admins2 && admins2.length > 0) {
+         const notifs = admins2.filter(a => a.id !== user.id).map(a => ({
+@@ -411,7 +412,7 @@
+       }
+ 
+       // Notify admins (don't break flow on failure)
+-      const { data: admins3, error: adminsErr3 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']);
++      const { data: admins3, error: adminsErr3 } = await supabase.from('users').select('id').in('role', ['admin', 'secretary']).returns<Pick<UserRow, 'id'>[]>();
+       if (adminsErr3) console.error('Failed to fetch admins for notification:', adminsErr3);
+       if (admins3 && admins3.length > 0) {
+         const notifs3 = admins3.filter(a => a.id !== user.id).map(a => ({
+--- a/src/app/(dashboard)/technician/notifications/page.tsx
++++ b/src/app/(dashboard)/technician/notifications/page.tsx
+@@ -35,9 +35,9 @@
+         if (!user) throw new Error('Session expirée. Reconnectez-vous pour consulter vos notifications.');
+ 
+         // Fetch type preference for navigation
+-        const { data: prefData } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
++        const { data: prefData } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single<{ intervention_type_preference: 'depannage' | 'chantier' | null }>();
+         if (prefData?.intervention_type_preference) {
+-          setTypePreference(prefData.intervention_type_preference as 'depannage' | 'chantier');
++          setTypePreference(prefData.intervention_type_preference);
+         }
+ 
+         // Fetch notifications
+--- a/src/app/(dashboard)/technician/today/page.tsx
++++ b/src/app/(dashboard)/technician/today/page.tsx
+@@ -79,9 +79,9 @@
+       const { data: { user } } = await supabase.auth.getUser();
+       if (user) {
+         setUserId(user.id);
+-        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
++        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single<{ intervention_type_preference: 'depannage' | 'chantier' | null }>();
+         if (data?.intervention_type_preference) {
+-          setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
++          setTypePreference(data.intervention_type_preference);
+         }
+         // Check if on-call this week
+         const today = format(new Date(), 'yyyy-MM-dd');
+--- a/tests/lot1-harness.cjs
++++ b/tests/lot1-harness.cjs
+@@ -112,6 +112,7 @@
+       const query = { table, filters: [], action: 'select', values: null, one: false, count: Infinity };
+       const chain = {
+         select() { return this; },
++        returns() { return this; },
+         eq(k, v) { query.filters.push(r => r[k] === v); calls.push({ filter: k, value: v, table }); return this; },
+         in(k, values) { query.filters.push(r => values.includes(r[k])); return this; },
+         lte(k, v) { query.filters.push(r => r[k] <= v); return this; },
+--- a/tests/lot1.test.cjs
++++ b/tests/lot1.test.cjs
+@@ -24,7 +24,7 @@
+ 
+ for (const role of ['admin', 'secretary', 'technician', null]) {
+   test(`BUG-01: server route access for ${role || 'missing profile'}`, async () => {
+-    const db = database({ users: role ? [{ id: 'account', role }] : [] }, 'account');
++    const db = database({ users: role ? [{ id: 'account', role, is_active: true }] : [] }, 'account');
+     const h = harness(db);
+     const Layout = h.load('src/app/(dashboard)/admin/stats/layout.tsx').default;
+     const tree = await Layout({ children: 'PRIVATE RH CONTENT' });
+--- a/tests/lot2a-photos.test.cjs
++++ b/tests/lot2a-photos.test.cjs
+@@ -98,6 +98,7 @@
+ test('Private photo route: owner/staff allowed, other technician, anonymous and traversal denied (mock storage)', async () => {
+   const path = `${owner}/reports/${interventionId}/before/${crypto.randomUUID()}.jpg`;
+   const db = database({ users: [{ id: owner, role: 'technician', is_active: true }] }, owner);
++  db.tables.reports = [{ technician_id: owner, intervention_id: interventionId, photos: [{ url: `/api/report-photos?path=${encodeURIComponent(path)}` }] }];
+   db.storage = { from: () => ({ download: async () => ({ data: file('1') }) }) };
+   const h = harness(db, { ...runtime, Response, Request }); const route = h.load('src/app/api/report-photos/route.ts');
+   const req = () => new Request(`http://localhost/api/report-photos?path=${encodeURIComponent(path)}`);
+--- a/tests/stabilization-access.test.cjs
++++ b/tests/stabilization-access.test.cjs
+@@ -0,0 +1,62 @@
++// Offline handler tests only: these do not prove PostgreSQL or Storage RLS.
++const test = require('node:test');
++const assert = require('node:assert/strict');
++const { harness, database } = require('./lot1-harness.cjs');
++const owner = '11111111-1111-4111-8111-111111111111';
++const intervention = '22222222-2222-4222-8222-222222222222';
++const path = `${owner}/reports/${intervention}/before/33333333-3333-4333-8333-333333333333.jpg`;
++const url = `/api/report-photos?path=${encodeURIComponent(path)}`;
++
++for (const scenario of ['anonymous', 'inactive', 'other technician', 'missing report', 'auth failure', 'database failure']) {
++  test(`DOCX GET/POST deny ${scenario} before privileged client (mock)`, async () => {
++    const id = scenario === 'other technician' ? 'other' : owner;
++    const db = database({ users: [{ id, role: 'technician', is_active: scenario !== 'inactive' }],
++      reports: scenario === 'missing report' ? [] : [{ id: 'r1', technician_id: owner }] }, scenario === 'anonymous' ? null : id,
++      scenario === 'database failure' ? { reports: { message: 'denied' } } : {});
++    if (scenario === 'auth failure') db.auth.getUser = async () => { throw new Error('offline'); };
++    const h = harness(db, { Request, Response, Buffer }); let privileged = 0;
++    h.mocks['next/server'] = { NextResponse: Response };
++    h.mocks['@/lib/supabase/admin'] = { createClient: () => { privileged++; throw new Error('Must not run'); } };
++    h.mocks['@/lib/generate-report-docx'] = {};
++    h.mocks['@/lib/docx/chantier'] = {};
++    h.mocks['@/lib/docx/convert'] = {};
++    const route = h.load('src/app/api/reports/[id]/docx/route.ts');
++    for (const method of ['GET', 'POST']) {
++      const result = await route[method](new Request('http://127.0.0.1/api/reports/r1/docx', { method }), { params: { id: 'r1' } });
++      assert.ok([401, 403, 503].includes(result.status));
++      assert.equal(privileged, 0);
++    }
++  });
++}
++
++test('DOCX access matrix: active staff read/write, owner read only (mock)', async () => {
++  for (const role of ['admin', 'secretary', 'technician']) {
++    const db = database({ users: [{ id: owner, role, is_active: true }], reports: [{ id: 'r1', technician_id: owner }] }, owner);
++    const { reportAccessFailure } = harness(db, { Response }).load('src/lib/report-access.ts');
++    assert.equal(await reportAccessFailure('r1', false), null);
++    const write = await reportAccessFailure('r1', true);
++    assert.equal(role === 'technician' ? write.status : write, role === 'technician' ? 403 : null);
++    assert.ok(await reportAccessFailure('substituted-report', false));
++  }
++});
++
++test('Photo read requires exact persisted reference and report scope before Storage (mock)', async () => {
++  const db = database({ users: [{ id: owner, role: 'technician', is_active: true }], reports: [] }, owner);
++  let reads = 0;
++  db.storage = { from: () => ({ download: async () => { reads++; return { data: new Blob(['fiction'], { type: 'image/jpeg' }) }; } }) };
++  const route = harness(db, { Response, Request }).load('src/app/api/report-photos/route.ts');
++  const read = () => route.GET(new Request(`http://127.0.0.1${url}`));
++  assert.equal((await read()).status, 404); assert.equal(reads, 0);
++  db.tables.reports.push({ intervention_id: 'another-site', technician_id: owner, photos: [{ url }] });
++  assert.equal((await read()).status, 404); assert.equal(reads, 0);
++  db.tables.reports[0].intervention_id = intervention;
++  assert.equal((await read()).status, 200); assert.equal(reads, 1);
++  db.tables.reports[0].photos = [{ url: url.replace('before', 'after') }];
++  assert.equal((await read()).status, 404); assert.equal(reads, 1);
++});
++
++test('Stats guard refuses inactive admin (mock)', async () => {
++  const db = database({ users: [{ id: owner, role: 'admin', is_active: false }] }, owner);
++  const { requireAdmin } = harness(db).load('src/lib/auth-guard.ts');
++  assert.equal((await requireAdmin()).authorized, false);
++});

@@ -1,5 +1,7 @@
 'use client';
 
+import { buildInterventionDates, calendarDate, isCalendarDate, isClockTime } from '@/lib/intervention-dates';
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { sendPush } from '@/lib/send-push';
@@ -191,8 +193,8 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       const now = new Date();
       const year = now.getFullYear();
       const bdays: BirthdayEntry[] = usersData
-        .filter((u: { birth_date: string | null }) => u.birth_date)
-        .map((u: { id: string; first_name: string; last_name: string; birth_date: string }) => {
+        .filter((u): u is typeof u & { birth_date: string } => typeof u.birth_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(u.birth_date))
+        .map((u) => {
           const [, m, d] = u.birth_date.split('-');
           return { user_id: u.id, first_name: u.first_name || '', last_name: u.last_name || '', date: `${year}-${m}-${d}` };
         });
@@ -249,13 +251,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
     setIsLoading(true);
     try {
       const isChantier = formData.intervention_type === 'chantier';
-      let datePlanned = null;
-      if (formData.date_planned) {
-        const dateStr = isChantier
-          ? `${formData.date_planned}T07:00:00`
-          : formData.time_planned ? `${formData.date_planned}T${formData.time_planned}:00` : `${formData.date_planned}T09:00:00`;
-        datePlanned = new Date(dateStr).toISOString();
-      }
+      const dates = buildInterventionDates(formData);
       const clientInfo: Record<string, string> = {};
       if (formData.client_name) clientInfo.name = formData.client_name;
       if (formData.client_phone) clientInfo.phone = formData.client_phone;
@@ -263,7 +259,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any).from('interventions').insert({
         title: formData.title, description: formData.description || null,
-        address: formData.address, date_planned: datePlanned,
+        address: formData.address, date_planned: dates.date_planned,
         estimated_duration_minutes: isChantier ? 480 : formData.estimated_duration_minutes,
         status: 'planifie', priority: formData.priority,
         technician_id: formData.technician_id || null,
@@ -274,9 +270,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
         source_email_id: email?.id || null,
         intervention_type: formData.intervention_type,
         keys_info: formData.keys_info || null,
-        date_end: formData.intervention_type === 'chantier' && formData.date_end
-          ? new Date(`${formData.date_end}T18:00:00`).toISOString()
-          : null,
+        date_end: dates.date_end,
       }).select('id');
 
       if (error) throw new Error(error.message);
@@ -306,7 +300,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       // Insert notification if technician is assigned
       if (formData.technician_id && data?.[0]?.id) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
-        const notifMessage = `${formData.title} — ${formData.address}${formData.date_planned ? ` le ${format(new Date(formData.date_planned), 'd MMM', { locale: fr })}` : ''}`;
+        const notifMessage = `${formData.title} — ${formData.address}${formData.date_planned ? ` le ${format(calendarDate(formData.date_planned)!, 'd MMM', { locale: fr })}` : ''}`;
         await supabase.from('notifications').insert({
           recipient_id: formData.technician_id,
           sender_id: currentUser?.id || null,
@@ -344,7 +338,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       }
     } catch (error) {
       console.error('Error creating intervention:', error);
-      toast.error("Erreur lors de la création de l'intervention");
+      toast.error(error instanceof Error ? error.message : 'Impossible d’enregistrer l’intervention.');
     } finally {
       setIsLoading(false);
     }
@@ -398,7 +392,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   const inputClass = 'w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
   const selectClass = `${inputClass} bg-white`;
 
-  const calendarSelectedSlot: SelectedSlot | null = formData.date_planned && formData.time_planned
+  const calendarSelectedSlot: SelectedSlot | null = isCalendarDate(formData.date_planned) && isClockTime(formData.time_planned)
     ? { date: formData.date_planned, time: formData.time_planned, durationMinutes: formData.estimated_duration_minutes || 60, title: formData.title || 'Nouvelle' }
     : null;
 
@@ -518,9 +512,9 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
           </div>
 
           <div className={`p-3 rounded-lg border ${formData.date_planned ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-            {formData.date_planned ? (
+            {isCalendarDate(formData.date_planned) ? (
               <p className="text-sm text-green-800">
-                📅 <strong>{format(new Date(formData.date_planned), 'EEEE d MMMM', { locale: fr })}</strong> à <strong>{formData.time_planned || '09:00'}</strong>
+                📅 <strong>{format(calendarDate(formData.date_planned)!, 'EEEE d MMMM', { locale: fr })}</strong> à <strong>{formData.time_planned || '09:00'}</strong>
               </p>
             ) : (
               <p className="text-sm text-amber-800">👆 Cliquez sur un créneau libre dans le calendrier →</p>
@@ -531,18 +525,18 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date début</label>
-                <input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+                <input type="date" onInvalid={() => toast.error("Saisissez une date de début complète et valide.")} name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label>
-                <input type="date" name="date_end" value={formData.date_end} onChange={handleChange} className={inputClass} />
+                <input type="date" name="date_end" min={formData.date_planned || undefined} value={formData.date_end} onChange={handleChange} className={inputClass} />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                <input type="date" name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
+                <input type="date" onInvalid={() => toast.error("Saisissez une date de début complète et valide.")} name="date_planned" value={formData.date_planned} onChange={handleChange} className={inputClass} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Heure</label>

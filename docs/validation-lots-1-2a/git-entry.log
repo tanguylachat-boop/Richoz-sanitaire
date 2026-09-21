@@ -1,0 +1,32 @@
+ M .claude/settings.local.json
+ M middleware.ts
+ M package.json
+ M src/app/(dashboard)/admin/stats/page.tsx
+ M src/app/(dashboard)/calendar/page.tsx
+ M src/app/(dashboard)/chantiers/[id]/page.tsx
+ M src/app/(dashboard)/reports/validate/[id]/page.tsx
+ M src/app/(dashboard)/reports/validate/page.tsx
+ M src/app/(dashboard)/technician/chantier/[id]/page.tsx
+ M src/app/(dashboard)/technician/notifications/page.tsx
+ M src/app/(dashboard)/technician/report/[interventionId]/page.tsx
+ M src/app/(dashboard)/technician/today/page.tsx
+ M src/app/api/reports/[id]/docx/route.ts
+ M src/components/calendar/InterventionDetailSheet.tsx
+ M src/components/interventions/InterventionForm.tsx
+ M src/components/interventions/PlanificationSplitView.tsx
+ M src/components/layout/MobileNav.tsx
+ M src/components/reports/PhotoUploader.tsx
+ M src/components/reports/ReportForm.tsx
+ M src/lib/normalize-image.ts
+?? .playwright-mcp/
+?? docs/
+?? src/app/(dashboard)/admin/stats/layout.tsx
+?? src/app/api/interventions/
+?? src/app/api/report-photos/
+?? src/components/documents/
+?? src/lib/chantier-documents.ts
+?? src/lib/intervention-dates.ts
+?? src/lib/report-feedback.ts
+?? src/lib/report-photos.ts
+?? supabase/migrations/00024_chantier_documents.sql
+?? tests/

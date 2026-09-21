@@ -1,0 +1,166 @@
+TAP version 13
+# Subtest: Photos: five selected, remove one, append second selection, reject individual invalid images
+ok 1 - Photos: five selected, remove one, append second selection, reject individual invalid images
+  ---
+  duration_ms: 86.016041
+  type: 'test'
+  ...
+# Subtest: Photos: concurrent selection cannot overwrite the pending batch; size/type validated
+ok 2 - Photos: concurrent selection cannot overwrite the pending batch; size/type validated
+  ---
+  duration_ms: 32.894625
+  type: 'test'
+  ...
+# Subtest: Photos: partial upload, retained successes, stable paths, retry without duplicates (mock storage)
+ok 3 - Photos: partial upload, retained successes, stable paths, retry without duplicates (mock storage)
+  ---
+  duration_ms: 12.0395
+  type: 'test'
+  ...
+# Subtest: Photos: lost storage response recovered by comparing bytes
+ok 4 - Photos: lost storage response recovered by comparing bytes
+  ---
+  duration_ms: 18.661542
+  type: 'test'
+  ...
+# Subtest: Report handlers: partial failure + database failure + retry + reopen preserve existing photos, captions and text
+ok 5 - Report handlers: partial failure + database failure + retry + reopen preserve existing photos, captions and text
+  ---
+  duration_ms: 345.444833
+  type: 'test'
+  ...
+# Subtest: Private photo route: owner/staff allowed, other technician, anonymous and traversal denied (mock storage)
+ok 6 - Private photo route: owner/staff allowed, other technician, anonymous and traversal denied (mock storage)
+  ---
+  duration_ms: 32.700708
+  type: 'test'
+  ...
+# Subtest: DOCX neighbor: private photos resolved to bytes and foreign attachment rejected (mock storage, no conversion)
+ok 7 - DOCX neighbor: private photos resolved to bytes and foreign attachment rejected (mock storage, no conversion)
+  ---
+  duration_ms: 21.83125
+  type: 'test'
+  ...
+# Subtest: existing report + reviewed correction; double add consumed once
+ok 8 - existing report + reviewed correction; double add consumed once
+  ---
+  duration_ms: 61.603292
+  type: 'test'
+  ...
+# Subtest: manual corrections during listening survive cumulative repeated events, spoken repetitions remain
+ok 9 - manual corrections during listening survive cumulative repeated events, spoken repetitions remain
+  ---
+  duration_ms: 14.66925
+  type: 'test'
+  ...
+# Subtest: cancel and dispose abort and ignore captured late callbacks
+ok 10 - cancel and dispose abort and ignore captured late callbacks
+  ---
+  duration_ms: 37.554042
+  type: 'test'
+  ...
+# Subtest: normal stop waits for final results and never promotes interim
+ok 11 - normal stop waits for final results and never promotes interim
+  ---
+  duration_ms: 24.641583
+  type: 'test'
+  ...
+# Subtest: refused, missing microphone, network, silence, unsupported language and unexpected end do not restart
+ok 12 - refused, missing microphone, network, silence, unsupported language and unexpected end do not restart
+  ---
+  duration_ms: 135.780125
+  type: 'test'
+  ...
+# Subtest: unsupported browser, constructor/start failures and empty normal stop
+ok 13 - unsupported browser, constructor/start failures and empty normal stop
+  ---
+  duration_ms: 11.913209
+  type: 'test'
+  ...
+# Subtest: stop timeout aborts unresponsive service and discards interim
+ok 14 - stop timeout aborts unresponsive service and discards interim
+  ---
+  duration_ms: 6.393291
+  type: 'test'
+  ...
+# Subtest: unsupported UI keeps manual fallback and all dictation buttons are non-submit
+ok 15 - unsupported UI keeps manual fallback and all dictation buttons are non-submit
+  ---
+  duration_ms: 38.523083
+  type: 'test'
+  ...
+# Subtest: report handler appends to latest manual description, preserves photos and other saved fields
+ok 16 - report handler appends to latest manual description, preserves photos and other saved fields
+  ---
+  duration_ms: 175.245708
+  type: 'test'
+  ...
+# Subtest: old callbacks cannot contaminate next session; intermediate replacement/removal never inserts text
+ok 17 - old callbacks cannot contaminate next session; intermediate replacement/removal never inserts text
+  ---
+  duration_ms: 7.975291
+  type: 'test'
+  ...
+# Subtest: DOCX GET/POST deny anonymous before privileged client (mock)
+ok 18 - DOCX GET/POST deny anonymous before privileged client (mock)
+  ---
+  duration_ms: 123.514167
+  type: 'test'
+  ...
+# Subtest: DOCX GET/POST deny inactive before privileged client (mock)
+ok 19 - DOCX GET/POST deny inactive before privileged client (mock)
+  ---
+  duration_ms: 63.853291
+  type: 'test'
+  ...
+# Subtest: DOCX GET/POST deny other technician before privileged client (mock)
+ok 20 - DOCX GET/POST deny other technician before privileged client (mock)
+  ---
+  duration_ms: 44.724417
+  type: 'test'
+  ...
+# Subtest: DOCX GET/POST deny missing report before privileged client (mock)
+ok 21 - DOCX GET/POST deny missing report before privileged client (mock)
+  ---
+  duration_ms: 39.031833
+  type: 'test'
+  ...
+# Subtest: DOCX GET/POST deny auth failure before privileged client (mock)
+ok 22 - DOCX GET/POST deny auth failure before privileged client (mock)
+  ---
+  duration_ms: 24.883375
+  type: 'test'
+  ...
+# Subtest: DOCX GET/POST deny database failure before privileged client (mock)
+ok 23 - DOCX GET/POST deny database failure before privileged client (mock)
+  ---
+  duration_ms: 53.468375
+  type: 'test'
+  ...
+# Subtest: DOCX access matrix: active staff read/write, owner read only (mock)
+ok 24 - DOCX access matrix: active staff read/write, owner read only (mock)
+  ---
+  duration_ms: 16.196458
+  type: 'test'
+  ...
+# Subtest: Photo read requires exact persisted reference and report scope before Storage (mock)
+ok 25 - Photo read requires exact persisted reference and report scope before Storage (mock)
+  ---
+  duration_ms: 25.940417
+  type: 'test'
+  ...
+# Subtest: Stats guard refuses inactive admin (mock)
+ok 26 - Stats guard refuses inactive admin (mock)
+  ---
+  duration_ms: 10.490667
+  type: 'test'
+  ...
+1..26
+# tests 26
+# suites 0
+# pass 26
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 934.962625

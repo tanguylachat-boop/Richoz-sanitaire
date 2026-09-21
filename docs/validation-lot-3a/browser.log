@@ -1,0 +1,5 @@
+PASS browser desktop: explicit confirmation, filters, manual double click, exact intervention link and persisted notification
+PASS browser loading/empty/error/retry states
+PASS browser technician: correction notification exact report/comment and staff follow-up denied
+PASS browser mobile: follow-up navigation, filters and no horizontal document overflow
+PASS HTTP automatic entry: unauthorized rejected; execution disabled; authorized simulation without writes

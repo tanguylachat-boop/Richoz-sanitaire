@@ -1,0 +1,7 @@
+PASS simulated: manual edit, review, repeated deliveries, spoken repetitions, final after stop, double add
+PASS simulated: second dictation, cancel and stale callback
+PASS simulated: microphone refusal and silence
+PASS real persistence: existing save flow, new authenticated browser session, text/photo/other fields
+PASS simulated: navigation aborts recognition, ignores late callback
+PASS simulated: unsupported browser retains manual editing
+Chromium 147.0.7727.15: no real microphone, no real recognition, local persistence verified

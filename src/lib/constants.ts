@@ -68,6 +68,9 @@ export const ADMIN_ONLY_ROUTES = [
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/regies', label: 'Régies', icon: 'building' },
   { href: '/admin/stats', label: 'Statistiques RH', icon: 'history' },
+  { href: '/admin/salary-items', label: 'Éléments de salaire', icon: 'file-signature' },
+  { href: '/admin/payroll-drafts', label: 'Brouillons de paie', icon: 'file-text' },
+  { href: '/admin/locations', label: 'Localisation', icon: 'map-pin' },
   { href: '/admin/settings', label: 'Paramètres', icon: 'settings' },
 ];
 
@@ -77,6 +80,7 @@ export const TECHNICIAN_ROUTES = [
   { href: '/technician/piquet', label: 'Piquet / urgence', icon: 'clock' },
   { href: '/interventions', label: 'Historique', icon: 'history' },
   { href: '/technician/leave', label: 'Mes congés', icon: 'calendar-check' },
+  { href: '/technician/location', label: 'Ma position', icon: 'map-pin' },
   { href: '/technician/profile', label: 'Mon profil', icon: 'users' },
 ];
 

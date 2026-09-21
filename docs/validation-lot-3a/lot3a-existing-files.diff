@@ -1,0 +1,110 @@
+--- entry/src/types/database.ts
++++ lot3a/src/types/database.ts
+@@ -758,6 +758,10 @@
+       [_ in never]: never;
+     };
+     Functions: {
++      get_report_followup: { Args: Record<PropertyKey, never>; Returns: Json };
++      confirm_report_expectation: { Args: { p_intervention: string; p_reference: string; p_due?: string | null }; Returns: undefined };
++      remind_report: { Args: { p_intervention: string; p_interval_seconds: number; p_expected?: string | null }; Returns: Json };
++      run_report_reminders: { Args: { p_config: Json; p_dry?: boolean; p_now?: string }; Returns: Json };
+       user_role: {
+         Args: Record<PropertyKey, never>;
+         Returns: UserRole;
+--- entry/src/lib/report-feedback.ts
++++ lot3a/src/lib/report-feedback.ts
+@@ -3,10 +3,15 @@
+ }
+ 
+ export function reportNotificationLink(notification: {
+-  type: string; reference_id: string | null; intervention_type?: string | null;
++  type: string; reference_type?: string | null; reference_id: string | null; intervention_type?: string | null;
+   report_intervention_id?: string | null;
+ }) {
+   if (!notification.reference_id) return '#';
++  if (notification.type === 'report_reminder') {
++    return notification.report_intervention_id
++      ? technicianReportLink(notification.report_intervention_id, notification.reference_id)
++      : notification.reference_type === 'report' ? '#' : technicianReportLink(notification.reference_id);
++  }
+   if (notification.type === 'revision_requested') {
+     // New notifications reference a report; older ones reference its intervention.
+     return notification.report_intervention_id
+--- entry/src/app/(dashboard)/calendar/page.tsx
++++ lot3a/src/app/(dashboard)/calendar/page.tsx
+@@ -45,7 +45,7 @@
+   { value: 'day', label: 'Jour', icon: Calendar },
+ ];
+ 
+-export default function CalendarPage() {
++export default function CalendarPage({ searchParams }: { searchParams?: { intervention?: string } }) {
+   const [view, setView] = useState<CalendarView>('week');
+   const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('all');
+   const [currentDate, setCurrentDate] = useState(new Date());
+@@ -187,6 +187,19 @@
+       setDetailIntervention(data as Intervention);
+     }
+   };
++  useEffect(() => {
++    const id = searchParams?.intervention;
++    if (!id) return;
++    let active = true;
++    const client = createClient();
++    void client.from('interventions').select('*, technician:users!interventions_technician_id_fkey(id, first_name, last_name, calendar_color)')
++      .eq('id', id).single().then(({ data, error }) => {
++        if (!active) return;
++        if (error || !data) toast.error('Intervention inaccessible.');
++        else setDetailIntervention(data as Intervention);
++      });
++    return () => { active = false; };
++  }, [searchParams?.intervention]);
+   const handleEditFromDetail = () => { if (detailIntervention) { setSelectedIntervention(detailIntervention); setDetailIntervention(null); setIsEditModalOpen(true); } };
+   const handleCreateSuccess = () => { setIsCreateModalOpen(false); fetchInterventions(); };
+   const handleEditSuccess = () => { setIsEditModalOpen(false); setSelectedIntervention(null); fetchInterventions(); };
+--- entry/src/app/(dashboard)/reports/layout.tsx
++++ lot3a/src/app/(dashboard)/reports/layout.tsx
+@@ -6,6 +6,7 @@
+ import { ClipboardCheck, History, FileText } from 'lucide-react';
+ 
+ const tabs = [
++  { name: 'Suivi', href: '/reports/followup', icon: FileText },
+   {
+     name: 'À valider',
+     href: '/reports/validate',
+@@ -27,6 +28,7 @@
+ 
+   // Determine active tab based on pathname
+   const getActiveTab = () => {
++    if (pathname.startsWith('/reports/followup')) return '/reports/followup';
+     if (pathname.startsWith('/reports/history')) return '/reports/history';
+     return '/reports/validate';
+   };
+@@ -50,7 +52,7 @@
+         </div>
+ 
+         {/* Tabs */}
+-        <div className="px-6 flex gap-1 bg-gray-50/50">
++        <div className="px-2 sm:px-6 flex gap-1 overflow-x-auto bg-gray-50/50">
+           {tabs.map((tab) => {
+             const Icon = tab.icon;
+             const isActive = activeTab === tab.href;
+@@ -60,7 +62,7 @@
+                 key={tab.href}
+                 href={tab.href}
+                 className={cn(
+-                  'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors',
++                  'flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors',
+                   isActive
+                     ? 'border-blue-600 text-blue-600 bg-white'
+                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+--- entry/src/app/(dashboard)/technician/notifications/page.tsx
++++ lot3a/src/app/(dashboard)/technician/notifications/page.tsx
+@@ -53,7 +53,7 @@
+         }
+ 
+         if (data && data.length > 0) {
+-          const reportIds = data.filter((n: NotificationRow) => n.type === 'revision_requested' && n.reference_id).map((n: NotificationRow) => n.reference_id!);
++          const reportIds = data.filter((n: NotificationRow) => (n.type === 'revision_requested' || (n.type === 'report_reminder' && n.reference_type === 'report')) && n.reference_id).map((n: NotificationRow) => n.reference_id!);
+           const reportMap = new Map<string, string>();
+           if (reportIds.length) {
+             const { data: reports, error: reportsError } = await supabase.from('reports')
