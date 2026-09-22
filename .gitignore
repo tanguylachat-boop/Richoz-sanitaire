@@ -39,3 +39,6 @@ supabase/.temp
 
 # Playwright MCP debug logs
 .playwright-mcp/
+
+# DB backups (real client data — never commit)
+backups/
