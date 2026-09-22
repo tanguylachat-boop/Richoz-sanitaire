@@ -77,13 +77,19 @@ export default function AdminStatsPage() {
           .order('last_name'),
       ]);
 
-      if (leavesError || techError) throw new Error('Chargement RH impossible');
+      if (leavesError || techError) {
+        const detail = leavesError ?? techError;
+        const code = detail && 'code' in detail ? (detail as { code?: string }).code : undefined;
+        throw new Error(detail?.message ? `${detail.message}${code ? ` [${code}]` : ''}` : 'Chargement RH impossible');
+      }
       if (currentRequest !== requestId.current) return;
       setLeaves((leavesData || []) as LeaveRow[]);
       setTechnicians((techData || []) as TechRow[]);
-    } catch {
+    } catch (err) {
       if (currentRequest === requestId.current) {
-        setLoadError('Impossible de charger les statistiques RH. Vérifiez votre connexion et vos droits, puis réessayez.');
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error('[stats-rh] chargement échoué :', err);
+        setLoadError(`Impossible de charger les statistiques RH : ${reason}. Vérifiez votre connexion et vos droits, puis réessayez.`);
       }
     } finally {
       if (currentRequest === requestId.current) setIsLoading(false);
