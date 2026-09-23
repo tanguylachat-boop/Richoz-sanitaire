@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ADMIN_ROUTES, ADMIN_ONLY_ROUTES, TECHNICIAN_ROUTES } from '@/lib/constants';
+import { ADMIN_ROUTES, ADMIN_ONLY_ROUTES, PAYROLL_ROUTES, TECHNICIAN_ROUTES } from '@/lib/constants';
 import type { User } from '@/types/database';
 import {
   Inbox,
@@ -22,6 +22,7 @@ import {
   Clock,
   FileSignature,
   MapPin,
+  Wallet,
   LogOut,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -47,6 +48,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   'clock': Clock,
   'file-signature': FileSignature,
   'map-pin': MapPin,
+  'wallet': Wallet,
 };
 
 interface SidebarProps {
@@ -67,6 +69,7 @@ export function Sidebar({ user, className }: SidebarProps) {
 
   const mainRoutes = isTechnician ? TECHNICIAN_ROUTES : ADMIN_ROUTES;
   const adminRoutes = isAdmin ? ADMIN_ONLY_ROUTES : [];
+  const payrollRoutes = isStaff ? PAYROLL_ROUTES : [];
 
   const badgeMap: Record<string, number> = isStaff
     ? {
@@ -138,6 +141,35 @@ export function Sidebar({ user, className }: SidebarProps) {
             })}
           </ul>
         </div>
+
+        {/* Payroll Routes (staff : admin + secrétaire) */}
+        {payrollRoutes.length > 0 && (
+          <div className="px-3 mb-6">
+            <p className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              Paie
+            </p>
+            <ul className="space-y-1">
+              {payrollRoutes.map((route) => {
+                const Icon = iconMap[route.icon] || Wallet;
+                const isActive = pathname === route.href || pathname.startsWith(route.href + '/');
+                return (
+                  <li key={route.href}>
+                    <Link
+                      href={route.href}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                        isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                      )}
+                    >
+                      <Icon className={cn('w-5 h-5', isActive ? 'text-blue-600' : 'text-gray-400')} />
+                      {route.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Admin Routes */}
         {adminRoutes.length > 0 && (

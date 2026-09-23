@@ -68,10 +68,17 @@ export const ADMIN_ONLY_ROUTES = [
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/regies', label: 'Régies', icon: 'building' },
   { href: '/admin/stats', label: 'Statistiques RH', icon: 'history' },
-  { href: '/admin/salary-items', label: 'Éléments de salaire', icon: 'file-signature' },
-  { href: '/admin/payroll-drafts', label: 'Brouillons de paie', icon: 'file-text' },
   { href: '/admin/locations', label: 'Localisation', icon: 'map-pin' },
   { href: '/admin/settings', label: 'Paramètres', icon: 'settings' },
+];
+
+// Paie : accessibles au staff (admin + secrétaire) — même garde
+// requireAdminOrSecretary() et même RLS is_admin_or_secretary() côté serveur.
+// La secrétaire configure la rémunération (LOT 8).
+export const PAYROLL_ROUTES = [
+  { href: '/admin/salary-config', label: 'Config rémunération', icon: 'wallet' },
+  { href: '/admin/salary-items', label: 'Éléments de salaire', icon: 'file-signature' },
+  { href: '/admin/payroll-drafts', label: 'Brouillons de paie', icon: 'file-text' },
 ];
 
 export const TECHNICIAN_ROUTES = [

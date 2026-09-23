@@ -728,9 +728,9 @@ export interface Database {
         Relationships: [{ foreignKeyName: 'salary_item_history_changed_by_fkey'; columns: ['changed_by']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
       };
       payroll_drafts: {
-        Row: { id: string; technician_id: string; period_start: string; period_end: string; version: number; status: string; is_regularization: boolean; generated_at: string; generated_by: string | null; validated_by: string | null; validated_at: string | null; notes: string | null };
-        Insert: { id?: string; technician_id: string; period_start: string; period_end: string; version?: number; status?: string; is_regularization?: boolean; generated_by?: string | null; notes?: string | null };
-        Update: { status?: string; validated_by?: string | null; validated_at?: string | null; notes?: string | null };
+        Row: { id: string; technician_id: string; period_start: string; period_end: string; version: number; status: string; is_regularization: boolean; generated_at: string; generated_by: string | null; validated_by: string | null; validated_at: string | null; notes: string | null; worked_hours: number | null; worked_hours_source: string; net_chf: number | null };
+        Insert: { id?: string; technician_id: string; period_start: string; period_end: string; version?: number; status?: string; is_regularization?: boolean; generated_by?: string | null; notes?: string | null; worked_hours?: number | null; worked_hours_source?: string };
+        Update: { status?: string; validated_by?: string | null; validated_at?: string | null; notes?: string | null; worked_hours?: number | null; worked_hours_source?: string };
         Relationships: [{ foreignKeyName: 'payroll_drafts_technician_id_fkey'; columns: ['technician_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
       };
       technician_locations: {
@@ -740,10 +740,28 @@ export interface Database {
         Relationships: [{ foreignKeyName: 'technician_locations_technician_id_fkey'; columns: ['technician_id']; isOneToOne: true; referencedRelation: 'users'; referencedColumns: ['id'] }];
       };
       payroll_draft_lines: {
-        Row: { id: string; draft_id: string; line_type: string; salary_item_id: string | null; label: string; minutes: number | null; amount_chf: number | null; amount_state: string; source_snapshot: Json | null; created_at: string };
-        Insert: { id?: string; draft_id: string; line_type: string; salary_item_id?: string | null; label: string; minutes?: number | null; amount_chf?: number | null; amount_state: string; source_snapshot?: Json | null };
-        Update: { label?: string; minutes?: number | null; amount_chf?: number | null; amount_state?: string };
+        Row: { id: string; draft_id: string; line_type: string; salary_item_id: string | null; component_id: string | null; label: string; minutes: number | null; amount_chf: number | null; amount_state: string; overridden: boolean; source_snapshot: Json | null; created_at: string };
+        Insert: { id?: string; draft_id: string; line_type: string; salary_item_id?: string | null; component_id?: string | null; label: string; minutes?: number | null; amount_chf?: number | null; amount_state: string; overridden?: boolean; source_snapshot?: Json | null };
+        Update: { label?: string; minutes?: number | null; amount_chf?: number | null; amount_state?: string; overridden?: boolean };
         Relationships: [{ foreignKeyName: 'payroll_draft_lines_draft_id_fkey'; columns: ['draft_id']; isOneToOne: false; referencedRelation: 'payroll_drafts'; referencedColumns: ['id'] }];
+      };
+      employee_salary_config: {
+        Row: { id: string; technician_id: string; pay_type: string; monthly_base_chf: number | null; hourly_rate_chf: number; overtime_supplement_pct: number; effective_from: string; is_active: boolean; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; technician_id: string; pay_type: string; monthly_base_chf?: number | null; hourly_rate_chf: number; overtime_supplement_pct?: number; effective_from?: string; is_active?: boolean; created_by?: string | null };
+        Update: { pay_type?: string; monthly_base_chf?: number | null; hourly_rate_chf?: number; overtime_supplement_pct?: number; effective_from?: string; is_active?: boolean };
+        Relationships: [{ foreignKeyName: 'employee_salary_config_technician_id_fkey'; columns: ['technician_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
+      };
+      employee_salary_config_history: {
+        Row: { id: string; config_id: string; technician_id: string; action: string; changed_by: string | null; changed_at: string; old_values: Json | null; new_values: Json | null };
+        Insert: never;
+        Update: never;
+        Relationships: [{ foreignKeyName: 'employee_salary_config_history_changed_by_fkey'; columns: ['changed_by']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
+      };
+      salary_config_component: {
+        Row: { id: string; config_id: string; label: string; direction: string; basis: string; pct: number | null; amount_chf: number | null; sort_order: number; created_at: string };
+        Insert: { id?: string; config_id: string; label: string; direction: string; basis: string; pct?: number | null; amount_chf?: number | null; sort_order?: number };
+        Update: { label?: string; direction?: string; basis?: string; pct?: number | null; amount_chf?: number | null; sort_order?: number };
+        Relationships: [{ foreignKeyName: 'salary_config_component_config_id_fkey'; columns: ['config_id']; isOneToOne: false; referencedRelation: 'employee_salary_config'; referencedColumns: ['id'] }];
       };
       audit_log: {
         Relationships: [

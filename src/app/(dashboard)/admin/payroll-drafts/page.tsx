@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { FileText, Loader2, PlayCircle, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
+import { FileText, Loader2, PlayCircle, CheckCircle, AlertTriangle, Lock, Pencil, X, Check, Clock } from 'lucide-react';
 
 interface DraftLine {
   id: string;
@@ -22,6 +22,7 @@ interface DraftLine {
   minutes: number | null;
   amount_chf: number | null;
   amount_state: string;
+  overridden: boolean;
 }
 
 interface Draft {
@@ -34,6 +35,9 @@ interface Draft {
   is_regularization: boolean;
   generated_at: string;
   notes: string | null;
+  worked_hours: number | null;
+  worked_hours_source: string;
+  net_chf: number | null;
   technician?: { first_name: string | null; last_name: string | null; email: string } | null;
   lines: DraftLine[];
 }
@@ -60,6 +64,9 @@ export default function PayrollDraftsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [editingLine, setEditingLine] = useState<string | null>(null);
+  const [lineValue, setLineValue] = useState('');
+  const [hoursEdit, setHoursEdit] = useState<Record<string, string>>({});
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => { if (user) setUserId(user.id); });
@@ -127,6 +134,48 @@ export default function PayrollDraftsPage() {
     }
   };
 
+  // Override secrétaire d'une ligne : fixe/corrige le montant (persiste au rafraîchissement).
+  const saveLineOverride = async (line: DraftLine) => {
+    const value = Number(lineValue);
+    if (!Number.isFinite(value)) { toast.error('Montant invalide'); return; }
+    setProcessingId(line.id);
+    try {
+      const { error } = await supabase.from('payroll_draft_lines')
+        .update({ amount_chf: value, amount_state: 'amount_set', overridden: true }).eq('id', line.id);
+      if (error) throw new Error(error.message);
+      setEditingLine(null);
+      toast.success('Montant enregistré');
+      fetchDrafts();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      toast.error(message.includes('PAIE_FIGEE') ? 'Fiche figée : modification impossible' : 'Enregistrement impossible');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Heures du mois (employés horaires) : correction manuelle puis régénération pour recalculer la base.
+  const saveHours = async (draft: Draft) => {
+    const raw = hoursEdit[draft.id];
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) { toast.error('Heures invalides'); return; }
+    setProcessingId(draft.id);
+    try {
+      const { error } = await supabase.from('payroll_drafts')
+        .update({ worked_hours: value, worked_hours_source: 'manual' }).eq('id', draft.id);
+      if (error) throw new Error(error.message);
+      const { error: genError } = await supabase.rpc('generate_payroll_drafts', { p_reference: period.reference, p_dry: false });
+      if (genError) throw new Error(genError.message);
+      toast.success('Heures enregistrées, base recalculée');
+      setHoursEdit((h) => { const next = { ...h }; delete next[draft.id]; return next; });
+      fetchDrafts();
+    } catch (error) {
+      toast.error(error instanceof Error && error.message.includes('PAIE_FIGEE') ? 'Fiche figée' : 'Enregistrement impossible');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -175,10 +224,9 @@ export default function PayrollDraftsPage() {
         <div className="space-y-4">
           {drafts.map((draft) => {
             const unresolved = draft.lines.filter((l) => l.amount_state === 'requires_rule').length;
-            const totalChf = draft.lines
-              .filter((l) => l.amount_state === 'amount_set')
-              .reduce((s, l) => s + Number(l.amount_chf || 0), 0);
             const isValidated = draft.status === 'validated';
+            const base = draft.lines.find((l) => l.line_type === 'salaire_base');
+            const isHourly = base?.label.startsWith('Salaire horaire') ?? false;
             return (
               <div key={draft.id} className={`bg-white rounded-xl border shadow-sm p-5 ${isValidated ? 'border-emerald-200' : 'border-gray-200'}`}>
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
@@ -215,20 +263,79 @@ export default function PayrollDraftsPage() {
                   )}
                 </div>
 
+                {isHourly && (
+                  <div className="mb-3 flex items-center gap-2 text-sm bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                    <Clock className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-600">Heures du mois</span>
+                    {isValidated ? (
+                      <span className="font-medium text-gray-900">{draft.worked_hours != null ? `${Number(draft.worked_hours)} h` : '—'}</span>
+                    ) : (
+                      <>
+                        <input
+                          type="number" step="0.25" min="0"
+                          value={hoursEdit[draft.id] ?? (draft.worked_hours != null ? String(draft.worked_hours) : '')}
+                          onChange={(e) => setHoursEdit((h) => ({ ...h, [draft.id]: e.target.value }))}
+                          className="w-24 h-8 px-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-400">{draft.worked_hours_source === 'manual' ? '(corrigé)' : '(auto, rapports)'}</span>
+                        <button
+                          onClick={() => saveHours(draft)}
+                          disabled={processingId === draft.id || hoursEdit[draft.id] === undefined}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-40"
+                        >
+                          {processingId === draft.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          Enregistrer & recalculer
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <table className="w-full text-sm">
                   <tbody className="divide-y divide-gray-100">
                     {draft.lines.map((line) => (
                       <tr key={line.id}>
-                        <td className="py-2 pr-3 text-gray-700">{line.label}</td>
+                        <td className="py-2 pr-3 text-gray-700">
+                          {line.label}
+                          {line.overridden && <span className="ml-1 text-xs text-blue-500">(corrigé)</span>}
+                        </td>
                         <td className="py-2 px-3 text-right text-gray-500 whitespace-nowrap">
                           {line.minutes != null ? `${line.minutes} min` : ''}
                         </td>
                         <td className="py-2 pl-3 text-right whitespace-nowrap">
-                          {line.amount_state === 'amount_set' ? (
-                            <span className="font-medium text-gray-900">{Number(line.amount_chf).toFixed(2)} CHF</span>
+                          {editingLine === line.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number" step="0.01" autoFocus
+                                value={lineValue}
+                                onChange={(e) => setLineValue(e.target.value)}
+                                className="w-24 h-8 px-2 border border-gray-200 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <button onClick={() => saveLineOverride(line)} disabled={processingId === line.id}
+                                className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40" title="Enregistrer">
+                                {processingId === line.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                              </button>
+                              <button onClick={() => setEditingLine(null)} className="text-gray-400 hover:text-gray-600" title="Annuler">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                              <AlertTriangle className="w-3 h-3" /> À configurer
+                            <span className="inline-flex items-center gap-2">
+                              {line.amount_state === 'amount_set' ? (
+                                <span className="font-medium text-gray-900">{Number(line.amount_chf).toFixed(2)} CHF</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                  <AlertTriangle className="w-3 h-3" /> À configurer
+                                </span>
+                              )}
+                              {!isValidated && (
+                                <button
+                                  onClick={() => { setEditingLine(line.id); setLineValue(line.amount_chf != null ? String(line.amount_chf) : ''); }}
+                                  className="text-gray-300 hover:text-blue-600" title="Corriger le montant"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </span>
                           )}
                         </td>
@@ -239,12 +346,14 @@ export default function PayrollDraftsPage() {
                     <tr className="border-t border-gray-200">
                       <td className="py-2 pr-3 text-gray-500 text-xs">
                         {unresolved > 0
-                          ? `${unresolved} ligne(s) en attente de règle validée — la clôture reste impossible`
+                          ? `${unresolved} ligne(s) « à configurer » — clôture impossible ; corrigez le montant ou configurez la règle`
                           : 'Toutes les lignes sont résolues'}
                       </td>
-                      <td />
+                      <td className="py-2 px-3 text-right text-xs text-gray-400 whitespace-nowrap">Net</td>
                       <td className="py-2 pl-3 text-right font-semibold text-gray-900 whitespace-nowrap">
-                        {totalChf.toFixed(2)} CHF <span className="text-xs font-normal text-gray-400">(montants résolus)</span>
+                        {draft.net_chf != null
+                          ? `${Number(draft.net_chf).toFixed(2)} CHF`
+                          : <span className="text-amber-700">— (à configurer)</span>}
                       </td>
                     </tr>
                   </tfoot>

@@ -45,8 +45,44 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 - **Géoloc activée** : `NEXT_PUBLIC_LOCATION_SHARING_ENABLED='true'` posée sur Vercel **Preview + Production** (client confirme salariés informés). Effet uniquement après nouveau build ; preview à jour déployé (`richoz-sanitaire-c3hnjze0i…`). En prod, actif seulement après merge sur `main`.
 - **Advisor sécurité relancé (23.09)** : les 6 nouvelles fonctions ont `search_path` figé (OK). Elles rejoignent le pattern préexistant « SECURITY DEFINER exécutable via RPC » (23 fonctions-trigger, risque réel nul). **ERROR RLS `lx_prospects` + `activities` toujours ouverte.**
 
+## Session 23.09.2026 (suite) — LOT 8 : config rémunération & fiche nette
+
+- **Débloque la paie (6A/6B/6C)** : la clôture était impossible faute de taux. Décision client : la
+  **secrétaire configure la rémunération**. Design : `docs/LOT-8-CONFIG-SALAIRES-DESIGN.md`.
+- **Migration `00036_salary_config_and_net.sql`** (additive, appliquée en LOCAL uniquement, PAS en prod) :
+  - `employee_salary_config` (par employé, 1 active, historisée inviolable) : `pay_type` mensuel/horaire,
+    `monthly_base_chf`, `hourly_rate_chf` (toujours saisi), `overtime_supplement_pct` (défaut 25).
+  - `salary_config_component` : liste flexible cotisations/retenues/ajouts (% du brut OU montant fixe,
+    contrainte d'honnêteté pct XOR montant). Le 13e salaire = un composant `addition`.
+  - `payroll_drafts` +`worked_hours`/`worked_hours_source` (auto rapports validés + correction manuelle)
+    +`net_chf` (recalculé par trigger, NULL tant qu'une ligne « à configurer » — net jamais partiel).
+  - `payroll_draft_lines` : types `cotisation`/`ajout`, `component_id`, `overridden` (override secrétaire
+    **préservé au rafraîchissement**).
+  - RPC `generate_payroll_drafts` étendue : base chiffrée (mensuel = fixe ; horaire = heures × taux),
+    variables valorisés (sans_solde/retard = min/60×taux ; heures_sup ×(1+suppl%)), cotisations/ajouts,
+    net. **Amende = reste « à configurer »** (imputabilité sur salaire = décision humaine, jamais
+    auto-déduite ; l'admin l'impute par override).
+- **UI** : nouvelle page `/admin/salary-config` (secrétaire/admin) ; `/admin/payroll-drafts` enrichie
+  (net affiché, heures éditables pour horaires, override inline d'une ligne). Nav : nouveau groupe
+  **« Paie »** visible **au staff (admin + secrétaire)** — `salary-items`/`payroll-drafts` déplacés hors
+  `ADMIN_ONLY_ROUTES` (la secrétaire les voyait pas alors qu'elle y a accès) + `salary-config`.
+- **Tests réels (stack local, base fraîche)** : `tests/lot8-salary-config.test.cjs` **9/9** ✅ ·
+  régression `tests/lot6bc-local.test.cjs` **7/7** ✅ (RPC réécrite sans casse) · `npx tsc --noEmit` code 0 ·
+  `npm run build` code 0 (`/admin/salary-config` compilée).
+- **Non testé** : (1) le chemin heures **auto** depuis les rapports validés (testé heures=0 → base « à
+  configurer », et heures manuelles → base = heures×taux ; PAS la somme réelle de rapports validés, qui
+  exige un rapport+intervention réels) ; (2) recette navigateur/rôles réels ; (3) vrais chiffres de paie
+  client (taux, cotisations LPP/LAA). **Rien appliqué en prod.**
+- **Constat annexe (pas mon lot)** : `tests/lot6a-local.test.cjs` = **7/9** ; les 2 échecs (piquet, sans-solde)
+  viennent du trigger **autosync `00035`** (23.09) qui crée déjà ces `salary_items` → la création *manuelle*
+  du test (écrit le 18.09, avant l'autosync) duplique la source (index unique). **Test obsolète à mettre à
+  jour** (attendre l'item autosync au lieu de le créer), indépendant du lot 8.
+
 ## Prochaine action
 
+- **LOT 8** : faire saisir à la secrétaire les vrais taux/cotisations (recette sur preview) ; quand validé,
+  appliquer `00036` en prod via `apply_migration` (additive, backup préalable comme 00030→00035) — PAS encore fait.
+  Ensuite : feature **bon de commande fournisseur** côté technicien/chantier (2e chantier, cadrage à faire).
 - Recette client par rôle sur le preview déployé ; collecter les décisions client (congés/paie/Bexio/géoloc ci-dessus) ; corriger l'alerte RLS `lx_prospects`/`activities` ; puis PR `feat/richoz-reprise-lots-4-7` → `main` pour promotion prod. Procédure de retour arrière : restaurer depuis `backups/richoz-2026-09-22T08-06-26/` (les migrations sont additives, un rollback = `DROP` des nouveaux objets, jamais nécessaire pour les données existantes).
 
 ## Derniers tests (18.09.2026, tous exécutés réellement)
