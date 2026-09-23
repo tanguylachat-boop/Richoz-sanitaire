@@ -80,9 +80,16 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 
 ## Prochaine action
 
-- **LOT 8** : faire saisir à la secrétaire les vrais taux/cotisations (recette sur preview) ; quand validé,
-  appliquer `00036` en prod via `apply_migration` (additive, backup préalable comme 00030→00035) — PAS encore fait.
-  Ensuite : feature **bon de commande fournisseur** côté technicien/chantier (2e chantier, cadrage à faire).
+- **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).
+  Vérifié : counts existants inchangés (users 15, leave_requests 6, interventions 6, salary_items 0,
+  payroll_drafts 0 — tables paie vides, zéro perte), 3 tables créées + RLS activée + net_chf/overridden +
+  3 triggers. Advisor : mes 3 fonctions ont `search_path` figé, aucune nouvelle ERROR ; l'ERROR RLS
+  `lx_prospects`/`activities` reste ouverte (préexistante). Code committé + poussé sur
+  `feat/richoz-reprise-lots-4-7` (commit `2d9ffe2`) → preview Vercel se reconstruit.
+  **Recette** : la secrétaire saisit ses vrais taux/cotisations sur le **preview** (qui pointe la prod DB).
+  **Promotion prod app (main)** = PR `feat/richoz-reprise-lots-4-7` → `main` — NON faite (promeut lots 4→8
+  d'un coup, à garder après recette, décision Tanguy). Ensuite : feature **bon de commande fournisseur**
+  côté technicien/chantier (2e chantier, cadrage à faire ce soir).
 - Recette client par rôle sur le preview déployé ; collecter les décisions client (congés/paie/Bexio/géoloc ci-dessus) ; corriger l'alerte RLS `lx_prospects`/`activities` ; puis PR `feat/richoz-reprise-lots-4-7` → `main` pour promotion prod. Procédure de retour arrière : restaurer depuis `backups/richoz-2026-09-22T08-06-26/` (les migrations sont additives, un rollback = `DROP` des nouveaux objets, jamais nécessaire pour les données existantes).
 
 ## Derniers tests (18.09.2026, tous exécutés réellement)
