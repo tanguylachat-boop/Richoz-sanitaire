@@ -4,15 +4,16 @@
 // Le partage ne fonctionne que PAGE OUVERTE : une application web ne suit pas
 // la position écran verrouillé ou application fermée, et cette limite est
 // affichée. Aucune position n'est conservée après l'arrêt du partage.
-// Dispositif livré désactivé : NEXT_PUBLIC_LOCATION_SHARING_ENABLED='true'
-// requis (information préalable des salariés à faire avant usage réel).
+// Activé par décision client (salariés informés, acté le 23.09.2026). Le partage
+// reste EXPLICITE (le technicien l'active), avant-plan uniquement, sans rétention.
+// Kill-switch : poser NEXT_PUBLIC_LOCATION_SHARING_ENABLED='false' pour désactiver.
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { MapPin, Play, Square, AlertTriangle, ShieldCheck } from 'lucide-react';
 
-const FEATURE_ENABLED = process.env.NEXT_PUBLIC_LOCATION_SHARING_ENABLED === 'true';
+const FEATURE_ENABLED = process.env.NEXT_PUBLIC_LOCATION_SHARING_ENABLED !== 'false';
 const PUSH_INTERVAL_MS = 20000;
 
 type ShareState = 'off' | 'starting' | 'on' | 'denied' | 'error';
