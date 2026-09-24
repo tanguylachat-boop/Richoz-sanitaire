@@ -99,6 +99,19 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
   custom à prévoir pour un accès sans login). Ancienne prod = `rollback candidate` (retour 1 clic).
 - **À appliquer/merger pour ce lot** : migration `00037` en prod + re-merge branche→main (congés + lot 9).
 
+## Compte de test en prod (24.09.2026 — À SUPPRIMER après recette)
+
+- **Technicien démo** créé directement en base prod (auth.users + identity + public.users, mdp hashé
+  pgcrypto, login vérifié end-to-end) : `demo.technicien@richoz.test` / `RichozDemo2026!`. Rôle technicien
+  actif. **NB** : apparaît donc dans la génération de paie, la liste des congés, etc. (données test).
+- **2 interventions test** assignées : « TEST — Dépannage (démo) » et « TEST — Chantier (démo) » — pour
+  voir les bons de commande côté technicien (page rapport + chantier) et la localisation.
+- **Nettoyage** : supprimer les 2 interventions test, puis le technicien démo (public.users + auth.users)
+  quand la recette est finie.
+- **Localisation** : `technician_locations` = 0 partage → « on ne voit rien » est NORMAL tant qu'aucun
+  technicien n'a activé le partage. C'est de l'avant-plan uniquement (watchPosition tant que la page
+  `/technician/location` est ouverte) ; suivi en arrière-plan = app native (hors périmètre, déjà acté).
+
 ## Prochaine action
 
 - **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).
