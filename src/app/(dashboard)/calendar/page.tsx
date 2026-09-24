@@ -53,6 +53,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
   const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([]);
   const [reminders, setReminders] = useState<ReminderEntry[]>([]);
+  const [holidays, setHolidays] = useState<{ holiday_date: string; label: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -115,6 +116,14 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
       .lte('reminder_date', ed)
       .eq('completed', false);
     if (remindersData) setReminders(remindersData as ReminderEntry[]);
+
+    // Jours fériés (payés) dans la fenêtre affichée.
+    const { data: holidaysData } = await supabase
+      .from('public_holidays')
+      .select('holiday_date, label')
+      .gte('holiday_date', sd)
+      .lte('holiday_date', ed);
+    if (holidaysData) setHolidays(holidaysData as { holiday_date: string; label: string }[]);
 
     setIsLoading(false);
   }, [view, currentDate]);
@@ -263,6 +272,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
   });
   const getLeavesForDay = (day: Date): LeaveEntry[] => leaves.filter((l) => { const s = new Date(l.start_date + 'T00:00:00'); const e = new Date(l.end_date + 'T23:59:59'); return isWithinInterval(day, { start: s, end: e }); });
   const getBirthdaysForDay = (day: Date): BirthdayEntry[] => birthdays.filter((b) => isSameDay(new Date(b.date + 'T00:00:00'), day));
+  const getHolidayForDay = (day: Date) => holidays.find((h) => isSameDay(new Date(h.holiday_date + 'T00:00:00'), day)) || null;
   const cancelledInterventionIds = useMemo(() => new Set(interventions.filter(iv => iv.status === 'cancelled' || iv.status === 'annule').map(iv => iv.id)), [interventions]);
   const activeReminders = useMemo(() => reminders.filter(r => !cancelledInterventionIds.has(r.intervention_id)), [reminders, cancelledInterventionIds]);
   const getRemindersForDay = (day: Date): ReminderEntry[] => activeReminders.filter((r) => isSameDay(new Date(r.reminder_date + 'T00:00:00'), day));
@@ -316,10 +326,12 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
               <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
                 {calendarDays.map((day, idx) => {
                   const dayIvs = getIvsForDay(day); const dayLeaves = getLeavesForDay(day); const dayBirthdays = getBirthdaysForDay(day); const dayReminders = getRemindersForDay(day);
+                  const dayHoliday = getHolidayForDay(day);
                   const isCur = isSameMonth(day, currentDate); const isT = isToday(day);
                   const MAX = 2; const overflow = dayIvs.length - MAX;
-                  return (<div key={idx} className={`bg-white min-h-[100px] p-2 ${!isCur ? 'bg-gray-50' : ''}`}>
+                  return (<div key={idx} className={`min-h-[100px] p-2 ${dayHoliday ? 'bg-amber-50' : !isCur ? 'bg-gray-50' : 'bg-white'}`}>
                     <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${isT ? 'bg-blue-600 text-white' : isCur ? 'text-gray-900' : 'text-gray-400'}`}>{format(day, 'd')}</div>
+                    {dayHoliday && (<div className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-amber-200 text-amber-900 font-semibold mb-0.5 truncate border border-amber-300" title={`${dayHoliday.label} — férié payé`}>🎉 {dayHoliday.label}</div>)}
                     {dayBirthdays.map((b) => (<div key={`b-${b.user_id}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-violet-200 text-violet-800 font-semibold mb-0.5 truncate border border-violet-300">🎂 {b.first_name}</div>))}
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-emerald-200 text-emerald-800 font-semibold mb-0.5 truncate border border-emerald-400">🌴 {getTechName(l.technician)}</div>))}
                     {dayReminders.map((rem) => (<button type="button" key={`r-${rem.id}`} onClick={() => handleReminderClick(rem)} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-orange-200 text-orange-800 font-semibold mb-0.5 truncate border border-orange-400 hover:bg-orange-300 transition-colors cursor-pointer" title={rem.message}>🔔 {rem.message.length > 15 ? rem.message.slice(0, 15) + '…' : rem.message}</button>))}
@@ -350,6 +362,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /><span className="text-gray-600">🌴 Congé</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /><span className="text-gray-600">🎂 Anniversaire</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-300" /><span className="text-gray-600">🔔 Rappel</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-200 border border-amber-300" /><span className="text-gray-600">🎉 Férié (payé)</span></div>
             <div className="flex items-center gap-1.5"><span className="w-8 h-3 rounded bg-gray-100 border border-dashed border-gray-300" /><span className="text-gray-600">🍽️ Pause midi</span></div>
           </div>
         </div>

@@ -769,6 +769,12 @@ export interface Database {
         Update: { supplier?: string | null; note?: string | null; photos?: Json; is_processed?: boolean; processed_by?: string | null; processed_at?: string | null };
         Relationships: [{ foreignKeyName: 'supplier_orders_intervention_id_fkey'; columns: ['intervention_id']; isOneToOne: false; referencedRelation: 'interventions'; referencedColumns: ['id'] }];
       };
+      public_holidays: {
+        Row: { holiday_date: string; label: string; canton: string; is_paid: boolean; created_at: string };
+        Insert: { holiday_date: string; label: string; canton?: string; is_paid?: boolean };
+        Update: { label?: string; canton?: string; is_paid?: boolean };
+        Relationships: [];
+      };
       audit_log: {
         Relationships: [
           { foreignKeyName: 'audit_log_user_id_fkey'; columns: ['user_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] },
