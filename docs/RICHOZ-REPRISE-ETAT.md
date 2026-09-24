@@ -119,9 +119,10 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
   (`!== 'false'`, kill-switch conservé) — feu vert client déjà acté. Partage explicite + avant-plan +
   sans rétention inchangés. Rappel : rien ne s'affiche tant qu'un technicien n'a pas activé le partage.
 - **Jours fériés GE 2027 (payés)** : `00038_public_holidays` (table + seed 9 dates, appliquée prod),
-  affichés dans le calendrier (mois : fond ambré + badge 🎉 + légende). **Incidence paie NON calculée**
-  pour un employé horaire (heures/jour d'un férié = règle client manquante) ; un mensualisé est payé de fait.
-  → **décision client en attente** (voir Prochaine action). Années futures : ajouter des lignes dans la table.
+  affichés dans le calendrier (mois : fond ambré + badge 🎉 + légende). **DÉCISION CLIENT (24.09) :
+  tous les employés sont MENSUALISÉS** → un férié est déjà inclus dans le salaire fixe, AUCUN calcul paie
+  nécessaire (feature complète). Le chemin « horaire » du lot 8 existe mais n'est pas utilisé aujourd'hui.
+  Années futures : ajouter des lignes dans `public_holidays`.
 - **Interfaces dépannage vs chantier** : différentes PAR DESIGN (dépannage = 1 rapport ; chantier = suivi
   multi-jours à onglets). Bon de commande présent dans les deux. Le compte démo voit les 2 flux via « Aujourd'hui ».
 - Compte démo : les 2 interventions test sont datées du jour → visibles dans « Aujourd'hui » de la PWA.
