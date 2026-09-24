@@ -1,0 +1,175 @@
+
+> ics-sanitaire@0.1.0 build
+> next build
+
+   ▲ Next.js 14.1.3
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./src/app/(dashboard)/calendar/page.tsx
+120:6  Warning: React Hook useCallback has missing dependencies: 'getDateRange' and 'supabase'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+481:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+517:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/chantiers/page.tsx
+167:6  Warning: React Hook useEffect has missing dependencies: 'fetchChantiers' and 'fetchReferenceData'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/inbox/page.tsx
+125:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+148:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+526:21  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/(dashboard)/interventions/[id]/page.tsx
+100:6  Warning: React Hook useEffect has missing dependencies: 'router' and 'supabase'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/interventions/page.tsx
+113:6  Warning: React Hook useEffect has missing dependencies: 'fetchInterventions' and 'fetchReferenceData'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/invoices/[id]/page.tsx
+66:6  Warning: React Hook useEffect has missing dependencies: 'router' and 'supabase'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/leave/page.tsx
+99:6  Warning: React Hook useEffect has a missing dependency: 'supabase.auth'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+112:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+142:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+168:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+183:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/piquet/page.tsx
+525:29  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/(dashboard)/reports/validate/page.tsx
+218:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/technician/layout.tsx
+66:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/technician/leave/page.tsx
+66:6  Warning: React Hook useEffect has a missing dependency: 'supabase.auth'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+85:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/technician/notifications/page.tsx
+105:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/technician/piquet/page.tsx
+354:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/(dashboard)/technician/today/page.tsx
+99:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+152:6  Warning: React Hook useEffect has a missing dependency: 'fetchInterventions'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+167:6  Warning: React Hook useEffect has missing dependencies: 'fetchInterventions' and 'supabase'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/(dashboard)/technician/week/page.tsx
+88:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+132:6  Warning: React Hook useEffect has a missing dependency: 'fetchInterventions'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/interventions/PlanificationSplitView.tsx
+203:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+220:6  Warning: React Hook useEffect has a missing dependency: 'technicians'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/layout/Header.tsx
+160:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/layout/Sidebar.tsx
+95:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/hooks/useNotificationCounts.ts
+57:6  Warning: React Hook useCallback has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+99:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/hooks/useRealtime.ts
+77:6  Warning: React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/hooks/useUser.ts
+82:6  Warning: React Hook useEffect has missing dependencies: 'fetchUser' and 'supabase.auth'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/49) ...
+   Generating static pages (12/49) 
+   Generating static pages (24/49) 
+   Generating static pages (36/49) 
+ ✓ Generating static pages (49/49) 
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                     Size     First Load JS
+┌ λ /                                           152 B          84.5 kB
+├ ○ /_not-found                                 886 B          85.3 kB
+├ λ /admin/regies                               6.29 kB         151 kB
+├ λ /admin/settings                             3.71 kB        97.4 kB
+├ λ /admin/stats                                6.29 kB         154 kB
+├ λ /admin/users                                6.42 kB         174 kB
+├ λ /api/cron/report-reminders                  0 B                0 B
+├ λ /api/cron/sync-bexio-invoices               0 B                0 B
+├ λ /api/interventions/[id]/documents           0 B                0 B
+├ λ /api/invoices/create-bexio                  0 B                0 B
+├ λ /api/piquet-report-docx                     0 B                0 B
+├ λ /api/piquet-report-pdf                      0 B                0 B
+├ λ /api/report-photos                          0 B                0 B
+├ λ /api/reports/[id]/docx                      0 B                0 B
+├ λ /api/reports/daily                          0 B                0 B
+├ λ /api/send-push                              0 B                0 B
+├ λ /api/webhooks/calendar-sync                 0 B                0 B
+├ λ /api/webhooks/email-ingestion               0 B                0 B
+├ λ /api/webhooks/invoice-validate              0 B                0 B
+├ λ /api/webhooks/report-submit                 0 B                0 B
+├ λ /api/webhooks/transcribe-audio              0 B                0 B
+├ λ /calendar                                   14 kB           194 kB
+├ λ /chantiers                                  4.09 kB         189 kB
+├ λ /chantiers/[id]                             12.4 kB         173 kB
+├ λ /clients                                    5.47 kB         166 kB
+├ λ /clients/[id]                               7.16 kB         167 kB
+├ λ /clients/new                                3.21 kB         157 kB
+├ λ /contracts                                  5.36 kB         166 kB
+├ λ /contracts/[id]                             6.32 kB         167 kB
+├ λ /contracts/new                              4.51 kB         165 kB
+├ ○ /forgot-password                            1.55 kB         156 kB
+├ λ /inbox                                      6.81 kB         193 kB
+├ λ /interventions                              3.23 kB         194 kB
+├ λ /interventions/[id]                         5.78 kB         166 kB
+├ λ /invoices                                   3.09 kB         104 kB
+├ λ /invoices/[id]                              3.39 kB         157 kB
+├ λ /invoices/to-bill                           1.05 kB        92.2 kB
+├ λ /invoices/to-bill/[interventionId]/preview  3.6 kB          104 kB
+├ λ /leave                                      9.42 kB         164 kB
+├ ○ /login                                      1.74 kB         156 kB
+├ λ /piquet                                     8.68 kB         169 kB
+├ λ /products                                   4.83 kB         150 kB
+├ λ /profile                                    3.58 kB         151 kB
+├ λ /quotes                                     5.17 kB         150 kB
+├ λ /quotes/[id]                                7.75 kB         162 kB
+├ λ /quotes/new                                 7.18 kB         152 kB
+├ λ /reports/daily                              4.93 kB        96.1 kB
+├ λ /reports/followup                           4.28 kB         149 kB
+├ λ /reports/history                            3.65 kB         148 kB
+├ λ /reports/validate                           7.53 kB         168 kB
+├ λ /reports/validate/[id]                      15.4 kB         176 kB
+├ ○ /reset-password                             2.77 kB         157 kB
+├ λ /technician/chantier                        3.45 kB         148 kB
+├ λ /technician/chantier/[id]                   12.1 kB         172 kB
+├ λ /technician/leave                           6.75 kB         162 kB
+├ λ /technician/notifications                   3.55 kB         155 kB
+├ λ /technician/piquet                          8.11 kB         162 kB
+├ λ /technician/profile                         6.97 kB         154 kB
+├ λ /technician/report/[interventionId]         22.5 kB         183 kB
+├ λ /technician/today                           6.98 kB         158 kB
+└ λ /technician/week                            5.83 kB         157 kB
++ First Load JS shared by all                   84.4 kB
+  ├ chunks/4827-3c4485c20d8ba222.js             29 kB
+  ├ chunks/567b3956-dff7c267829e1758.js         53.4 kB
+  └ other shared chunks (total)                 1.97 kB
+
+
+○  (Static)   prerendered as static content
+λ  (Dynamic)  server-rendered on demand using Node.js
+

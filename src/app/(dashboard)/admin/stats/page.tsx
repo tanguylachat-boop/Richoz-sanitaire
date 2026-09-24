@@ -1,17 +1,19 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { BarChart3, Download, Users as UsersIcon, Loader2 } from 'lucide-react';
 import { LEAVE_TYPES, LEAVE_TYPE_ORDER, type LeaveType } from '@/lib/constants';
-import { eachDayOfInterval, parseISO } from 'date-fns';
+import { LEAVE_HOURS_PER_DAY, annualAllowanceHours, leaveHours } from '@/lib/leave-duration';
 
 interface LeaveRow {
   id: string;
   technician_id: string;
   start_date: string;
   end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   leave_type: LeaveType;
   status: string;
 }
@@ -25,21 +27,15 @@ interface TechRow {
   annual_leave_weeks: number | null;
 }
 
-// Swiss working assumptions for the leave balance:
-// 1 week = 5 working days, 1 day = 8 hours.
-const DAYS_PER_WEEK = 5;
-const HOURS_PER_DAY = 8;
-
+// Durées via la règle partagée du dépôt (src/lib/leave-duration) : jours
+// calendaires × 8h, heures réelles pour les absences partielles. Stats en
+// HEURES en interne, affichées en jours équivalents — mêmes chiffres que la
+// page Gestion des congés (pas de double décompte, recalcul systématique).
 type StatsByTech = Record<string, Record<LeaveType, number>>;
 
-function countBusinessDays(start: string, end: string): number {
-  // Count all days including weekends (plombier = travail parfois 6j/7). Pour des stats simples.
-  try {
-    const days = eachDayOfInterval({ start: parseISO(start), end: parseISO(end) });
-    return days.length;
-  } catch {
-    return 0;
-  }
+function formatDaysFromHours(hours: number): string {
+  const days = hours / LEAVE_HOURS_PER_DAY;
+  return Number.isInteger(days) ? String(days) : days.toFixed(1);
 }
 
 function getTechName(t: TechRow): string {
@@ -53,56 +49,71 @@ export default function AdminStatsPage() {
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [technicians, setTechnicians] = useState<TechRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchData = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     setIsLoading(true);
+    setLoadError(null);
+    setLeaves([]);
+    setTechnicians([]);
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
 
-    const [{ data: leavesData }, { data: techData }] = await Promise.all([
-      supabase
-        .from('leave_requests')
-        .select('id, technician_id, start_date, end_date, leave_type, status')
-        .eq('status', 'approved')
-        .lte('start_date', endStr)
-        .gte('end_date', startStr),
-      supabase
-        .from('users')
-        .select('id, first_name, last_name, email, is_active, annual_leave_weeks')
-        .in('role', ['technician', 'secretary', 'admin'])
-        .order('last_name'),
-    ]);
+    try {
+      const [{ data: leavesData, error: leavesError }, { data: techData, error: techError }] = await Promise.all([
+        supabase
+          .from('leave_requests')
+          .select('id, technician_id, start_date, end_date, start_time, end_time, leave_type, status')
+          .eq('status', 'approved')
+          .lte('start_date', endStr)
+          .gte('end_date', startStr),
+        supabase
+          .from('users')
+          .select('id, first_name, last_name, email, is_active, annual_leave_weeks')
+          .in('role', ['technician', 'secretary', 'admin'])
+          .order('last_name'),
+      ]);
 
-    if (leavesData) setLeaves(leavesData as LeaveRow[]);
-    if (techData) setTechnicians(techData as TechRow[]);
-    setIsLoading(false);
+      if (leavesError || techError) {
+        const detail = leavesError ?? techError;
+        const code = detail && 'code' in detail ? (detail as { code?: string }).code : undefined;
+        throw new Error(detail?.message ? `${detail.message}${code ? ` [${code}]` : ''}` : 'Chargement RH impossible');
+      }
+      if (currentRequest !== requestId.current) return;
+      setLeaves((leavesData || []) as LeaveRow[]);
+      setTechnicians((techData || []) as TechRow[]);
+    } catch (err) {
+      if (currentRequest === requestId.current) {
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error('[stats-rh] chargement échoué :', err);
+        setLoadError(`Impossible de charger les statistiques RH : ${reason}. Vérifiez votre connexion et vos droits, puis réessayez.`);
+      }
+    } finally {
+      if (currentRequest === requestId.current) setIsLoading(false);
+    }
   }, [year, supabase]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const pendingRequests = requestId;
+    fetchData();
+    return () => { pendingRequests.current++; };
+  }, [fetchData]);
 
   const stats: StatsByTech = useMemo(() => {
     const result: StatsByTech = {};
     for (const t of technicians) {
       result[t.id] = { conge: 0, maladie: 0, rtt: 0, sans_solde: 0, accident: 0, autre: 0 };
     }
-    const yearStart = new Date(`${year}-01-01T00:00:00`);
-    const yearEnd = new Date(`${year}-12-31T23:59:59`);
+    const clip = { clipStart: `${year}-01-01`, clipEnd: `${year}-12-31` };
 
     for (const l of leaves) {
       if (!result[l.technician_id]) continue;
-      // Clip to current year
-      const lStart = new Date(l.start_date + 'T00:00:00');
-      const lEnd = new Date(l.end_date + 'T23:59:59');
-      const effStart = lStart < yearStart ? yearStart : lStart;
-      const effEnd = lEnd > yearEnd ? yearEnd : lEnd;
-      if (effStart > effEnd) continue;
-      const days = countBusinessDays(
-        effStart.toISOString().slice(0, 10),
-        effEnd.toISOString().slice(0, 10)
-      );
+      const hours = leaveHours(l, clip);
       const type = (l.leave_type || 'conge') as LeaveType;
-      result[l.technician_id][type] = (result[l.technician_id][type] || 0) + days;
+      result[l.technician_id][type] = (result[l.technician_id][type] || 0) + hours;
     }
     return result;
   }, [leaves, technicians, year]);
@@ -118,21 +129,20 @@ export default function AdminStatsPage() {
   }, [stats]);
 
   const handleExportCSV = () => {
-    const header = ['Nom', 'Email', 'Solde annuel (sem.)', 'Solde annuel (h)', ...LEAVE_TYPE_ORDER.map((t) => LEAVE_TYPES[t].label), 'Total jours', 'Heures restantes'];
+    const header = ['Nom', 'Email', 'Solde annuel (sem.)', 'Solde annuel (h)', ...LEAVE_TYPE_ORDER.map((t) => `${LEAVE_TYPES[t].label} (j)`), 'Total jours', 'Heures restantes'];
     const rows = technicians.map((t) => {
       const s = stats[t.id] || ({} as Record<LeaveType, number>);
-      const total = LEAVE_TYPE_ORDER.reduce((sum, lt) => sum + (s[lt] || 0), 0);
+      const totalHours = LEAVE_TYPE_ORDER.reduce((sum, lt) => sum + (s[lt] || 0), 0);
       const weeks = t.annual_leave_weeks ?? 5;
-      const allowedHours = weeks * DAYS_PER_WEEK * HOURS_PER_DAY;
-      const usedCongeDays = s.conge || 0;
-      const remainingHours = allowedHours - usedCongeDays * HOURS_PER_DAY;
+      const allowedHours = annualAllowanceHours(t.annual_leave_weeks);
+      const remainingHours = allowedHours - (s.conge || 0);
       return [
         getTechName(t),
         t.email,
         String(weeks),
         String(allowedHours),
-        ...LEAVE_TYPE_ORDER.map((lt) => String(s[lt] || 0)),
-        String(total),
+        ...LEAVE_TYPE_ORDER.map((lt) => formatDaysFromHours(s[lt] || 0)),
+        formatDaysFromHours(totalHours),
         String(remainingHours),
       ];
     });
@@ -173,7 +183,7 @@ export default function AdminStatsPage() {
           </select>
           <button
             onClick={handleExportCSV}
-            disabled={isLoading}
+            disabled={isLoading || !!loadError || technicians.length === 0}
             className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
           >
             <Download className="w-4 h-4" />
@@ -182,6 +192,16 @@ export default function AdminStatsPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          <p>{loadError}</p>
+          <button onClick={fetchData} className="mt-2 underline">Réessayer</button>
+        </div>
+      )}
+      {!isLoading && !loadError && leaves.length === 0 && technicians.length > 0 && (
+        <p role="status" className="text-sm text-gray-600">Aucune absence approuvée pour {year}.</p>
+      )}
+      {!isLoading && !loadError && <>
       {/* Totals cards */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {LEAVE_TYPE_ORDER.map((lt) => (
@@ -190,8 +210,8 @@ export default function AdminStatsPage() {
               <span className="text-xs font-medium uppercase tracking-wide">{LEAVE_TYPES[lt].label}</span>
               <span className="text-lg">{LEAVE_TYPES[lt].emoji}</span>
             </div>
-            <div className="text-2xl font-bold">{totals[lt]}</div>
-            <div className="text-xs opacity-75">jour{totals[lt] > 1 ? 's' : ''}</div>
+            <div className="text-2xl font-bold">{formatDaysFromHours(totals[lt])}</div>
+            <div className="text-xs opacity-75">jour{totals[lt] > LEAVE_HOURS_PER_DAY ? 's' : ''}</div>
           </div>
         ))}
       </div>
@@ -225,11 +245,10 @@ export default function AdminStatsPage() {
               <tbody className="divide-y divide-gray-100">
                 {technicians.map((t) => {
                   const s = stats[t.id] || ({} as Record<LeaveType, number>);
-                  const total = LEAVE_TYPE_ORDER.reduce((sum, lt) => sum + (s[lt] || 0), 0);
+                  const totalHours = LEAVE_TYPE_ORDER.reduce((sum, lt) => sum + (s[lt] || 0), 0);
                   const weeks = t.annual_leave_weeks ?? 5;
-                  const allowedHours = weeks * DAYS_PER_WEEK * HOURS_PER_DAY;
-                  const usedCongeDays = s.conge || 0;
-                  const remainingHours = allowedHours - usedCongeDays * HOURS_PER_DAY;
+                  const allowedHours = annualAllowanceHours(t.annual_leave_weeks);
+                  const remainingHours = allowedHours - (s.conge || 0);
                   const isLow = remainingHours <= allowedHours * 0.2;
                   const isExhausted = remainingHours <= 0;
                   return (
@@ -244,14 +263,14 @@ export default function AdminStatsPage() {
                       </td>
                       {LEAVE_TYPE_ORDER.map((lt) => (
                         <td key={lt} className="px-3 py-3 text-center text-gray-700">
-                          {s[lt] || 0}
+                          {formatDaysFromHours(s[lt] || 0)}
                         </td>
                       ))}
-                      <td className="px-3 py-3 text-center font-semibold text-gray-900">{total}</td>
+                      <td className="px-3 py-3 text-center font-semibold text-gray-900">{formatDaysFromHours(totalHours)}</td>
                       <td className={`px-3 py-3 text-center font-bold ${isExhausted ? 'text-red-700' : isLow ? 'text-amber-700' : 'text-emerald-700'}`}>
                         {remainingHours}h
                         <span className="block text-xs font-normal opacity-70">
-                          ≈ {(remainingHours / HOURS_PER_DAY).toFixed(1)} j.
+                          ≈ {(remainingHours / LEAVE_HOURS_PER_DAY).toFixed(1)} j.
                         </span>
                       </td>
                     </tr>
@@ -269,6 +288,8 @@ export default function AdminStatsPage() {
           </div>
         )}
       </div>
+      </>}
+      {isLoading && <p role="status" className="flex items-center gap-2 text-gray-600"><Loader2 className="h-5 w-5 animate-spin" />Chargement des statistiques RH…</p>}
     </div>
   );
 }

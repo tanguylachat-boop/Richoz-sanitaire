@@ -1,5 +1,7 @@
 'use client';
 
+import { technicianReportLink } from '@/lib/report-feedback';
+
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { formatDate, formatTime, formatCHF, cn } from '@/lib/utils';
@@ -78,33 +80,36 @@ export default function ValidateReportsPage() {
     }
     setIsRejecting(true);
     try {
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('reports')
         .update({
           status: 'rejected',
           revision_requested: true,
-          revision_message: rejectReason.trim(),
+          revision_message: rejectReason,
         })
-        .eq('id', rejectModalReport.id);
+        .eq('id', rejectModalReport.id).select('id').single();
       if (error) throw error;
 
       // Insert notification for the technician
       if (rejectModalReport.technician?.id) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
-        await supabase.from('notifications').insert({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: notificationError } = await (supabase as any).from('notifications').insert({
           recipient_id: rejectModalReport.technician.id,
           sender_id: currentUser?.id || null,
           title: 'Rapport rejeté',
-          message: `Motif : ${rejectReason.trim()}`,
+          message: `Motif : ${rejectReason}`,
           type: 'revision_requested',
-          reference_id: rejectModalReport.intervention?.id || null,
+          reference_id: rejectModalReport.id,
           reference_type: 'report',
         });
+        if (notificationError) throw new Error('Retour enregistré, mais notification non envoyée.');
         sendPush({
           recipient_id: rejectModalReport.technician.id,
           title: 'Rapport rejeté',
-          message: `Motif : ${rejectReason.trim()}`,
-          url: `/technician/report/${rejectModalReport.intervention?.id || ''}`,
+          message: `Motif : ${rejectReason}`,
+          url: technicianReportLink(rejectModalReport.intervention?.id || '', rejectModalReport.id),
         });
       }
 
@@ -116,7 +121,7 @@ export default function ValidateReportsPage() {
       setReports(prev => prev.filter(r => r.id !== rejectModalReport.id));
     } catch (error) {
       console.error('Rejection error:', error);
-      toast.error('Erreur lors du rejet');
+      toast.error(error instanceof Error ? error.message : 'Impossible d’envoyer le retour.');
     } finally {
       setIsRejecting(false);
     }

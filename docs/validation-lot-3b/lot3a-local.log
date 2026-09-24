@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: confirmed absent -> one draft -> submitted -> correction draft -> resubmission -> new correction cycle
+ok 1 - confirmed absent -> one draft -> submitted -> correction draft -> resubmission -> new correction cycle
+  ---
+  duration_ms: 1164.243167
+  type: 'test'
+  ...
+# Subtest: no implicit planned-end obligation, cancelled, incomplete, reassignment and multiple reports excluded
+ok 2 - no implicit planned-end obligation, cancelled, incomplete, reassignment and multiple reports excluded
+  ---
+  duration_ms: 614.08375
+  type: 'test'
+  ...
+# Subtest: manual double click, two staff sessions, stale retry, persisted minimum interval
+ok 3 - manual double click, two staff sessions, stale retry, persisted minimum interval
+  ---
+  duration_ms: 33.106333
+  type: 'test'
+  ...
+# Subtest: two concurrent automatic runs, simulation writes nothing, next window and repetition cap
+ok 4 - two concurrent automatic runs, simulation writes nothing, next window and repetition cap
+  ---
+  duration_ms: 498.740708
+  type: 'test'
+  ...
+# Subtest: activation prevents historical catch-up; Zurich midnight and DST use elapsed seconds
+ok 5 - activation prevents historical catch-up; Zurich midnight and DST use elapsed seconds
+  ---
+  duration_ms: 1026.736583
+  type: 'test'
+  ...
+# Subtest: direct calls: staff active only, immutable history, own notifications, cannot exempt or reassign
+ok 6 - direct calls: staff active only, immutable history, own notifications, cannot exempt or reassign
+  ---
+  duration_ms: 73.891291
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3483.494584

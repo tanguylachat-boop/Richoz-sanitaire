@@ -175,10 +175,10 @@ export default async function UsersPage() {
                         )}>
                           {userItem.first_name} {userItem.last_name}
                         </h4>
-                        {userItem.role === 'technician' && (userItem as Record<string, unknown>).calendar_color && (
+                        {userItem.role === 'technician' && userItem.calendar_color && (
                           <span
                             className="w-4 h-4 rounded-full inline-block border border-gray-200"
-                            style={{ backgroundColor: (userItem as Record<string, unknown>).calendar_color as string }}
+                            style={{ backgroundColor: userItem.calendar_color || undefined }}
                             title="Couleur calendrier"
                           />
                         )}

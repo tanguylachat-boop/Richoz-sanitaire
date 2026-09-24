@@ -126,13 +126,13 @@ export default function ClientDetailPage() {
       const [{ data: invData }, { data: qData }] = await Promise.all([
         supabase
           .from('invoices')
-          .select('id, invoice_number, total_ttc, status, created_at')
+          .select('id, invoice_number, total_ttc:total, status, created_at')
           .or(`client_name.ilike.%${clientName}%`)
           .order('created_at', { ascending: false })
           .limit(50),
         supabase
           .from('quotes')
-          .select('id, quote_number, total_ttc, status, created_at')
+          .select('id, quote_number, total_ttc:total, status, created_at')
           .or(`client_name.ilike.%${clientName}%`)
           .order('created_at', { ascending: false })
           .limit(50),

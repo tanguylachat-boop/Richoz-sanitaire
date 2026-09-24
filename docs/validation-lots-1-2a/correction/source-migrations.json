@@ -1,0 +1,147 @@
+[
+  {
+    "source": "supabase/migrations/00001_initial_schema.sql",
+    "staged": "20260914000001_initial_schema.sql",
+    "sha256": "ab8ebdb887cf974dfa78c217d65b30e38a60342e058827b5c2b6c8508faa1931"
+  },
+  {
+    "source": "supabase/migrations/00002_add_work_order_number.sql",
+    "staged": "20260914000002_add_work_order_number.sql",
+    "sha256": "03a7f8387ab8e2079a8f86138c1dce667a180363c88457554d434c839f35127b"
+  },
+  {
+    "source": "supabase/migrations/00003_products_upgrade_quote_items.sql",
+    "staged": "20260914000003_products_upgrade_quote_items.sql",
+    "sha256": "1bf6c5e3b16e3e72b55daeafa3bf5716373c9259fa447962b8ad9c7d14a5a69a"
+  },
+  {
+    "source": "supabase/migrations/00004_add_parent_quote_id.sql",
+    "staged": "20260914000004_add_parent_quote_id.sql",
+    "sha256": "a794ef2ab1e813c1d7d6b773ab1cd6188b8b42d7d43f3146cc640562bddcb2a6"
+  },
+  {
+    "source": "supabase/migrations/00005_notifications.sql",
+    "staged": "20260914000005_notifications.sql",
+    "sha256": "0b100841390d08b99d75be37026b36e84122fad888014323f37d4c864a9722d3"
+  },
+  {
+    "source": "supabase/migrations/00006_keys_info.sql",
+    "staged": "20260914000006_keys_info.sql",
+    "sha256": "bd7aef942d0453efe36e98534a53672c61f9eef93a6691e3c7bc5471d5352fe3"
+  },
+  {
+    "source": "supabase/migrations/00007_date_end.sql",
+    "staged": "20260914000007_date_end.sql",
+    "sha256": "0a0a00ecd09dae81c00aa5b90d0cdc329d2620533f07dfc799a3858f652572ea"
+  },
+  {
+    "source": "supabase/migrations/00008_intervention_reminders.sql",
+    "staged": "20260914000008_intervention_reminders.sql",
+    "sha256": "0406cdadf5291f2a193b1426a7605581d46b4f542564b7176f5efa5f53062da7"
+  },
+  {
+    "source": "supabase/migrations/00009_apply_pending_columns.sql",
+    "staged": "20260914000009_apply_pending_columns.sql",
+    "sha256": "d341dbc4a57ee24e18b8c09a5c0e0c34056d9b119c2eca8911fbe8bc8b619297"
+  },
+  {
+    "source": "supabase/migrations/0000901_restore_application_schema.sql",
+    "staged": "20260914000010_restore_application_schema.sql",
+    "sha256": "d04ceb8bef6348dd4cf982b53ecc33cbb24e009dbf012d8380bd48f3fc628028"
+  },
+  {
+    "source": "supabase/migrations/00010_chantier_photos.sql",
+    "staged": "20260914000011_chantier_photos.sql",
+    "sha256": "2f14da878a62fabd7db418c90051086e1f59a505b67b5d39474d5e3d8e2bb53e"
+  },
+  {
+    "source": "supabase/migrations/00011_allow_technicians_see_staff.sql",
+    "staged": "20260914000012_allow_technicians_see_staff.sql",
+    "sha256": "663057ab0827181083a4f233d169a48ecdc2587cdbe0ef02d145e630c37760da"
+  },
+  {
+    "source": "supabase/migrations/00012_user_calendar_color.sql",
+    "staged": "20260914000013_user_calendar_color.sql",
+    "sha256": "1751d2bca3bbc944718ca5d3298defe90b2979cf75ec4cfaad200fb1a8c0b85c"
+  },
+  {
+    "source": "supabase/migrations/00013_push_subscriptions.sql",
+    "staged": "20260914000014_push_subscriptions.sql",
+    "sha256": "2078ae0786361c02c4fb2810ad883dc99d6b7934ed50e8591140260f6bbbb04a"
+  },
+  {
+    "source": "supabase/migrations/00014_fix_rls_policies.sql",
+    "staged": "20260914000015_fix_rls_policies.sql",
+    "sha256": "10dd415cf7917a80ca16d58a2a2197fa84124633283645307ea6967b82ff28f7"
+  },
+  {
+    "source": "supabase/migrations/00015_enable_realtime.sql",
+    "staged": "20260914000016_enable_realtime.sql",
+    "sha256": "e7bda3b4a6897034d5722ef5ca7cb18bbc79d299c0d4238392553093e77bfc0b"
+  },
+  {
+    "source": "supabase/migrations/00016_add_reminder_type.sql",
+    "staged": "20260914000017_add_reminder_type.sql",
+    "sha256": "61b34b91a4a72b93c24f5d1eae931ac4af713273dd8671600e2ed2897e727f8b"
+  },
+  {
+    "source": "supabase/migrations/00017_leave_type_and_stats.sql",
+    "staged": "20260914000018_leave_type_and_stats.sql",
+    "sha256": "2003364b91b6886878bca68f2c9fbc1778e1c92b266399533cbfab22a284eb00"
+  },
+  {
+    "source": "supabase/migrations/00018_clients.sql",
+    "staged": "20260914000019_clients.sql",
+    "sha256": "1355e772aba4ada9ef7d67a194cee60fd5821d29b2f2ae53938384561091155b"
+  },
+  {
+    "source": "supabase/migrations/00019_piquet.sql",
+    "staged": "20260914000020_piquet.sql",
+    "sha256": "44a5b4a5aad168bd37483dc4ae2ee36d78f2c5efc770e9bb5f765d3f396ffb98"
+  },
+  {
+    "source": "supabase/migrations/00020_maintenance_contracts.sql",
+    "staged": "20260914000021_maintenance_contracts.sql",
+    "sha256": "22e7b1042a26f04a4fe2337bfaf30bd11f1d30ec17691b58072507bc3e019525"
+  },
+  {
+    "source": "supabase/migrations/00021_reports_docx.sql",
+    "staged": "20260914000022_reports_docx.sql",
+    "sha256": "786a7eb8bcb93fa81d4f93f9183251232040b6d68c6c8c883e05e7a12d8d849d"
+  },
+  {
+    "source": "supabase/migrations/00022_bexio_integration.sql",
+    "staged": "20260914000023_bexio_integration.sql",
+    "sha256": "ce9d0905cff1c7d557a42c2d650cf6321c2f7875e11c9172e7c11a2dbee142da"
+  },
+  {
+    "source": "supabase/migrations/00023_users_annual_leave_weeks.sql",
+    "staged": "20260914000024_users_annual_leave_weeks.sql",
+    "sha256": "e85b1fedd8d6425d671c5484424f26c4f68d4c0a345fec06ad7a643261277242"
+  },
+  {
+    "source": "supabase/migrations/00024_chantier_documents.sql",
+    "staged": "20260914000025_chantier_documents.sql",
+    "sha256": "5f4956e0097e76d86854380a023979c4531a2c55ae31eca197476e69fde7fce7"
+  },
+  {
+    "source": "supabase/migrations/00025_report_workflow_access.sql",
+    "staged": "20260914000026_report_workflow_access.sql",
+    "sha256": "c8c487c055c286b51906761b9bb0a5f3e9aa25273bdf3cf0912ec0ba90d907f7"
+  },
+  {
+    "source": "supabase/migrations/00026_clients_backfill.sql",
+    "staged": "20260914000027_clients_backfill.sql",
+    "sha256": "790dedb93c1b0f75c79f4c2a6bee28d3cfd7d8da9fcd673ce40995ea95df9505"
+  },
+  {
+    "source": "supabase/migrations/00027_invoices_pdf.sql",
+    "staged": "20260914000028_invoices_pdf.sql",
+    "sha256": "b9ec1baf5e417663d905319ddba2b0999d6614f85e9daf29212fb46fced28daa"
+  },
+  {
+    "source": "supabase/migrations/00028_verify_schema_and_photo_scope.sql",
+    "staged": "20260914000029_verify_schema_and_photo_scope.sql",
+    "sha256": "21083ed08cdad31b6002b62511a98ea5d83e7035a769576b58455d6124cccf86"
+  }
+]

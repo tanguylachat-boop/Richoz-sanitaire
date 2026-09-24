@@ -1,5 +1,7 @@
 'use client';
 
+import { technicianReportLink } from '@/lib/report-feedback';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -77,9 +79,9 @@ export default function TechnicianTodayPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
-        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
+        const { data } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single<{ intervention_type_preference: 'depannage' | 'chantier' | null }>();
         if (data?.intervention_type_preference) {
-          setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');
+          setTypePreference(data.intervention_type_preference);
         }
         // Check if on-call this week
         const today = format(new Date(), 'yyyy-MM-dd');
@@ -122,7 +124,12 @@ export default function TechnicianTodayPage() {
     const { data, error } = await query;
 
     if (!error && data) {
-      setInterventions(data);
+      setInterventions(data.map(row => {
+        const info = row.client_info;
+        return { ...row, client_info: info && typeof info === 'object' && !Array.isArray(info)
+          ? { name: typeof info.name === 'string' ? info.name : undefined,
+              phone: typeof info.phone === 'string' ? info.phone : undefined } : null };
+      }));
     }
 
     // Fetch reports with revision requested for this technician (only rejected, not already resubmitted)
@@ -245,9 +252,8 @@ export default function TechnicianTodayPage() {
       {revisionReports.length > 0 && (
         <div className="px-4 -mt-2 mb-2 space-y-2">
           {revisionReports.map((rev) => {
-            const isChantier = rev.intervention?.intervention_type === 'chantier';
             const href = rev.intervention
-              ? (isChantier ? `/technician/chantier/${rev.intervention.id}` : `/technician/report/${rev.intervention.id}`)
+              ? technicianReportLink(rev.intervention.id, rev.id)
               : '#';
             return (
             <Link

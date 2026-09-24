@@ -1,0 +1,616 @@
+[
+  {
+    "file": "src/app/(dashboard)/admin/settings/actions.ts",
+    "line": 65,
+    "code": "TS2345",
+    "message": "Argument of type '{ company_name: string; address: string; email: string; phone: string; iban: string; vat_number: string; logo_url: string | null; }' is not assignable to parameter of type 'never'.",
+    "category": "B",
+    "head_line": 65,
+    "equivalent_head": [
+      65
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/settings/actions.ts",
+    "line": 74,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 74,
+    "equivalent_head": [
+      74
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/settings/actions.ts",
+    "line": 84,
+    "code": "TS2769",
+    "message": "No overload matches this call.",
+    "category": "B",
+    "head_line": 84,
+    "equivalent_head": [
+      84
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/users/actions.ts",
+    "line": 145,
+    "code": "TS2769",
+    "message": "No overload matches this call.",
+    "category": "B",
+    "head_line": 145,
+    "equivalent_head": [
+      145
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/users/page.tsx",
+    "line": 178,
+    "code": "TS2322",
+    "message": "Type 'unknown' is not assignable to type 'ReactNode'.",
+    "category": "B",
+    "head_line": 178,
+    "equivalent_head": [
+      178
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/[id]/page.tsx",
+    "line": 191,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 189,
+    "equivalent_head": [
+      189
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/[id]/page.tsx",
+    "line": 245,
+    "code": "TS2339",
+    "message": "Property 'photos' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 243,
+    "equivalent_head": [
+      243,
+      243
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/[id]/page.tsx",
+    "line": 245,
+    "code": "TS2339",
+    "message": "Property 'photos' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 243,
+    "equivalent_head": [
+      243,
+      243
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/[id]/page.tsx",
+    "line": 246,
+    "code": "TS2339",
+    "message": "Property 'photos' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 244,
+    "equivalent_head": [
+      244
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/[id]/page.tsx",
+    "line": 248,
+    "code": "TS2339",
+    "message": "Property 'created_at' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 246,
+    "equivalent_head": [
+      246
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/[id]/page.tsx",
+    "line": 255,
+    "code": "TS2339",
+    "message": "Property 'created_at' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 253,
+    "equivalent_head": [
+      253
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/page.tsx",
+    "line": 130,
+    "code": "TS2339",
+    "message": "Property 'status' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 130,
+    "equivalent_head": [
+      130
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 236,
+    "code": "TS2339",
+    "message": "Property 'status' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 234,
+    "equivalent_head": [
+      234
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 237,
+    "code": "TS2339",
+    "message": "Property 'revision_requested' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 235,
+    "equivalent_head": [
+      235
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 237,
+    "code": "TS2339",
+    "message": "Property 'revision_message' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 235,
+    "equivalent_head": [
+      235
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 238,
+    "code": "TS2339",
+    "message": "Property 'revision_message' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 236,
+    "equivalent_head": [
+      236
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 293,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 291,
+    "equivalent_head": [
+      291
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 294,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 292,
+    "equivalent_head": [
+      292
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 346,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 344,
+    "equivalent_head": [
+      344
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 347,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 345,
+    "equivalent_head": [
+      345
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 417,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 415,
+    "equivalent_head": [
+      415
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+    "line": 418,
+    "code": "TS2339",
+    "message": "Property 'id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 416,
+    "equivalent_head": [
+      416
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/page.tsx",
+    "line": 75,
+    "code": "TS2339",
+    "message": "Property 'intervention_id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 75,
+    "equivalent_head": [
+      75
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/page.tsx",
+    "line": 75,
+    "code": "TS2339",
+    "message": "Property 'revision_message' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 75,
+    "equivalent_head": [
+      75
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/layout.tsx",
+    "line": 31,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 31,
+    "equivalent_head": [
+      31
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/layout.tsx",
+    "line": 32,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 32,
+    "equivalent_head": [
+      32
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/notifications/page.tsx",
+    "line": 39,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 34,
+    "equivalent_head": [
+      34
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/notifications/page.tsx",
+    "line": 40,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 35,
+    "equivalent_head": [
+      35
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/notifications/page.tsx",
+    "line": 94,
+    "code": "TS2345",
+    "message": "Argument of type '{ is_read: boolean; }' is not assignable to parameter of type 'never'.",
+    "category": "B",
+    "head_line": 82,
+    "equivalent_head": [
+      82
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/today/page.tsx",
+    "line": 83,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 81,
+    "equivalent_head": [
+      81
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/today/page.tsx",
+    "line": 84,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 82,
+    "equivalent_head": [
+      82
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/week/page.tsx",
+    "line": 82,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 82,
+    "equivalent_head": [
+      82
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/week/page.tsx",
+    "line": 83,
+    "code": "TS2339",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 83,
+    "equivalent_head": [
+      83
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 2,
+    "code": "TS7016",
+    "message": "Could not find a declaration file for module 'web-push'. '/Users/tanguylachat/n8n/ics-sanitaire/node_modules/web-push/src/index.js' implicitly has an 'any' type.",
+    "category": "B",
+    "head_line": 2,
+    "equivalent_head": [
+      2
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 58,
+    "code": "TS2339",
+    "message": "Property 'endpoint' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 58,
+    "equivalent_head": [
+      58
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 59,
+    "code": "TS2339",
+    "message": "Property 'p256dh' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 59,
+    "equivalent_head": [
+      59
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 59,
+    "code": "TS2339",
+    "message": "Property 'auth' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 59,
+    "equivalent_head": [
+      59
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 68,
+    "code": "TS2339",
+    "message": "Property 'endpoint' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 68,
+    "equivalent_head": [
+      68
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 71,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 71,
+    "equivalent_head": [
+      71
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 72,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 72,
+    "equivalent_head": [
+      72
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 73,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 73,
+    "equivalent_head": [
+      73
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 74,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 74,
+    "equivalent_head": [
+      74
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 75,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 75,
+    "equivalent_head": [
+      75
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 76,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 76,
+    "equivalent_head": [
+      76
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 77,
+    "code": "TS2339",
+    "message": "Property 'data' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 77,
+    "equivalent_head": [
+      77
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/components/interventions/PlanificationSplitView.tsx",
+    "line": 304,
+    "code": "TS2769",
+    "message": "No overload matches this call.",
+    "category": "B",
+    "head_line": 310,
+    "equivalent_head": [
+      310
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/lib/leave-utils.ts",
+    "line": 83,
+    "code": "TS2339",
+    "message": "Property 'technician_id' does not exist on type 'never'.",
+    "category": "B",
+    "head_line": 83,
+    "equivalent_head": [
+      83
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 96,
+    "code": "TS2322",
+    "message": "Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'string | BufferSource | null | undefined'.",
+    "category": "B",
+    "head_line": 96,
+    "equivalent_head": [
+      96
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 111,
+    "code": "TS2802",
+    "message": "Type 'Uint8Array<ArrayBuffer>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.",
+    "category": "B",
+    "head_line": 111,
+    "equivalent_head": [
+      111
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 112,
+    "code": "TS2802",
+    "message": "Type 'Uint8Array<ArrayBuffer>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.",
+    "category": "B",
+    "head_line": 112,
+    "equivalent_head": [
+      112
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 123,
+    "code": "TS2769",
+    "message": "No overload matches this call.",
+    "category": "B",
+    "head_line": 123,
+    "equivalent_head": [
+      123
+    ],
+    "proof": "Même ligne source (hors indentation) et diagnostic reproduit sur HEAD a0a6c85 avec les dépendances installées."
+  }
+]

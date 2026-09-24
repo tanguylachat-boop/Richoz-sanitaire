@@ -1,0 +1,169 @@
+[
+  {
+    "name": "typescript-before",
+    "cwd": "/Users/tanguylachat/n8n/ics-sanitaire",
+    "command": [
+      "node_modules/.bin/tsc",
+      "--noEmit",
+      "--incremental",
+      "false"
+    ],
+    "exit": 2,
+    "diagnostics": 31
+  },
+  {
+    "name": "typescript-head",
+    "cwd": "/private/tmp/richoz-validation-reprise-alid1vk9/head",
+    "command": [
+      "node_modules/.bin/tsc",
+      "--noEmit",
+      "--incremental",
+      "false"
+    ],
+    "exit": 2,
+    "diagnostics": 53
+  },
+  {
+    "name": "eslint",
+    "cwd": "/Users/tanguylachat/n8n/ics-sanitaire",
+    "command": [
+      "node_modules/.bin/eslint",
+      "--no-eslintrc",
+      "--no-inline-config",
+      "--config",
+      "tests/eslint-lot2a.cjs",
+      "src/lib/chantier-documents.ts",
+      "src/lib/report-photos.ts",
+      "src/lib/normalize-image.ts",
+      "src/components/documents/ChantierDocuments.tsx",
+      "src/components/reports/PhotoUploader.tsx",
+      "src/components/reports/ReportForm.tsx",
+      "src/app/api/interventions/[id]/documents/route.ts",
+      "src/app/api/report-photos/route.ts",
+      "src/app/api/reports/[id]/docx/route.ts",
+      "src/app/(dashboard)/reports/validate/[id]/page.tsx",
+      "src/app/(dashboard)/chantiers/[id]/page.tsx",
+      "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+      "src/components/calendar/InterventionDetailSheet.tsx",
+      "src/components/interventions/InterventionForm.tsx"
+    ],
+    "exit": 0,
+    "diagnostics": 0
+  },
+  {
+    "name": "tests",
+    "cwd": "/Users/tanguylachat/n8n/ics-sanitaire",
+    "command": [
+      "node",
+      "--test",
+      "tests/lot1.test.cjs",
+      "tests/lot2a-documents.test.cjs",
+      "tests/lot2a-photos.test.cjs",
+      "tests/stabilization-access.test.cjs"
+    ],
+    "exit": 0,
+    "diagnostics": 0
+  },
+  {
+    "name": "lint-normal",
+    "cwd": "/private/tmp/richoz-validation-reprise-alid1vk9/current",
+    "command": [
+      "npm",
+      "run",
+      "lint",
+      "--",
+      "--config",
+      "tests/eslint-lot2a.cjs",
+      "--no-cache"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "eslint-inline",
+    "cwd": "/Users/tanguylachat/n8n/ics-sanitaire",
+    "command": [
+      "node_modules/.bin/eslint",
+      "--no-eslintrc",
+      "--config",
+      "tests/eslint-lot2a.cjs",
+      "src/lib/chantier-documents.ts",
+      "src/lib/report-photos.ts",
+      "src/lib/normalize-image.ts",
+      "src/components/documents/ChantierDocuments.tsx",
+      "src/components/reports/PhotoUploader.tsx",
+      "src/components/reports/ReportForm.tsx",
+      "src/app/api/interventions/[id]/documents/route.ts",
+      "src/app/api/report-photos/route.ts",
+      "src/app/api/reports/[id]/docx/route.ts",
+      "src/app/(dashboard)/reports/validate/[id]/page.tsx",
+      "src/app/(dashboard)/chantiers/[id]/page.tsx",
+      "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+      "src/components/calendar/InterventionDetailSheet.tsx",
+      "src/components/interventions/InterventionForm.tsx",
+      "--format",
+      "json"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "typescript-after",
+    "cwd": "/Users/tanguylachat/n8n/ics-sanitaire",
+    "command": [
+      "node_modules/.bin/tsc",
+      "--noEmit",
+      "--incremental",
+      "false"
+    ],
+    "exit": 2,
+    "diagnostics": 31
+  },
+  {
+    "name": "build",
+    "cwd": "/private/tmp/richoz-validation-reprise-alid1vk9/current",
+    "command": [
+      "/usr/bin/sandbox-exec",
+      "-f",
+      "/private/tmp/richoz-validation-reprise-alid1vk9/network-deny.sb",
+      "/usr/bin/env",
+      "-i",
+      "PATH=/Users/tanguylachat/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin",
+      "TMPDIR=/private/tmp",
+      "NEXT_TELEMETRY_DISABLED=1",
+      "npm",
+      "run",
+      "build"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "eslint-lot1-expanded",
+    "cwd": "/Users/tanguylachat/n8n/ics-sanitaire",
+    "command": [
+      "node_modules/.bin/eslint",
+      "--no-eslintrc",
+      "--no-inline-config",
+      "--config",
+      "tests/eslint-lot2a.cjs",
+      "src/app/(dashboard)/admin/stats/page.tsx",
+      "src/app/(dashboard)/calendar/page.tsx",
+      "src/app/(dashboard)/chantiers/[id]/page.tsx",
+      "src/app/(dashboard)/reports/validate/[id]/page.tsx",
+      "src/app/(dashboard)/reports/validate/page.tsx",
+      "src/app/(dashboard)/technician/chantier/[id]/page.tsx",
+      "src/app/(dashboard)/technician/notifications/page.tsx",
+      "src/app/(dashboard)/technician/report/[interventionId]/page.tsx",
+      "src/app/(dashboard)/technician/today/page.tsx",
+      "src/app/api/reports/[id]/docx/route.ts",
+      "src/components/calendar/InterventionDetailSheet.tsx",
+      "src/components/interventions/InterventionForm.tsx",
+      "src/components/interventions/PlanificationSplitView.tsx",
+      "src/components/layout/MobileNav.tsx",
+      "src/components/reports/PhotoUploader.tsx",
+      "src/components/reports/ReportForm.tsx",
+      "src/lib/auth-guard.ts",
+      "src/lib/normalize-image.ts"
+    ],
+    "exit": 0,
+    "warnings": 20
+  }
+]

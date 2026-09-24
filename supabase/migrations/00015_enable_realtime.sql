@@ -1,8 +1,12 @@
--- Enable Supabase Realtime on tables needed for technician live updates
-ALTER PUBLICATION supabase_realtime ADD TABLE interventions;
-ALTER PUBLICATION supabase_realtime ADD TABLE chantier_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE chantier_photos;
-ALTER PUBLICATION supabase_realtime ADD TABLE chantier_cutoff_notices;
-ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
-ALTER PUBLICATION supabase_realtime ADD TABLE chantier_details;
-ALTER PUBLICATION supabase_realtime ADD TABLE reports;
+-- 00001 already publishes interventions/reports. Preserve existing membership.
+DO $$
+DECLARE table_name text;
+BEGIN
+ FOREACH table_name IN ARRAY ARRAY['interventions','chantier_messages','chantier_photos',
+   'chantier_cutoff_notices','notifications','chantier_details','reports'] LOOP
+   IF NOT EXISTS (SELECT 1 FROM pg_publication_tables
+     WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename=table_name) THEN
+     EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I',table_name);
+   END IF;
+ END LOOP;
+END $$;

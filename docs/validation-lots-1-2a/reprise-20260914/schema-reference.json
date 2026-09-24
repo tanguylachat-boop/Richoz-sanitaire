@@ -1,0 +1,17 @@
+{
+  "supabase/migrations/00001_initial_schema.sql": {
+    "identical_to_HEAD": true
+  },
+  "supabase/migrations/prd-v2-migrations.sql": {
+    "identical_to_HEAD": true
+  },
+  "src/types/database.ts": {
+    "identical_to_HEAD": true
+  },
+  "src/app/layout.tsx": {
+    "identical_to_HEAD": true
+  },
+  "tsconfig.json": {
+    "identical_to_HEAD": true
+  }
+}

@@ -1,5 +1,9 @@
 'use client';
 
+import { privateReportPhotoPath } from '@/lib/report-photos';
+
+import { technicianReportLink } from '@/lib/report-feedback';
+
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -190,28 +194,29 @@ export default function ValidateReportDetailPage() {
         .from('reports').update({
           status: 'rejected',
           revision_requested: true,
-          revision_message: rejectReason.trim(),
-        }).eq('id', report.id);
+          revision_message: rejectReason,
+        }).eq('id', report.id).select('id').single();
       if (error) throw error;
 
       // Notify the technician
       if (report.technician_id) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('notifications').insert({
+        const { error: notificationError } = await (supabase as any).from('notifications').insert({
           recipient_id: report.technician_id,
           sender_id: currentUser?.id || null,
           title: 'Rapport rejeté',
-          message: `Motif : ${rejectReason.trim()}`,
+          message: `Motif : ${rejectReason}`,
           type: 'revision_requested',
-          reference_id: report.intervention_id || null,
+          reference_id: report.id,
           reference_type: 'report',
         });
+        if (notificationError) throw new Error('Retour enregistré, mais notification non envoyée.');
         sendPush({
           recipient_id: report.technician_id,
           title: 'Rapport rejeté',
-          message: `Motif : ${rejectReason.trim()}`,
-          url: `/technician/report/${report.intervention_id || ''}`,
+          message: `Motif : ${rejectReason}`,
+          url: technicianReportLink(report.intervention_id || '', report.id),
         });
       }
 
@@ -221,7 +226,7 @@ export default function ValidateReportDetailPage() {
       router.refresh();
     } catch (error) {
       console.error('Rejection error:', error);
-      toast.error('Erreur lors de l\'envoi');
+      toast.error(error instanceof Error ? error.message : 'Impossible d’envoyer le retour.');
     } finally {
       setIsRejecting(false);
     }
@@ -289,7 +294,7 @@ export default function ValidateReportDetailPage() {
   // Helper used before report is loaded — declared as function for hoisting
   function getPhotoUrl(path: string): string {
     if (!path) return '';
-    if (path.startsWith('http')) return path;
+    if (path.startsWith('http') || privateReportPhotoPath(path)) return path;
     return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photos/${path}`;
   }
 

@@ -1,3 +1,5 @@
+import { privateReportPhotoPath } from '@/lib/report-photos';
+import { reportAccessFailure } from '@/lib/report-access';
 import { NextResponse } from 'next/server';
 const TZ = 'Europe/Zurich';
 import { createClient as createAdminClient } from '@/lib/supabase/admin';
@@ -33,7 +35,7 @@ function fmtDate(iso: string | null | undefined): string {
 
 function getPhotoUrl(path: string): string {
   if (!path) return '';
-  if (path.startsWith('http')) return path;
+  if (path.startsWith('http') || path.startsWith('data:image/')) return path;
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photos/${path}`;
 }
 
@@ -51,6 +53,20 @@ async function fetchReport(id: string) {
     .eq('id', id)
     .single();
   if (error || !data) return null;
+  // Resolve new private report images through Storage before server-side export.
+  // Existing image URLs retain their previous behavior.
+  data.photos = await Promise.all(((data.photos || []) as PhotoEntry[]).map(async photo => {
+    const url = typeof photo === 'string' ? photo : photo.url;
+    const path = privateReportPhotoPath(url);
+    if (!path) return photo;
+    if (path.split('/')[0] !== data.technician_id || path.split('/')[2] !== data.intervention_id) {
+      throw new Error('Photo non rattachée à ce rapport.');
+    }
+    const image = await supabase.storage.from('photos').download(path);
+    if (image.error || !image.data) throw new Error('Une photo du rapport est inaccessible.');
+    const resolved = `data:${image.data.type || 'image/jpeg'};base64,${Buffer.from(await image.data.arrayBuffer()).toString('base64')}`;
+    return typeof photo === 'string' ? resolved : { ...photo, url: resolved };
+  }));
   return data;
 }
 
@@ -188,10 +204,12 @@ async function buildChantierDocx(r: any): Promise<{ buffer: Buffer; filename: st
 
 export async function GET(_req: Request, ctx: { params: { id: string } }) {
   const id = ctx.params.id;
-  const r = await fetchReport(id);
-  if (!r) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+  const denied = await reportAccessFailure(id, false);
+  if (denied) return denied;
 
   try {
+    const r = await fetchReport(id);
+    if (!r) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     const isChantier = r.intervention?.intervention_type === 'chantier';
     const { buffer, filename } = isChantier
       ? await buildChantierDocx(r)
@@ -207,14 +225,15 @@ export async function GET(_req: Request, ctx: { params: { id: string } }) {
       },
     });
   } catch (e) {
-    console.error('DOCX generation failed', e);
-    return NextResponse.json({ error: 'Generation failed', detail: String(e) }, { status: 500 });
+    return NextResponse.json({ error: 'Generation failed' }, { status: 500 });
   }
 }
 
 // Upload edited Word → convert to PDF → store → update report.pdf_url
 export async function POST(req: Request, ctx: { params: { id: string } }) {
   const id = ctx.params.id;
+  const denied = await reportAccessFailure(id, true);
+  if (denied) return denied;
   const supabase = createAdminClient();
 
   let docxBuffer: Buffer;

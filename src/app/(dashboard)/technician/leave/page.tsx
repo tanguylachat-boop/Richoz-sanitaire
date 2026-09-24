@@ -16,11 +16,14 @@ import {
   Send,
 } from 'lucide-react';
 import { LEAVE_TYPES, LEAVE_TYPE_ORDER, type LeaveType } from '@/lib/constants';
+import { formatLeaveDuration, leaveHours, validateLeaveSpan } from '@/lib/leave-duration';
 
 interface LeaveRequest {
   id: string;
   start_date: string;
   end_date: string;
+  start_time: string | null;
+  end_time: string | null;
   reason: string | null;
   leave_type: LeaveType;
   status: 'pending' | 'approved' | 'rejected';
@@ -28,6 +31,9 @@ interface LeaveRequest {
   created_at: string;
   reviewed_at: string | null;
 }
+
+// Message serveur du trigger anti-chevauchement (migration 00030).
+const OVERLAP_MARKER = 'CHEVAUCHEMENT_CONGE';
 
 const STATUS_CONFIG = {
   pending: { label: 'En attente', color: 'bg-amber-100 text-amber-700', icon: Clock },
@@ -45,11 +51,15 @@ export default function TechnicianLeavePage() {
   const [formData, setFormData] = useState<{
     start_date: string;
     end_date: string;
+    start_time: string;
+    end_time: string;
     reason: string;
     leave_type: LeaveType;
   }>({
     start_date: '',
     end_date: '',
+    start_time: '',
+    end_time: '',
     reason: '',
     leave_type: 'conge',
   });
@@ -93,9 +103,17 @@ export default function TechnicianLeavePage() {
     e.preventDefault();
     if (!userId) return;
 
-    // Validation
-    if (new Date(formData.start_date) > new Date(formData.end_date)) {
-      toast.error('La date de fin doit être après la date de début');
+    // Validation (heures uniquement sur un seul jour — migration 00030)
+    const sameDay = formData.start_date === formData.end_date;
+    const span = {
+      start_date: formData.start_date,
+      end_date: formData.end_date,
+      start_time: sameDay ? formData.start_time || null : null,
+      end_time: sameDay ? formData.end_time || null : null,
+    };
+    const validationError = validateLeaveSpan(span);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -110,13 +128,14 @@ export default function TechnicianLeavePage() {
     try {
       // Maladie/accident: auto-approve (déclaratif), sinon: pending
       const autoApprove = formData.leave_type === 'maladie' || formData.leave_type === 'accident';
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('leave_requests')
         .insert({
           technician_id: userId,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
+          start_date: span.start_date,
+          end_date: span.end_date,
+          start_time: span.start_time,
+          end_time: span.end_time,
           reason: formData.reason || null,
           leave_type: formData.leave_type,
           status: autoApprove ? 'approved' : 'pending',
@@ -127,20 +146,20 @@ export default function TechnicianLeavePage() {
       if (error) throw new Error(error.message);
 
       toast.success(autoApprove ? 'Absence enregistrée' : 'Demande de congé envoyée !');
-      setFormData({ start_date: '', end_date: '', reason: '', leave_type: 'conge' });
+      setFormData({ start_date: '', end_date: '', start_time: '', end_time: '', reason: '', leave_type: 'conge' });
       setShowForm(false);
       fetchRequests();
     } catch (error) {
       console.error('Error submitting leave request:', error);
-      toast.error('Erreur lors de l\'envoi de la demande');
+      const message = error instanceof Error ? error.message : '';
+      toast.error(
+        message.includes(OVERLAP_MARKER)
+          ? 'Un congé de même type existe déjà sur cette période'
+          : 'Erreur lors de l\'envoi de la demande'
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getDurationDays = (start: string, end: string) => {
-    const diff = new Date(end).getTime() - new Date(start).getTime();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
   };
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -205,9 +224,39 @@ export default function TechnicianLeavePage() {
               </div>
             </div>
 
+            {formData.start_date && formData.start_date === formData.end_date && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Heure de début (absence partielle)</label>
+                  <input
+                    type="time"
+                    value={formData.start_time}
+                    onChange={(e) => setFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                    className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Heure de fin</label>
+                  <input
+                    type="time"
+                    value={formData.end_time}
+                    onChange={(e) => setFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                    className="w-full h-10 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <p className="col-span-2 text-xs text-gray-500 -mt-2">
+                  Laisser vide pour une journée complète.
+                </p>
+              </div>
+            )}
             {formData.start_date && formData.end_date && (
               <div className="px-3 py-2 bg-blue-50 rounded-lg text-sm text-blue-700">
-                📅 {getDurationDays(formData.start_date, formData.end_date)} jour{getDurationDays(formData.start_date, formData.end_date) > 1 ? 's' : ''} d&apos;absence
+                📅 {formatLeaveDuration(leaveHours({
+                  start_date: formData.start_date,
+                  end_date: formData.end_date,
+                  start_time: formData.start_date === formData.end_date ? formData.start_time || null : null,
+                  end_time: formData.start_date === formData.end_date ? formData.end_time || null : null,
+                }))} d&apos;absence
               </div>
             )}
 
@@ -280,7 +329,6 @@ export default function TechnicianLeavePage() {
           {requests.map((req) => {
             const config = STATUS_CONFIG[req.status];
             const StatusIcon = config.icon;
-            const days = getDurationDays(req.start_date, req.end_date);
 
             return (
               <div key={req.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -297,7 +345,7 @@ export default function TechnicianLeavePage() {
                         </span>
                       )}
                       <span className="text-xs text-gray-400">
-                        {days} jour{days > 1 ? 's' : ''}
+                        {formatLeaveDuration(leaveHours(req))}
                       </span>
                     </div>
 
@@ -305,6 +353,9 @@ export default function TechnicianLeavePage() {
                       {format(new Date(req.start_date + 'T00:00:00'), 'd MMMM yyyy', { locale: fr })}
                       {req.start_date !== req.end_date && (
                         <> → {format(new Date(req.end_date + 'T00:00:00'), 'd MMMM yyyy', { locale: fr })}</>
+                      )}
+                      {req.start_time && req.end_time && (
+                        <span className="text-gray-500 font-normal"> · {req.start_time.slice(0, 5)} → {req.end_time.slice(0, 5)}</span>
                       )}
                     </p>
 

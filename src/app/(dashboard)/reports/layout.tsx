@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { ClipboardCheck, History, FileText } from 'lucide-react';
 
 const tabs = [
+  { name: 'Bilan journalier', href: '/reports/daily', icon: FileText },
+  { name: 'Suivi', href: '/reports/followup', icon: FileText },
   {
     name: 'À valider',
     href: '/reports/validate',
@@ -27,6 +29,8 @@ export default function ReportsLayout({
 
   // Determine active tab based on pathname
   const getActiveTab = () => {
+    if (pathname.startsWith('/reports/daily')) return '/reports/daily';
+    if (pathname.startsWith('/reports/followup')) return '/reports/followup';
     if (pathname.startsWith('/reports/history')) return '/reports/history';
     return '/reports/validate';
   };
@@ -50,7 +54,7 @@ export default function ReportsLayout({
         </div>
 
         {/* Tabs */}
-        <div className="px-6 flex gap-1 bg-gray-50/50">
+        <div className="px-2 sm:px-6 flex gap-1 overflow-x-auto bg-gray-50/50">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.href;
@@ -60,7 +64,7 @@ export default function ReportsLayout({
                 key={tab.href}
                 href={tab.href}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors',
+                  'flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors',
                   isActive
                     ? 'border-blue-600 text-blue-600 bg-white'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'

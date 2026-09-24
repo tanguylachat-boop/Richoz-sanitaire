@@ -1,5 +1,7 @@
 'use client';
 
+import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
+
 import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -23,6 +25,7 @@ import {
 } from 'lucide-react';
 
 interface Intervention {
+  intervention_type?: string | null;
   id: string;
   title: string;
   description: string | null;
@@ -236,6 +239,7 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
           )}
 
           {/* Description */}
+          {intervention.intervention_type === 'chantier' && <ChantierDocuments key={intervention.id} interventionId={intervention.id} />}
           {intervention.description && (
             <div className="flex items-start gap-3">
               <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />

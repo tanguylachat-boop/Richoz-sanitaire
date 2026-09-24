@@ -1,0 +1,23 @@
+--- before/src/components/reports/ReportForm.tsx
++++ after/src/components/reports/ReportForm.tsx
+@@ -8,6 +8,8 @@
+ import { PhotoUploader } from './PhotoUploader';
+ import { SignatureCanvas } from './SignatureCanvas';
+ import { GoogleReviewsQR } from './GoogleReviewsQR';
++import { VoiceRecorder } from './VoiceRecorder';
++import { appendDictation } from '@/lib/report-dictation';
+ import { cn } from '@/lib/utils';
+ import type { Intervention, Report, Product } from '@/types/database';
+ import {
+@@ -459,6 +461,11 @@
+           onChange={(e) => setTextContent(e.target.value)}
+           placeholder="Ex: Remplacement du robinet mural mélangeur par un mitigeur 120x220. Coupure d'eau effectuée, test fonctionnement OK..."
+           className="w-full h-32 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
++        />
++        <VoiceRecorder
++          key={`${intervention.id}:${existingReport?.id || 'new'}:${technicianId}`}
++          disabled={isSaving || isSubmitting}
++          onRecordingComplete={text => setTextContent(current => appendDictation(current, text))}
+         />
+       </div>
+ 

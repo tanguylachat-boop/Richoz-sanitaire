@@ -17,5 +17,5 @@ CREATE INDEX IF NOT EXISTS idx_reminders_intervention ON intervention_reminders(
 
 ALTER TABLE intervention_reminders ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "intervention_reminders_all" ON intervention_reminders
+CREATE POLICY "intervention_reminders_all" ON intervention_reminders
   FOR ALL USING (true) WITH CHECK (true);

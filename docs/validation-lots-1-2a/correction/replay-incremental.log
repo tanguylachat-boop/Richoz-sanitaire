@@ -1,0 +1,5 @@
+WARN: project_id field in config is invalid. Auto-fixing to richoz-validation-correction-replay-2026
+Connecting to local database...
+Local database is up to date.
+A new version of Supabase CLI is available: v2.117.0 (currently installed v1.226.4)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

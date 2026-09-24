@@ -1,0 +1,7 @@
+PASS photos: real multiple selection, remove and second selection retain text/old photo
+PASS photos: actual browser transport failure then retry, no duplicate Storage objects
+PASS photos: new browser session reopens saved text and four decoded images
+PASS reports: secretary returns via UI; technician reconnects, corrects and resubmits
+PASS PDF: browser multi-file failure/retry, reconnect, technician download and staff delete
+PASS stats: real browser allows active admin and refuses secretary/technician
+{"passed":6,"steps":["photos: real multiple selection, remove and second selection retain text/old photo","photos: actual browser transport failure then retry, no duplicate Storage objects","photos: new browser session reopens saved text and four decoded images","reports: secretary returns via UI; technician reconnects, corrects and resubmits","PDF: browser multi-file failure/retry, reconnect, technician download and staff delete","stats: real browser allows active admin and refuses secretary/technician"]}

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/database';
@@ -6,7 +7,7 @@ import type { Database } from '@/types/database';
  * Creates a Supabase client for server-side usage (Server Components, Route Handlers)
  * Use this in Server Components and API routes
  */
-export function createClient() {
+export function createClient(): SupabaseClient<Database> {
   const cookieStore = cookies();
 
   return createServerClient<Database>(

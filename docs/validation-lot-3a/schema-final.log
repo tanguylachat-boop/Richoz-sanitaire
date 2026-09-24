@@ -1,0 +1,20 @@
+       lot3a_functions_md5        
+----------------------------------
+ 70deae5bb611ccb86a9eb3cc1e2ceff7
+(1 row)
+
+ version |          migration_md5           
+---------+----------------------------------
+ 00029   | f8123097bb4f3394c494cd57bc108576
+(1 row)
+
+ duplicate_windows 
+-------------------
+                 0
+(1 row)
+
+ orphan_history 
+----------------
+              0
+(1 row)
+

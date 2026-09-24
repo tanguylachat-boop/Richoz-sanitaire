@@ -1,0 +1,78 @@
+src/app/(dashboard)/admin/settings/actions.ts(65,15): error TS2345: Argument of type '{ company_name: string; address: string; email: string; phone: string; iban: string; vat_number: string; logo_url: string | null; }' is not assignable to parameter of type 'never'.
+src/app/(dashboard)/admin/settings/actions.ts(74,26): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/admin/settings/actions.ts(84,8): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "company_settings", never, "POST">', gave the following error.
+    Argument of type '{ company_name: string; address: string; email: string; phone: string; iban: string; vat_number: string; logo_url: string | null; }' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "company_settings", never, "POST">', gave the following error.
+    Object literal may only specify known properties, and 'company_name' does not exist in type 'never[]'.
+src/app/(dashboard)/admin/users/actions.ts(145,8): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "users", never, "POST">', gave the following error.
+    Argument of type '{ id: string; email: string; first_name: string; last_name: string; birth_date: string | null; role: UserRole; is_active: boolean; intervention_type_preference: "depannage" | "chantier" | null; }' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "users", never, "POST">', gave the following error.
+    Object literal may only specify known properties, and 'id' does not exist in type 'never[]'.
+src/app/(dashboard)/admin/users/page.tsx(178,25): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/app/(dashboard)/chantiers/[id]/page.tsx(189,27): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/(dashboard)/chantiers/[id]/page.tsx(243,15): error TS2339: Property 'photos' does not exist on type 'never'.
+src/app/(dashboard)/chantiers/[id]/page.tsx(243,41): error TS2339: Property 'photos' does not exist on type 'never'.
+src/app/(dashboard)/chantiers/[id]/page.tsx(244,14): error TS2339: Property 'photos' does not exist on type 'never'.
+src/app/(dashboard)/chantiers/[id]/page.tsx(246,66): error TS2339: Property 'created_at' does not exist on type 'never'.
+src/app/(dashboard)/chantiers/[id]/page.tsx(253,25): error TS2339: Property 'created_at' does not exist on type 'never'.
+src/app/(dashboard)/chantiers/page.tsx(130,57): error TS2339: Property 'status' does not exist on type 'never'.
+src/app/(dashboard)/reports/validate/page.tsx(83,17): error TS2345: Argument of type '{ status: string; revision_requested: boolean; revision_message: string; }' is not assignable to parameter of type 'never'.
+src/app/(dashboard)/reports/validate/page.tsx(94,46): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "notifications", never, "POST">', gave the following error.
+    Argument of type '{ recipient_id: string; sender_id: string | null; title: string; message: string; type: string; reference_id: string | null; reference_type: string; }' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "notifications", never, "POST">', gave the following error.
+    Object literal may only specify known properties, and 'recipient_id' does not exist in type 'never[]'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(234,36): error TS2339: Property 'status' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(235,24): error TS2339: Property 'revision_requested' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(235,57): error TS2339: Property 'revision_message' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(236,41): error TS2339: Property 'revision_message' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(291,45): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(292,27): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(344,46): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(345,27): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(415,47): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/[id]/page.tsx(416,27): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/page.tsx(75,57): error TS2339: Property 'intervention_id' does not exist on type 'never'.
+src/app/(dashboard)/technician/chantier/page.tsx(75,76): error TS2339: Property 'revision_message' does not exist on type 'never'.
+src/app/(dashboard)/technician/layout.tsx(31,19): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/layout.tsx(32,34): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/notifications/page.tsx(34,21): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/notifications/page.tsx(35,36): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/notifications/page.tsx(82,17): error TS2345: Argument of type '{ is_read: boolean; }' is not assignable to parameter of type 'never'.
+src/app/(dashboard)/technician/today/page.tsx(81,19): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/today/page.tsx(82,34): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/week/page.tsx(82,19): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/(dashboard)/technician/week/page.tsx(83,34): error TS2339: Property 'intervention_type_preference' does not exist on type 'never'.
+src/app/api/send-push/route.ts(2,21): error TS7016: Could not find a declaration file for module 'web-push'. '/Users/tanguylachat/n8n/ics-sanitaire/node_modules/web-push/src/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/web-push` if it exists or add a new declaration (.d.ts) file containing `declare module 'web-push';`
+src/app/api/send-push/route.ts(58,27): error TS2339: Property 'endpoint' does not exist on type 'never'.
+src/app/api/send-push/route.ts(59,33): error TS2339: Property 'p256dh' does not exist on type 'never'.
+src/app/api/send-push/route.ts(59,51): error TS2339: Property 'auth' does not exist on type 'never'.
+src/app/api/send-push/route.ts(68,35): error TS2339: Property 'endpoint' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(71,32): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(72,27): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(73,25): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(74,25): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(75,24): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(76,30): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/admin/CompanySettingsForm.tsx(77,28): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/interventions/PlanificationSplitView.tsx(310,46): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "notifications", never, "POST">', gave the following error.
+    Argument of type '{ recipient_id: string; sender_id: string | null; title: string; message: string; type: string; reference_id: any; reference_type: string; }' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "notifications", never, "POST">', gave the following error.
+    Object literal may only specify known properties, and 'recipient_id' does not exist in type 'never[]'.
+src/lib/leave-utils.ts(83,27): error TS2339: Property 'technician_id' does not exist on type 'never'.
+src/lib/push-notifications.ts(96,9): error TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'string | BufferSource | null | undefined'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
+src/lib/push-notifications.ts(111,46): error TS2802: Type 'Uint8Array<ArrayBuffer>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+src/lib/push-notifications.ts(112,47): error TS2802: Type 'Uint8Array<ArrayBuffer>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+src/lib/push-notifications.ts(123,6): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { onConflict?: string | undefined; ignoreDuplicates?: boolean | undefined; count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ ...; }, ... 5 more ..., "POST">', gave the following error.
+    Argument of type '{ user_id: string; endpoint: string; p256dh: string; auth: string; }' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { onConflict?: string | undefined; ignoreDuplicates?: boolean | undefined; count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<...>', gave the following error.
+    Object literal may only specify known properties, and 'user_id' does not exist in type 'never[]'.

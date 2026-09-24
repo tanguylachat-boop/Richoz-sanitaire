@@ -1,0 +1,38 @@
+              proname               | anon | authenticated | service_role 
+------------------------------------+------+---------------+--------------
+ confirm_report_expectation         | f    | t             | f
+ get_report_followup                | f    | t             | f
+ remind_report                      | f    | t             | f
+ report_followup_cycle              | f    | f             | f
+ report_followup_intervention_guard | f    | f             | f
+ report_followup_lock               | f    | f             | f
+ report_followup_rows               | f    | f             | f
+ report_followup_staff              | f    | f             | f
+ report_reminder_one                | f    | f             | f
+ run_report_reminders               | f    | f             | t
+(10 rows)
+
+        tablename        | rowsecurity 
+-------------------------+-------------
+ report_expectations     | t
+ report_followup_cycles  | t
+ report_reminder_history | t
+(3 rows)
+
+                           conname                           |                       pg_get_constraintdef                        
+-------------------------------------------------------------+-------------------------------------------------------------------
+ report_reminder_history_intervention_id_cycle_window_at_key | UNIQUE (intervention_id, cycle, window_at)
+ report_reminder_history_intervention_id_fkey                | FOREIGN KEY (intervention_id) REFERENCES interventions(id)
+ report_reminder_history_notification_id_fkey                | FOREIGN KEY (notification_id) REFERENCES notifications(id)
+ report_reminder_history_notification_id_key                 | UNIQUE (notification_id)
+ report_reminder_history_pkey                                | PRIMARY KEY (id)
+ report_reminder_history_recipient_id_fkey                   | FOREIGN KEY (recipient_id) REFERENCES users(id)
+ report_reminder_history_report_id_fkey                      | FOREIGN KEY (report_id) REFERENCES reports(id)
+ report_reminder_history_source_check                        | CHECK ((source = ANY (ARRAY['manual'::text, 'automatic'::text])))
+(8 rows)
+
+ version 
+---------
+ 00028
+(1 row)
+

@@ -1,0 +1,18 @@
+{
+  "changed_existing": [
+    "src/app/(dashboard)/reports/layout.tsx"
+  ],
+  "added": [
+    "src/lib/daily-activity.ts",
+    "src/lib/daily-activity-data.ts",
+    "src/app/(dashboard)/reports/daily/page.tsx",
+    "src/app/api/reports/daily/route.ts",
+    "tests/lot3b-browser.cjs",
+    "tests/lot3b.test.cjs",
+    "tests/lot3b-local.test.cjs"
+  ],
+  "missing_existing": [],
+  "unchanged_count": 301,
+  "all_migrations_unchanged": true,
+  "lot3a_rules_unchanged": true
+}

@@ -1,0 +1,21 @@
+{
+  "changed_existing": [
+    "src/types/database.ts",
+    "src/lib/report-feedback.ts",
+    "src/app/(dashboard)/calendar/page.tsx",
+    "src/app/(dashboard)/reports/layout.tsx",
+    "src/app/(dashboard)/technician/notifications/page.tsx"
+  ],
+  "added": [
+    "src/lib/report-followup.ts",
+    "src/app/(dashboard)/reports/followup/page.tsx",
+    "src/app/api/cron/report-reminders/route.ts",
+    "supabase/migrations/00029_report_followup.sql",
+    "tests/lot3a-browser.cjs",
+    "tests/lot3a-failure.sql",
+    "tests/lot3a-local.test.cjs",
+    "tests/lot3a.test.cjs"
+  ],
+  "missing_existing": [],
+  "unchanged_count": 182
+}

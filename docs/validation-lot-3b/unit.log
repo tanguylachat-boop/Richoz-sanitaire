@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: same filtered rows drive count and order; undefined dates last
+ok 1 - same filtered rows drive count and order; undefined dates last
+  ---
+  duration_ms: 0.782916
+  type: 'test'
+  ...
+# Subtest: Zurich rendering at midnight and DST; exact notification routes
+ok 2 - Zurich rendering at midnight and DST; exact notification routes
+  ---
+  duration_ms: 10.881792
+  type: 'test'
+  ...
+# Subtest: form dates are Zurich independently of browser zone, invalid/ambiguous DST rejected
+ok 3 - form dates are Zurich independently of browser zone, invalid/ambiguous DST rejected
+  ---
+  duration_ms: 2.017042
+  type: 'test'
+  ...
+# Subtest: Zurich day is half-open and 23/25 hours at DST; month, leap date and midnight
+ok 4 - Zurich day is half-open and 23/25 hours at DST; month, leap date and midnight
+  ---
+  duration_ms: 10.26025
+  type: 'test'
+  ...
+# Subtest: planning overlap requires explicit end; elapsed forecast never means completion
+ok 5 - planning overlap requires explicit end; elapsed forecast never means completion
+  ---
+  duration_ms: 1.486541
+  type: 'test'
+  ...
+# Subtest: global IDs unique across sources and reports; current primary assignment only
+ok 6 - global IDs unique across sources and reports; current primary assignment only
+  ---
+  duration_ms: 1.279708
+  type: 'test'
+  ...
+# Subtest: completion, report creation and current submission have different meanings and dates
+ok 7 - completion, report creation and current submission have different meanings and dates
+  ---
+  duration_ms: 1.446542
+  type: 'test'
+  ...
+# Subtest: cancelled and undated completions never counted as dated realization
+ok 8 - cancelled and undated completions never counted as dated realization
+  ---
+  duration_ms: 1.090208
+  type: 'test'
+  ...
+# Subtest: 3A eligibility reused verbatim; day actions separate from current all-date backlog
+ok 9 - 3A eligibility reused verbatim; day actions separate from current all-date backlog
+  ---
+  duration_ms: 0.976667
+  type: 'test'
+  ...
+# Subtest: pagination handles more than 1000 rows and fails instead of returning a partial count
+ok 10 - pagination handles more than 1000 rows and fails instead of returning a partial count
+  ---
+  duration_ms: 0.265708
+  type: 'test'
+  ...
+# Subtest: API authorizes before domain access and rejects invalid dates and technician input
+ok 11 - API authorizes before domain access and rejects invalid dates and technician input
+  ---
+  duration_ms: 84.401292
+  type: 'test'
+  ...
+# Subtest: date change aborts an old response and cannot replace the newer daily data
+ok 12 - date change aborts an old response and cannot replace the newer daily data
+  ---
+  duration_ms: 19.44475
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 303.122042

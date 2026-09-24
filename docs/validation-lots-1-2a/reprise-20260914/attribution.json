@@ -1,0 +1,281 @@
+[
+  {
+    "file": "src/app/(dashboard)/admin/settings/actions.ts",
+    "line": 65,
+    "code": "TS2345",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 65,
+    "source": ".update({",
+    "message": "Argument of type '{ company_name: string; address: string; email: string; phone: string; iban: string; vat_number: string; logo_url: string | null; }' is not assignable to parameter of type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/settings/actions.ts",
+    "line": 74,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 74,
+    "source": ".eq('id', existing.id);",
+    "message": "Property 'id' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/settings/actions.ts",
+    "line": 84,
+    "code": "TS2769",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 84,
+    "source": ".insert({",
+    "message": "No overload matches this call."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/users/actions.ts",
+    "line": 145,
+    "code": "TS2769",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 145,
+    "source": ".insert({",
+    "message": "No overload matches this call."
+  },
+  {
+    "file": "src/app/(dashboard)/admin/users/page.tsx",
+    "line": 178,
+    "code": "TS2322",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 178,
+    "source": "{userItem.role === 'technician' && (userItem as Record<string, unknown>).calendar_color && (",
+    "message": "Type 'unknown' is not assignable to type 'ReactNode'."
+  },
+  {
+    "file": "src/app/(dashboard)/chantiers/page.tsx",
+    "line": 130,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 130,
+    "source": "setStatsEnCours(chantiersRes.data.filter((c) => c.status === 'en_cours').length);",
+    "message": "Property 'status' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/page.tsx",
+    "line": 75,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 75,
+    "source": "const revMap = new Map(revReports.map(r => [r.intervention_id, r.revision_message]));",
+    "message": "Property 'intervention_id' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/chantier/page.tsx",
+    "line": 75,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 75,
+    "source": "const revMap = new Map(revReports.map(r => [r.intervention_id, r.revision_message]));",
+    "message": "Property 'revision_message' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/layout.tsx",
+    "line": 31,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 31,
+    "source": "if (data?.intervention_type_preference) {",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/layout.tsx",
+    "line": 32,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 32,
+    "source": "setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/notifications/page.tsx",
+    "line": 94,
+    "code": "TS2345",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 82,
+    "source": ".update({ is_read: true })",
+    "message": "Argument of type '{ is_read: boolean; }' is not assignable to parameter of type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/week/page.tsx",
+    "line": 82,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 82,
+    "source": "if (data?.intervention_type_preference) {",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/(dashboard)/technician/week/page.tsx",
+    "line": 83,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 83,
+    "source": "setTypePreference(data.intervention_type_preference as 'depannage' | 'chantier');",
+    "message": "Property 'intervention_type_preference' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 2,
+    "code": "TS7016",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 2,
+    "source": "import webpush from 'web-push';",
+    "message": "Could not find a declaration file for module 'web-push'. '/Users/tanguylachat/n8n/ics-sanitaire/node_modules/web-push/src/index.js' implicitly has an 'any' type."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 58,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 58,
+    "source": "endpoint: sub.endpoint,",
+    "message": "Property 'endpoint' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 59,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 59,
+    "source": "keys: { p256dh: sub.p256dh, auth: sub.auth },",
+    "message": "Property 'p256dh' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 59,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 59,
+    "source": "keys: { p256dh: sub.p256dh, auth: sub.auth },",
+    "message": "Property 'auth' does not exist on type 'never'."
+  },
+  {
+    "file": "src/app/api/send-push/route.ts",
+    "line": 68,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 68,
+    "source": "staleEndpoints.push(sub.endpoint);",
+    "message": "Property 'endpoint' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 71,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 71,
+    "source": "company_name: result.data.company_name || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 72,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 72,
+    "source": "address: result.data.address || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 73,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 73,
+    "source": "email: result.data.email || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 74,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 74,
+    "source": "phone: result.data.phone || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 75,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 75,
+    "source": "iban: result.data.iban || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 76,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 76,
+    "source": "vat_number: result.data.vat_number || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/admin/CompanySettingsForm.tsx",
+    "line": 77,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 77,
+    "source": "logo_url: result.data.logo_url || '',",
+    "message": "Property 'data' does not exist on type 'never'."
+  },
+  {
+    "file": "src/components/interventions/PlanificationSplitView.tsx",
+    "line": 304,
+    "code": "TS2769",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 310,
+    "source": "await supabase.from('notifications').insert({",
+    "message": "No overload matches this call."
+  },
+  {
+    "file": "src/lib/leave-utils.ts",
+    "line": 83,
+    "code": "TS2339",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 83,
+    "source": "return data?.map(d => d.technician_id) || [];",
+    "message": "Property 'technician_id' does not exist on type 'never'."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 96,
+    "code": "TS2322",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 96,
+    "source": "applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),",
+    "message": "Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'string | BufferSource | null | undefined'."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 111,
+    "code": "TS2802",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 111,
+    "source": "const p256dh = btoa(String.fromCharCode(...new Uint8Array(key)));",
+    "message": "Type 'Uint8Array<ArrayBuffer>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 112,
+    "code": "TS2802",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 112,
+    "source": "const authKey = btoa(String.fromCharCode(...new Uint8Array(auth)));",
+    "message": "Type 'Uint8Array<ArrayBuffer>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher."
+  },
+  {
+    "file": "src/lib/push-notifications.ts",
+    "line": 123,
+    "code": "TS2769",
+    "classification": "préexistant prouvé dans HEAD",
+    "head_line": 123,
+    "source": ".upsert(",
+    "message": "No overload matches this call."
+  }
+]

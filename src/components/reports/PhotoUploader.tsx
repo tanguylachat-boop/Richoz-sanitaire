@@ -1,73 +1,76 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Camera, X, Plus } from 'lucide-react';
 import { normalizeImage } from '@/lib/normalize-image';
-
-interface Photo {
-  url: string;
-  file?: File;
-  caption?: string;
-  isLocal?: boolean;
-}
+import { validatePhoto, type ReportPhoto as Photo } from '@/lib/report-photos';
 
 interface PhotoUploaderProps {
   interventionId: string;
   photos: Photo[];
   onPhotosChange: (photos: Photo[]) => void;
   maxPhotos?: number;
+  disabled?: boolean;
+  onProcessingChange?: (processing: boolean) => void;
 }
 
 export function PhotoUploader({
   photos,
   onPhotosChange,
   maxPhotos = 10,
+  disabled = false,
+  onProcessingChange,
 }: PhotoUploaderProps) {
   // Refs for file inputs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle file selection - normalize EXIF orientation
+  const [processing, setProcessing] = useState(false);
+  const processingLock = useRef(false);
+  const latest = useRef(photos);
+  latest.current = photos;
+  const ownedUrls = useRef(new Set<string>());
+  useEffect(() => () => { ownedUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    if (photos.length + files.length > maxPhotos) {
-      toast.error(`Maximum ${maxPhotos} photos`);
-      return;
-    }
-
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length || disabled || processingLock.current) return;
+    processingLock.current = true; setProcessing(true); onProcessingChange?.(true);
     const newPhotos: Photo[] = [];
-
-    // Process each file - normalize orientation via canvas
-    for (let i = 0; i < files.length; i++) {
-      const normalized = await normalizeImage(files[i]);
-      const objectUrl = URL.createObjectURL(normalized);
-
-      newPhotos.push({
-        url: objectUrl,
-        file: normalized,
-        isLocal: true,
-      });
-    }
-
-    // Update state with new photos
-    onPhotosChange([...photos, ...newPhotos]);
-    toast.success(`${files.length} photo(s) ajoutée(s)`);
-
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    try {
+      for (const file of files) {
+        if (latest.current.length + newPhotos.length >= maxPhotos) {
+          toast.error(`${file.name} : maximum ${maxPhotos} photos dans cette catégorie.`);
+          continue;
+        }
+        try {
+          validatePhoto(file);
+          const normalized = await normalizeImage(file);
+          validatePhoto(normalized);
+          const url = URL.createObjectURL(normalized);
+          ownedUrls.current.add(url);
+          newPhotos.push({ url, file: normalized, isLocal: true });
+        } catch (error) {
+          toast.error(`${file.name} : ${error instanceof Error ? error.message : 'Image illisible sur cet appareil.'}`);
+        }
+      }
+      onPhotosChange([...latest.current, ...newPhotos]);
+      if (newPhotos.length) toast.info(`${newPhotos.length} photo(s) prête(s). Enregistrez le rapport pour les conserver.`);
+    } finally {
+      processingLock.current = false; setProcessing(false); onProcessingChange?.(false);
     }
   };
 
   // Remove a photo
   const removePhoto = (index: number) => {
+    if (disabled || processingLock.current) return;
     const photoToRemove = photos[index];
     
     // Revoke blob URL if local
     if (photoToRemove.isLocal && photoToRemove.url.startsWith('blob:')) {
       URL.revokeObjectURL(photoToRemove.url);
+      ownedUrls.current.delete(photoToRemove.url);
     }
     
     const newPhotos = photos.filter((_, i) => i !== index);
@@ -96,6 +99,8 @@ export function PhotoUploader({
               {/* Delete button */}
               <button
                 type="button"
+                disabled={disabled || processing}
+                aria-label={`Retirer la photo ${index + 1}`}
                 onClick={() => removePhoto(index)}
                 className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 active:scale-95"
               >
@@ -110,7 +115,7 @@ export function PhotoUploader({
               {/* Local badge */}
               {photo.isLocal && (
                 <div className="absolute bottom-2 left-2 px-2 py-1 bg-amber-500 rounded text-[10px] text-white font-medium">
-                  Non uploadé
+                  {photo.error || (photo.uploaded ? 'Envoyée — rapport à enregistrer' : 'À envoyer')}
                 </div>
               )}
             </div>
@@ -124,7 +129,8 @@ export function PhotoUploader({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/heic"
+            disabled={disabled || processing}
             multiple
             onChange={handleFileChange}
             className="hidden"
@@ -147,6 +153,7 @@ export function PhotoUploader({
         </label>
       )}
 
+      {processing && <p role="status">Préparation des photos…</p>}
       {/* Counter */}
       <p className="text-sm text-gray-500 text-center">
         {photos.length} / {maxPhotos} photos

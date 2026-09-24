@@ -1,0 +1,17 @@
+BEGIN
+NOTICE:  PASS: wrong feedback column type rejected by versioned migration
+DO
+NOTICE:  PASS: missing date constraint rejected by versioned migration
+DO
+         id         | public | file_size_limit 
+--------------------+--------+-----------------
+ photos             | f      |        10485760
+ chantier-documents | f      |        20971520
+(2 rows)
+
+ applied_migrations 
+--------------------
+                 29
+(1 row)
+
+ROLLBACK

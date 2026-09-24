@@ -1,0 +1,5 @@
+PASS browser desktop: Zurich default from another browser zone, date/technician filters, counts, coverage and exact intervention/report links
+PASS browser previous/empty day, explicitly current backlog, refresh without business writes or reminders
+PASS browser loading/error/retry; no stale totals displayed
+PASS browser mobile: navigation, filters, multiday detail and no horizontal document overflow
+PASS browser technician: global daily view refused

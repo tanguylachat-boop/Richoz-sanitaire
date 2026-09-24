@@ -1,5 +1,7 @@
 'use client';
 
+import { reportNotificationLink } from '@/lib/report-feedback';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Bell, Check, Loader2, Wrench, MessageSquare, HardHat, Camera } from 'lucide-react';
@@ -16,87 +18,91 @@ interface NotificationRow {
   is_read: boolean;
   created_at: string;
   intervention_type?: string | null;
+  report_intervention_id?: string | null;
 }
 
 export default function TechnicianNotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [typePreference, setTypePreference] = useState<'depannage' | 'chantier' | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
     const fetchNotifications = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Session expirée. Reconnectez-vous pour consulter vos notifications.');
 
-      // Fetch type preference for navigation
-      const { data: prefData } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single();
-      if (prefData?.intervention_type_preference) {
-        setTypePreference(prefData.intervention_type_preference as 'depannage' | 'chantier');
-      }
-
-      // Fetch notifications
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipient_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.error('Error fetching notifications:', error);
-        setIsLoading(false);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        // Fetch intervention types for notifications that have reference_id
-        const interventionIds = data
-          .filter((n: NotificationRow) => n.reference_id)
-          .map((n: NotificationRow) => n.reference_id as string);
-
-        let typeMap = new Map<string, string>();
-        if (interventionIds.length > 0) {
-          const uniqueIds = Array.from(new Set(interventionIds));
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: ivData } = await (supabase as any)
-            .from('interventions')
-            .select('id, intervention_type')
-            .in('id', uniqueIds);
-          if (ivData) {
-            typeMap = new Map(ivData.map((iv: { id: string; intervention_type: string }) => [iv.id, iv.intervention_type]));
-          }
+        // Fetch type preference for navigation
+        const { data: prefData } = await supabase.from('users').select('intervention_type_preference').eq('id', user.id).single<{ intervention_type_preference: 'depannage' | 'chantier' | null }>();
+        if (prefData?.intervention_type_preference) {
+          setTypePreference(prefData.intervention_type_preference);
         }
 
-        setNotifications(data.map((n: NotificationRow) => ({
-          ...n,
-          intervention_type: n.reference_id ? typeMap.get(n.reference_id) || null : null,
-        })) as NotificationRow[]);
-      } else {
-        setNotifications([]);
+        // Fetch notifications
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('recipient_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (error) {
+          throw new Error('Impossible de charger vos notifications. Rechargez la page pour réessayer.');
+        }
+
+        if (data && data.length > 0) {
+          const reportIds = data.filter((n: NotificationRow) => (n.type === 'revision_requested' || (n.type === 'report_reminder' && n.reference_type === 'report')) && n.reference_id).map((n: NotificationRow) => n.reference_id!);
+          const reportMap = new Map<string, string>();
+          if (reportIds.length) {
+            const { data: reports, error: reportsError } = await supabase.from('reports')
+              .select('id, intervention_id').eq('technician_id', user.id).in('id', reportIds);
+            if (reportsError) throw new Error('Impossible de retrouver les rapports concernés. Rechargez la page pour réessayer.');
+            (reports as { id: string; intervention_id: string }[] | null)?.forEach(r => reportMap.set(r.id, r.intervention_id));
+          }
+          // Fetch intervention types for notifications that have reference_id
+          const interventionIds = data
+            .filter((n: NotificationRow) => n.reference_id)
+            .map((n: NotificationRow) => n.reference_id as string);
+
+          let typeMap = new Map<string, string>();
+          if (interventionIds.length > 0) {
+            const uniqueIds = Array.from(new Set(interventionIds));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: ivData } = await (supabase as any)
+              .from('interventions')
+              .select('id, intervention_type')
+              .in('id', uniqueIds);
+            if (ivData) {
+              typeMap = new Map(ivData.map((iv: { id: string; intervention_type: string }) => [iv.id, iv.intervention_type]));
+            }
+          }
+
+          setNotifications(data.map((n: NotificationRow) => ({
+            ...n,
+            report_intervention_id: n.reference_id ? reportMap.get(n.reference_id) || null : null,
+            intervention_type: n.reference_id ? typeMap.get(n.reference_id) || null : null,
+          })) as NotificationRow[]);
+        } else {
+          setNotifications([]);
+        }
+
+        // Mark all as read
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('recipient_id', user.id)
+          .eq('is_read', false);
+
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Impossible de charger vos notifications.');
+      } finally {
+        setIsLoading(false);
       }
-
-      // Mark all as read
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
-
-      setIsLoading(false);
     };
     fetchNotifications();
   }, []);
-
-  const getNotificationLink = (n: NotificationRow) => {
-    if (n.reference_id) {
-      if (n.intervention_type === 'chantier') {
-        return `/technician/chantier/${n.reference_id}`;
-      }
-      return `/technician/report/${n.reference_id}`;
-    }
-    return '#';
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -114,6 +120,8 @@ export default function TechnicianNotificationsPage() {
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
             <p className="text-gray-500">Chargement...</p>
           </div>
+        ) : loadError ? (
+          <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{loadError}</p>
         ) : notifications.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -127,7 +135,7 @@ export default function TechnicianNotificationsPage() {
             {notifications.map((n) => (
               <Link
                 key={n.id}
-                href={getNotificationLink(n)}
+                href={reportNotificationLink(n)}
                 className={`block bg-white rounded-2xl shadow-sm p-4 transition-all active:scale-[0.98] ${
                   !n.is_read ? 'border-l-4 border-blue-500' : 'border border-gray-100'
                 }`}
@@ -157,7 +165,7 @@ export default function TechnicianNotificationsPage() {
                       {n.title}
                     </p>
                     {n.message && (
-                      <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className={`text-sm text-gray-500 mt-0.5 ${n.type === 'revision_requested' ? 'whitespace-pre-wrap break-words' : 'line-clamp-2'}`}>{n.message}</p>
                     )}
                     <p className="text-xs text-gray-400 mt-1">{formatRelativeTime(n.created_at)}</p>
                   </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -27,6 +29,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import type { Report } from '@/types/database';
 import { toast } from 'sonner';
 import { sendPush } from '@/lib/send-push';
 import { computeChantierProgress } from '@/lib/chantier-progress';
@@ -158,13 +161,13 @@ export default function ChantierDetailAdminPage() {
           technician:users!interventions_technician_id_fkey(id, first_name, last_name, phone, email)
         `)
         .eq('id', interventionId)
-        .single(),
+        .single<ChantierIntervention>(),
 
       supabase
         .from('chantier_details')
         .select('*')
         .eq('intervention_id', interventionId)
-        .maybeSingle(),
+        .maybeSingle<ChantierDetails>(),
 
       supabase
         .from('chantier_messages')
@@ -186,7 +189,7 @@ export default function ChantierDetailAdminPage() {
       return;
     }
 
-    setIntervention(ivRes.data as unknown as ChantierIntervention);
+    setIntervention(ivRes.data);
 
     if (detailsRes.data) {
       const d = detailsRes.data as ChantierDetails;
@@ -215,7 +218,8 @@ export default function ChantierDetailAdminPage() {
       supabase
         .from('reports')
         .select('photos, created_at, technician:users!reports_technician_id_fkey(first_name, last_name)')
-        .eq('intervention_id', interventionId),
+        .eq('intervention_id', interventionId)
+        .returns<(Pick<Report, 'photos' | 'created_at'> & { technician: { first_name: string; last_name: string } | null })[]>(),
     ]);
 
     const allPhotos: PhotoEntry[] = [];
@@ -279,7 +283,7 @@ export default function ChantierDetailAdminPage() {
 
     setPhotos(allPhotos);
     setIsLoading(false);
-  }, [interventionId]);
+  }, [interventionId, router, supabase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -567,6 +571,7 @@ export default function ChantierDetailAdminPage() {
       </div>
 
       {/* ═══ TAB: Infos ═══ */}
+      {activeTab === 'infos' && <ChantierDocuments key={interventionId} interventionId={interventionId} />}
       {activeTab === 'infos' && (
         <div className="space-y-4">
           {/* Edit toggle */}

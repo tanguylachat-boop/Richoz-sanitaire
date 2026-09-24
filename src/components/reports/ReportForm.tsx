@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { uploadReportPhotos, type ReportPhoto } from '@/lib/report-photos';
 import { PhotoUploader } from './PhotoUploader';
 import { SignatureCanvas } from './SignatureCanvas';
 import { GoogleReviewsQR } from './GoogleReviewsQR';
+import { VoiceRecorder } from './VoiceRecorder';
+import { appendDictation } from '@/lib/report-dictation';
 import { cn } from '@/lib/utils';
 import type { Intervention, Report, Product } from '@/types/database';
 import {
@@ -38,9 +41,9 @@ export function ReportForm({
   // Parse existing photos into before/after categories
   const parseExistingPhotos = () => {
     const existingPhotos = (existingReport?.photos as unknown as (string | { url: string; caption?: string; category?: string })[]) || [];
-    const before: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[] = [];
-    const after: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[] = [];
-    const uncategorized: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[] = [];
+    const before: ReportPhoto[] = [];
+    const after: ReportPhoto[] = [];
+    const uncategorized: ReportPhoto[] = [];
 
     existingPhotos.forEach((photo) => {
       if (typeof photo === 'string') {
@@ -68,8 +71,11 @@ export function ReportForm({
   // =============================================
 
   const [textContent, setTextContent] = useState(existingReport?.text_content || '');
-  const [photosBefore, setPhotosBefore] = useState<{ url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]>(parsedPhotos.before);
-  const [photosAfter, setPhotosAfter] = useState<{ url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]>(parsedPhotos.after);
+  const [photosBefore, setPhotosBefore] = useState<ReportPhoto[]>(parsedPhotos.before);
+  const [photosAfter, setPhotosAfter] = useState<ReportPhoto[]>(parsedPhotos.after);
+  const [processingBefore, setProcessingBefore] = useState(false);
+  const [processingAfter, setProcessingAfter] = useState(false);
+  const saveLock = useRef(false);
   const [isBillable, setIsBillable] = useState(existingReport?.is_billable ?? true);
   const [billableReason, setBillableReason] = useState(existingReport?.billable_reason || '');
   const [workDuration, setWorkDuration] = useState(existingReport?.work_duration_minutes || 60);
@@ -85,6 +91,7 @@ export function ReportForm({
     (existingReport as unknown as { client_signature?: string })?.client_signature || null
   );
 
+  const [revisionActive, setRevisionActive] = useState(Boolean(existingReport?.revision_requested));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<string | null>(null);
@@ -93,11 +100,11 @@ export function ReportForm({
   // HANDLERS
   // =============================================
 
-  const handlePhotosBeforeChange = (newPhotos: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]) => {
+  const handlePhotosBeforeChange = (newPhotos: ReportPhoto[]) => {
     setPhotosBefore(newPhotos);
   };
 
-  const handlePhotosAfterChange = (newPhotos: { url: string; caption?: string; file?: File; isLocal?: boolean; isUploading?: boolean }[]) => {
+  const handlePhotosAfterChange = (newPhotos: ReportPhoto[]) => {
     setPhotosAfter(newPhotos);
   };
 
@@ -112,38 +119,15 @@ export function ReportForm({
   // UPLOAD HELPERS
   // =============================================
 
-  const uploadPhotos = async (
-    photos: { url: string; file?: File; isLocal?: boolean }[],
-    category: string
-  ): Promise<{ url: string; category: string }[]> => {
-    const results: { url: string; category: string }[] = [];
-
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i];
-
-      if (photo.isLocal && photo.file) {
-        const fileName = `intervention-${intervention.id}-${category}-${Date.now()}-${i}.jpg`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('photos')
-          .upload(fileName, photo.file, { cacheControl: '3600', upsert: false });
-
-        if (uploadError) {
-          console.error(`[UPLOAD ERROR] ${fileName}:`, uploadError);
-          throw new Error(`Échec upload photo: ${uploadError.message}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('photos')
-          .getPublicUrl(fileName);
-
-        results.push({ url: publicUrl, category });
-      } else {
-        results.push({ url: photo.url, category });
-      }
-    }
-
-    return results;
+  const uploadPhotos = async () => {
+    const bucket = {
+      upload: (...args: Parameters<ReturnType<typeof supabase.storage.from>['upload']>) => supabase.storage.from('photos').upload(...args),
+      download: (path: string) => supabase.storage.from('photos').download(path),
+    };
+    const before = await uploadReportPhotos(photosBefore, 'before', technicianId, intervention.id, bucket, setPhotosBefore);
+    const after = await uploadReportPhotos(photosAfter, 'after', technicianId, intervention.id, bucket, setPhotosAfter);
+    if (before.failed + after.failed) throw new Error(`${before.failed + after.failed} photo(s) restent à envoyer. Les autres sont conservées pour la reprise ; le rapport n’a pas encore été enregistré.`);
+    return [...before.photos, ...after.photos];
   };
 
   const uploadSignature = async (dataUrl: string): Promise<string> => {
@@ -192,8 +176,8 @@ export function ReportForm({
     client_signature: signatureUrl,
     is_completed: isCompleted,
     status,
-    // Reset revision fields on submit so the banner disappears
-    ...(status === 'submitted' ? { revision_requested: false, revision_message: null } : {}),
+    // Resolve the request, retaining the last feedback for consultation.
+    ...(status === 'submitted' ? { revision_requested: false } : {}),
   });
 
   // =============================================
@@ -201,11 +185,11 @@ export function ReportForm({
   // =============================================
 
   const handleSaveDraft = async () => {
+    if (saveLock.current || processingBefore || processingAfter) return;
+    saveLock.current = true;
     setIsSaving(true);
     try {
-      const beforeUrls = await uploadPhotos(photosBefore, 'before');
-      const afterUrls = await uploadPhotos(photosAfter, 'after');
-      const allPhotos = [...beforeUrls, ...afterUrls];
+      const allPhotos = await uploadPhotos();
 
       let signatureUrl = null;
       if (clientSignature && clientSignature.startsWith('data:')) {
@@ -221,13 +205,15 @@ export function ReportForm({
 
       if (!reportId) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: foundReport } = await (supabase as any)
+        const { data: foundReport, error: lookupError } = await (supabase as any)
           .from('reports')
           .select('id')
           .eq('intervention_id', intervention.id)
+          .eq('technician_id', technicianId)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+        if (lookupError) throw new Error("Impossible de vérifier le rapport existant. Réessayez.");
         if (foundReport) reportId = foundReport.id;
       }
 
@@ -242,16 +228,19 @@ export function ReportForm({
         if (!data || data.length === 0) throw new Error('Mise à jour échouée (0 lignes)');
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any).from('reports').insert(reportData);
-        if (error) throw error;
+        const { data, error } = await (supabase as any).from('reports').insert(reportData).select();
+        if (error || !data?.length) throw new Error('Enregistrement du rapport non confirmé.');
       }
 
+      setPhotosBefore(allPhotos.filter(p => p.category === 'before'));
+      setPhotosAfter(allPhotos.filter(p => p.category === 'after'));
       toast.success('Brouillon sauvegardé');
     } catch (error) {
-      console.error('[SAVE DRAFT ERROR]', error);
+
       const message = error instanceof Error ? error.message : String(error);
       toast.error(`Erreur sauvegarde: ${message}`);
     } finally {
+      saveLock.current = false;
       setIsSaving(false);
     }
   };
@@ -261,11 +250,13 @@ export function ReportForm({
   // =============================================
 
   const handleSubmit = async () => {
+    if (saveLock.current || processingBefore || processingAfter) return;
     if (!textContent) {
       toast.error('Veuillez ajouter une description de l\'intervention');
       return;
     }
 
+    saveLock.current = true;
     setIsSubmitting(true);
     setSubmitProgress('Préparation du rapport...');
 
@@ -280,13 +271,9 @@ export function ReportForm({
         setSubmitProgress(`Upload de ${allLocalPhotos.length} photo(s)...`);
       }
 
-      const beforeUrls = await uploadPhotos(photosBefore, 'before');
-      const afterUrls = await uploadPhotos(photosAfter, 'after');
-      const allPhotos = [...beforeUrls, ...afterUrls];
+      const allPhotos = await uploadPhotos();
 
-      if (allLocalPhotos.length > 0) {
-        toast.success(`${allLocalPhotos.length} photo(s) uploadée(s)`);
-      }
+
 
       // Upload signature
       let signatureUrl = null;
@@ -313,10 +300,12 @@ export function ReportForm({
           .from('reports')
           .select('id')
           .eq('intervention_id', intervention.id)
+          .eq('technician_id', technicianId)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
+        if (lookupError) throw new Error("Impossible de vérifier le rapport existant. Réessayez.");
         if (foundReport) {
           reportId = foundReport.id;
         }
@@ -347,6 +336,10 @@ export function ReportForm({
         }
       }
 
+      setPhotosBefore(allPhotos.filter(p => p.category === 'before'));
+      setPhotosAfter(allPhotos.filter(p => p.category === 'after'));
+      setRevisionActive(false);
+
       // Update intervention status
       setSubmitProgress("Mise à jour de l'intervention...");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -371,10 +364,11 @@ export function ReportForm({
         router.refresh();
       }, 500);
     } catch (error) {
-      console.error('[SUBMIT ERROR]', error);
+
       const message = error instanceof Error ? error.message : String(error);
       toast.error(`Erreur: ${message}`);
     } finally {
+      saveLock.current = false;
       setIsSubmitting(false);
       setSubmitProgress(null);
     }
@@ -386,6 +380,12 @@ export function ReportForm({
 
   return (
     <div className="space-y-6 pb-32">
+      {existingReport?.revision_message && (
+        <section aria-label="Retour du secrétariat" className={cn('rounded-xl border p-4', revisionActive ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50')}>
+          <h2 className="font-semibold">{revisionActive ? "Retour du secrétariat — correction demandée" : "Dernier commentaire du secrétariat (historique)"}</h2>
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm text-amber-900">{existingReport.revision_message}</p>
+        </section>
+      )}
       {/* Progress summary */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="font-semibold text-gray-900 mb-3">Résumé</h2>
@@ -462,6 +462,11 @@ export function ReportForm({
           placeholder="Ex: Remplacement du robinet mural mélangeur par un mitigeur 120x220. Coupure d'eau effectuée, test fonctionnement OK..."
           className="w-full h-32 px-3 py-2 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
+        <VoiceRecorder
+          key={`${intervention.id}:${existingReport?.id || 'new'}:${technicianId}`}
+          disabled={isSaving || isSubmitting}
+          onRecordingComplete={text => setTextContent(current => appendDictation(current, text))}
+        />
       </div>
 
       {/* ===== FOURNITURES / PIÈCES (texte libre, SANS PRIX) ===== */}
@@ -491,6 +496,8 @@ export function ReportForm({
           interventionId={intervention.id}
           photos={photosBefore}
           onPhotosChange={handlePhotosBeforeChange}
+          disabled={isSaving || isSubmitting || processingBefore || processingAfter}
+          onProcessingChange={setProcessingBefore}
           maxPhotos={5}
         />
       </div>
@@ -505,6 +512,8 @@ export function ReportForm({
           interventionId={intervention.id}
           photos={photosAfter}
           onPhotosChange={handlePhotosAfterChange}
+          disabled={isSaving || isSubmitting || processingBefore || processingAfter}
+          onProcessingChange={setProcessingAfter}
           maxPhotos={5}
         />
       </div>
@@ -621,7 +630,7 @@ export function ReportForm({
         <div className="flex gap-3 max-w-2xl mx-auto">
           <button
             onClick={handleSaveDraft}
-            disabled={isSaving || isSubmitting}
+            disabled={isSaving || isSubmitting || processingBefore || processingAfter}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-4 border-2 border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
             {isSaving ? (
@@ -633,7 +642,7 @@ export function ReportForm({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSaving || isSubmitting}
+            disabled={isSaving || isSubmitting || processingBefore || processingAfter}
             className="flex-1 flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 rounded-xl font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98] transition-all shadow-lg shadow-emerald-600/30"
           >
             {isSubmitting ? (

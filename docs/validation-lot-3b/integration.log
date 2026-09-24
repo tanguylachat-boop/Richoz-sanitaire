@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: real daily activity, no invented completion/submission; cancelled/undefined coverage explicit
+ok 1 - real daily activity, no invented completion/submission; cancelled/undefined coverage explicit
+  ---
+  duration_ms: 963.583625
+  type: 'test'
+  ...
+# Subtest: completion D, report creation D+1, unavailable submission date, empty date and no updated_at inference
+ok 2 - completion D, report creation D+1, unavailable submission date, empty date and no updated_at inference
+  ---
+  duration_ms: 140.913084
+  type: 'test'
+  ...
+# Subtest: one global intervention despite multiple days and report authors; respect current assignment
+ok 3 - one global intervention despite multiple days and report authors; respect current assignment
+  ---
+  duration_ms: 99.384625
+  type: 'test'
+  ...
+# Subtest: returned then resubmitted, including consultation of a past day, uses refreshed current 3A state
+ok 4 - returned then resubmitted, including consultation of a past day, uses refreshed current 3A state
+  ---
+  duration_ms: 75.954375
+  type: 'test'
+  ...
+# Subtest: actual HTTP permissions, invalid input, no shared caching and mutation endpoint absent
+ok 5 - actual HTTP permissions, invalid input, no shared caching and mutation endpoint absent
+  ---
+  duration_ms: 89.579
+  type: 'test'
+  ...
+# Subtest: actual reads and refreshes leave business records, 3A cycles, notifications and audit unchanged
+ok 6 - actual reads and refreshes leave business records, 3A cycles, notifications and audit unchanged
+  ---
+  duration_ms: 150.150667
+  type: 'test'
+  ...
+# Subtest: actual server intervals at Zurich month boundary, spring and autumn change
+ok 7 - actual server intervals at Zurich month boundary, spring and autumn change
+  ---
+  duration_ms: 45.010209
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1738.099
