@@ -166,13 +166,16 @@ export default function LeaveManagementPage() {
     getUser();
   }, []);
 
-  // Load technicians once for the create-leave form
+  // Charge le personnel pour le formulaire de congés : techniciens ET employés
+  // de bureau (secrétaires + admin) — tous prennent des congés et doivent être
+  // visibles dans la liste. Seuls les comptes actifs.
   useEffect(() => {
     const loadTechnicians = async () => {
       const { data } = await supabase
         .from('users')
         .select('id, first_name, last_name, email, annual_leave_weeks')
-        .eq('role', 'technician')
+        .in('role', ['technician', 'secretary', 'admin'])
+        .eq('is_active', true)
         .order('last_name');
       if (data) setTechnicians(data as TechnicianOption[]);
     };
