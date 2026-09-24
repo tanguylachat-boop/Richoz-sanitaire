@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { SupplierOrders } from '@/components/supplier-orders/SupplierOrders';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -293,6 +294,10 @@ export default function InterventionDetailPage() {
             ) : (
               <p className="text-gray-400 italic text-sm">Aucun rapport lié</p>
             )}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+            <SupplierOrders interventionId={interventionId} />
           </div>
         </div>
       </div>

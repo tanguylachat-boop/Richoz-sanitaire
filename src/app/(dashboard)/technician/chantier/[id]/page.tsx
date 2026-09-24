@@ -1,6 +1,7 @@
 'use client';
 
 import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
+import { SupplierOrders } from '@/components/supplier-orders/SupplierOrders';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -926,6 +927,11 @@ export default function ChantierDetailPage() {
 
       {/* ═══ TAB: Photos ═══ */}
       {activeTab === 'overview' && <ChantierDocuments key={interventionId} interventionId={interventionId} />}
+      {activeTab === 'overview' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm mt-4">
+          <SupplierOrders interventionId={interventionId} />
+        </div>
+      )}
       {activeTab === 'photos' && (
         <div className="space-y-4">
           {/* Upload section */}

@@ -78,6 +78,27 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
   du test (écrit le 18.09, avant l'autosync) duplique la source (index unique). **Test obsolète à mettre à
   jour** (attendre l'item autosync au lieu de le créer), indépendant du lot 8.
 
+## Session 24.09.2026 — LOT 9 (bons de commande) + congés bureau + promotion prod
+
+- **Congés** : la liste chargeait `role='technician'` seulement → les **employés de bureau
+  (secrétaire + admin)** n'apparaissaient jamais. Corrigé (`.in('role', [...])` + `is_active`).
+- **LOT 9 — Bons de commande fournisseur** (`00037_supplier_orders.sql`) : le technicien enregistre
+  fournisseur + note + **photo(s)** du bon/ticket, rattaché à une intervention (dépannage/chantier).
+  La secrétaire lit pour facturer et coche **« traité »** (fige le BC côté technicien). Réutilise le
+  bucket `photos` (chemins `{uid}/supplier-orders/…`, autorisés par `report_photo_scope`), route
+  privée `/api/supplier-order-photos`, composant `SupplierOrders` posé sur : page rapport technicien,
+  détail chantier (onglet aperçu), détail intervention (staff). RLS calquée sur les rapports
+  (technicien = ses BC pour SES interventions ; staff = tout ; BC traité figé). Décision client :
+  contenu **léger** (photo + note + fournisseur), pas de lignes d'articles structurées.
+- **Tests réels** : `tests/lot9-supplier-orders.test.cjs` **7/7** ✅ · non-régression lot8 9/9, lot6bc 7/7 ·
+  `tsc` 0 · `npm run build` 0.
+- **Promotion prod (Vercel)** : constat = **aucun déploiement de prod n'existait sur lots 4-8** (la prod
+  servait l'ancien `main` a0a6c85). PR #2 `feat/richoz-reprise-lots-4-7` → `main` **mergée** → build prod.
+  URL stable de test : `https://richoz-sanitaire-git-main-tanguylachat-3925s-projects.vercel.app`
+  (⚠ protection SSO Vercel active sur `*.vercel.app` → accessible au compte Vercel ; secrétaire = domaine
+  custom à prévoir pour un accès sans login). Ancienne prod = `rollback candidate` (retour 1 clic).
+- **À appliquer/merger pour ce lot** : migration `00037` en prod + re-merge branche→main (congés + lot 9).
+
 ## Prochaine action
 
 - **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).

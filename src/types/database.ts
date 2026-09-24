@@ -763,6 +763,12 @@ export interface Database {
         Update: { label?: string; direction?: string; basis?: string; pct?: number | null; amount_chf?: number | null; sort_order?: number };
         Relationships: [{ foreignKeyName: 'salary_config_component_config_id_fkey'; columns: ['config_id']; isOneToOne: false; referencedRelation: 'employee_salary_config'; referencedColumns: ['id'] }];
       };
+      supplier_orders: {
+        Row: { id: string; intervention_id: string; technician_id: string; supplier: string | null; note: string | null; photos: Json; is_processed: boolean; processed_by: string | null; processed_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; intervention_id: string; technician_id: string; supplier?: string | null; note?: string | null; photos?: Json; is_processed?: boolean; processed_by?: string | null; processed_at?: string | null };
+        Update: { supplier?: string | null; note?: string | null; photos?: Json; is_processed?: boolean; processed_by?: string | null; processed_at?: string | null };
+        Relationships: [{ foreignKeyName: 'supplier_orders_intervention_id_fkey'; columns: ['intervention_id']; isOneToOne: false; referencedRelation: 'interventions'; referencedColumns: ['id'] }];
+      };
       audit_log: {
         Relationships: [
           { foreignKeyName: 'audit_log_user_id_fkey'; columns: ['user_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] },
