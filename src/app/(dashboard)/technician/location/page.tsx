@@ -13,7 +13,8 @@ import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { MapPin, Play, Square, AlertTriangle, ShieldCheck } from 'lucide-react';
 
-const FEATURE_ENABLED = process.env.NEXT_PUBLIC_LOCATION_SHARING_ENABLED !== 'false';
+// Activé en dur (décision client actée) : indépendant de toute variable Vercel.
+const FEATURE_ENABLED = true;
 const PUSH_INTERVAL_MS = 20000;
 
 type ShareState = 'off' | 'starting' | 'on' | 'denied' | 'error';

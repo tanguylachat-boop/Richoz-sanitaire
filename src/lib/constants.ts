@@ -58,6 +58,7 @@ export const ADMIN_ROUTES = [
   { href: '/piquet', label: 'Piquet', icon: 'clock' },
   { href: '/contracts', label: 'Contrats maintenance', icon: 'file-signature' },
   { href: '/reports/validate', label: 'Validation rapports', icon: 'clipboard-check' },
+  { href: '/admin/supplier-orders', label: 'Bons de commande', icon: 'package' },
   { href: '/invoices', label: 'Factures', icon: 'file-text' },
   { href: '/quotes', label: 'Devis', icon: 'file-plus' },
   { href: '/products', label: 'Catalogue', icon: 'package' },

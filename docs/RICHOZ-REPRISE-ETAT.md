@@ -112,6 +112,21 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
   technicien n'a activé le partage. C'est de l'avant-plan uniquement (watchPosition tant que la page
   `/technician/location` est ouverte) ; suivi en arrière-plan = app native (hors périmètre, déjà acté).
 
+## Session 24.09.2026 (suite) — localisation + jours fériés + démo
+
+- **Localisation débloquée** : le gate build-var `NEXT_PUBLIC_LOCATION_SHARING_ENABLED==='true'`
+  laissait la page technicien désactivée en prod (var non fiable). Passé en **activé par défaut**
+  (`!== 'false'`, kill-switch conservé) — feu vert client déjà acté. Partage explicite + avant-plan +
+  sans rétention inchangés. Rappel : rien ne s'affiche tant qu'un technicien n'a pas activé le partage.
+- **Jours fériés GE 2027 (payés)** : `00038_public_holidays` (table + seed 9 dates, appliquée prod),
+  affichés dans le calendrier (mois : fond ambré + badge 🎉 + légende). **DÉCISION CLIENT (24.09) :
+  tous les employés sont MENSUALISÉS** → un férié est déjà inclus dans le salaire fixe, AUCUN calcul paie
+  nécessaire (feature complète). Le chemin « horaire » du lot 8 existe mais n'est pas utilisé aujourd'hui.
+  Années futures : ajouter des lignes dans `public_holidays`.
+- **Interfaces dépannage vs chantier** : différentes PAR DESIGN (dépannage = 1 rapport ; chantier = suivi
+  multi-jours à onglets). Bon de commande présent dans les deux. Le compte démo voit les 2 flux via « Aujourd'hui ».
+- Compte démo : les 2 interventions test sont datées du jour → visibles dans « Aujourd'hui » de la PWA.
+
 ## Prochaine action
 
 - **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).
