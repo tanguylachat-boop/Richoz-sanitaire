@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { ReportForm } from '@/components/reports/ReportForm';
+import { SupplierOrders } from '@/components/supplier-orders/SupplierOrders';
 import { format, addMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { Intervention, Report, Product, Regie } from '@/types/database';
@@ -322,6 +323,10 @@ export default function TechnicianReportPage({ searchParams }: { searchParams?: 
             technicianId={userId}
           />
         )}
+      </div>
+
+      <div className="px-4 pb-6">
+        <SupplierOrders interventionId={interventionId} />
       </div>
     </div>
   );
