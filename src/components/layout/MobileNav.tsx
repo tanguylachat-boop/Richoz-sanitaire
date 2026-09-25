@@ -12,6 +12,7 @@ import {
   Inbox,
   Palmtree,
   BarChart3,
+  MapPin,
 } from 'lucide-react';
 
 interface MobileNavProps {
@@ -22,6 +23,7 @@ interface MobileNavProps {
 const technicianNav = [
   { href: '/technician/today', label: "Aujourd'hui", icon: CalendarCheck },
   { href: '/technician/week', label: 'Semaine', icon: Calendar },
+  { href: '/technician/location', label: 'Position', icon: MapPin },
   { href: '/technician/leave', label: 'Congés', icon: Palmtree },
   { href: '/interventions', label: 'Historique', icon: ClipboardList },
 ];
