@@ -3,7 +3,7 @@
 import { ReactNode, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat, Bell } from 'lucide-react';
+import { Calendar, CalendarDays, Palmtree, LogOut, UserCircle, HardHat, Bell, MapPin } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { registerPushSubscription } from '@/lib/push-notifications';
 
@@ -92,6 +92,13 @@ export default function TechnicianLayout({ children }: TechnicianLayoutProps) {
         label: 'Chantiers',
         isActive: pathname.startsWith('/technician/chantier'),
         showFor: 'chantier' as const,
+      },
+      {
+        href: '/technician/location',
+        icon: MapPin,
+        label: 'Position',
+        isActive: pathname === '/technician/location',
+        showFor: null as 'depannage' | 'chantier' | null,
       },
       {
         href: '/technician/leave',
