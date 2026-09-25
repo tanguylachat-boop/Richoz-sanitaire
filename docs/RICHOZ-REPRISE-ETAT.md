@@ -129,9 +129,12 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 
 ## Session 25.09.2026 — nav mobile localisation + 2e compte démo + audit bug révision
 
-- **CAUSE RACINE localisation trouvée** : la page était activée (hardcode `true`), mais la **barre de nav
-  mobile** (`MobileNav.technicianNav`, PWA) ne contenait PAS « Ma position » → le technicien n'atteignait
-  jamais la page. Ajout de l'entrée **« Position »** (MapPin) dans `MobileNav`. (Le Sidebar desktop l'avait déjà.)
+- **CAUSE RACINE localisation (définitive)** : les techniciens n'utilisent NI le Sidebar NI le MobileNav
+  admin — le `(dashboard)/layout.tsx` fait un return anticipé pour `role==='technician'`, et la vraie nav
+  est dans **`technician/layout.tsx`** (barre du bas, `navItems` filtrés par préférence dépannage/chantier).
+  Cette liste n'avait AUCUNE entrée localisation → inatteignable pour tout technicien. Ajout de l'onglet
+  **« Position »** (`showFor: null` → visible dépannage ET chantier). Page déjà activée (hardcode). L'edit
+  précédent sur `MobileNav.technicianNav` était inerte (branche morte, non utilisée par les techniciens).
 - **2e compte démo (chantier)** créé en prod : `demo.chantier@richoz.test` / `RichozDemo2026!`,
   `intervention_type_preference='chantier'`, 1 chantier assigné (login vérifié). À SUPPRIMER après recette,
   comme `demo.technicien@richoz.test`.
