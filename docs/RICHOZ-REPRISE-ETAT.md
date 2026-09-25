@@ -127,6 +127,20 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
   multi-jours à onglets). Bon de commande présent dans les deux. Le compte démo voit les 2 flux via « Aujourd'hui ».
 - Compte démo : les 2 interventions test sont datées du jour → visibles dans « Aujourd'hui » de la PWA.
 
+## Session 25.09.2026 — nav mobile localisation + 2e compte démo + audit bug révision
+
+- **CAUSE RACINE localisation trouvée** : la page était activée (hardcode `true`), mais la **barre de nav
+  mobile** (`MobileNav.technicianNav`, PWA) ne contenait PAS « Ma position » → le technicien n'atteignait
+  jamais la page. Ajout de l'entrée **« Position »** (MapPin) dans `MobileNav`. (Le Sidebar desktop l'avait déjà.)
+- **2e compte démo (chantier)** créé en prod : `demo.chantier@richoz.test` / `RichozDemo2026!`,
+  `intervention_type_preference='chantier'`, 1 chantier assigné (login vérifié). À SUPPRIMER après recette,
+  comme `demo.technicien@richoz.test`.
+- **Bug « notif de complément sans message » : AUDITÉ → déjà corrigé dans le code actuel.** Le message
+  (`Motif: …`) est bien transmis : notif in-app (`notifications.message`), push (payload `message`),
+  page Notifications, cartes Aujourd'hui/Semaine/Chantier, ET l'écran de correction (ReportForm affiche
+  l'encart « Retour du secrétariat » avec le texte). Colonne `message` confirmée en base. Aucun correctif
+  nécessaire ; d'anciennes notifs pré-correctif peuvent exister sans message (données historiques).
+
 ## Prochaine action
 
 - **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).
