@@ -144,6 +144,14 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
   l'encart « Retour du secrétariat » avec le texte). Colonne `message` confirmée en base. Aucun correctif
   nécessaire ; d'anciennes notifs pré-correctif peuvent exister sans message (données historiques).
 
+## Session 29.09.2026 — audit prod avant recette client + fix sécurité RLS
+
+- **Vérif prod (avant démo client du 29.09 après-midi)** :
+  - **Code** : `origin/main` = `cec6677` (merge PR #8) contient déjà `ba2d212` (fix nav « Position » technicien). Seul commit non mergé = `2a46384` (doc uniquement). **La prod a 100 % des features, localisation atteignable incluse.**
+  - **Migrations prod** : `00030→00038` toutes appliquées (dont `00037_supplier_orders` et `00038_public_holidays`). DB prod complète.
+- **FIX SÉCURITÉ — ERROR RLS fermé** (`00039_enable_rls_residual_tables`, appliquée prod via `apply_migration`) : `public.lx_prospects` et `public.activities` (résidus acquisition machine, 9 lignes chacune, PAS Richoz) avaient **RLS désactivé + anon avec tous les droits** (INSERT/UPDATE/DELETE/TRUNCATE via clé publique). Activé RLS + policy `service_role_all` explicite + `REVOKE` des droits d'écriture anon. `service_role` (backend/cron) bypasse RLS → acquisition machine non impactée si elle utilise service_role. **Advisor relancé : plus aucun ERROR**, ne restent que les WARN préexistants (search_path mutable, extensions en public, SECURITY DEFINER exécutables via RPC — risque réel faible déjà évalué, leaked-password protection off). Données intactes (9/9). Rollback = `DROP POLICY` + `DISABLE RLS` + re-`GRANT` si jamais nécessaire.
+- **Point d'accès démo à vérifier côté Tanguy** : l'URL prod `*.vercel.app` a la **protection SSO Vercel** → accessible depuis un compte Vercel connecté (ton laptop OK). Pour que la **secrétaire teste seule**, il faut un **domaine custom** (sinon elle bute sur le login Vercel). À trancher avant/pendant la démo.
+
 ## Prochaine action
 
 - **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).
