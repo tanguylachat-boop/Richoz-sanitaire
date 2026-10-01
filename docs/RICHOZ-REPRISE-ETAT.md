@@ -152,6 +152,45 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 - **FIX SÉCURITÉ — ERROR RLS fermé** (`00039_enable_rls_residual_tables`, appliquée prod via `apply_migration`) : `public.lx_prospects` et `public.activities` (résidus acquisition machine, 9 lignes chacune, PAS Richoz) avaient **RLS désactivé + anon avec tous les droits** (INSERT/UPDATE/DELETE/TRUNCATE via clé publique). Activé RLS + policy `service_role_all` explicite + `REVOKE` des droits d'écriture anon. `service_role` (backend/cron) bypasse RLS → acquisition machine non impactée si elle utilise service_role. **Advisor relancé : plus aucun ERROR**, ne restent que les WARN préexistants (search_path mutable, extensions en public, SECURITY DEFINER exécutables via RPC — risque réel faible déjà évalué, leaked-password protection off). Données intactes (9/9). Rollback = `DROP POLICY` + `DISABLE RLS` + re-`GRANT` si jamais nécessaire.
 - **Accès démo — RÉSOLU/vérifié** : le domaine custom **`www.rzsanitaire.online`** (verified) est **public**. La protection SSO Vercel est en mode `all_except_custom_domains` → elle ne touche QUE les URLs `*.vercel.app`. Vérifié par requête : `www.rzsanitaire.online` renvoie 307 → `/login` (page de connexion de l'app, PAS le mur SSO Vercel). **La secrétaire va sur `www.rzsanitaire.online` et se connecte avec son compte applicatif — aucun lien spécial, aucun login Vercel.** Ne PAS utiliser les URLs `*.vercel.app` (elles, sont SSO-gated).
 
+## Session 30.09.2026 — LOT A (impôt source + modèle déductions) + LOT B (fériés/ponts)
+
+Demande recette Richoz (visite 30.09). **Code livré + testé local, RIEN en prod.**
+
+- **LOT A — `00040_source_tax_and_component_template.sql`** (additif, PAIE_FIGEE conservé) :
+  - `employee_salary_config` +`is_source_tax`/`source_tax_rate` (CHECK : soumis ⇒ taux). L'IS
+    est injecté dans `generate_payroll_drafts` comme **ligne `cotisation` existante** (component_id NULL,
+    clé override stable `cotisation`) → **AUCUNE modif de `recompute_payroll_net` ni de `payroll-net.ts`**.
+  - `salary_config_component` +`included_in_gross` : une addition FIXE (13e mensualisé) marquée entre
+    dans le **brut déterminant** des % → AVS/IS tombent juste (comme le vrai bulletin, cotisations sur brut+13e).
+  - `pct` élargi `numeric(5,2)`→`numeric(6,3)` (taux fins 0.032/0.547/8.333 % — impossibles avant).
+  - Table `salary_component_template` (éditable) seedée avec les **6 cotisations réelles** du bulletin
+    Richoz (AVS/AI/APG 5.30, mat. GE 0.032, AC 1.10, AANP 0.80, LAA/SIM 0.547, LPP 5.50) — taux éditables.
+  - UI `/admin/salary-config` : case « soumis à l'IS » + taux, bouton **« Charger le modèle standard »**
+    (insère les lignes manquantes par libellé, n'écrase rien), case « compte dans le brut » (additions fixes),
+    step 0.001 pour les % ; résumé affiche l'IS. `database.ts` mis à jour à la main.
+  - **Choix de conception (anti-casse)** : défauts neutres (`is_source_tax=false`, `included_in_gross=false`)
+    → sur les données existantes, la paie produit exactement les mêmes résultats qu'avant.
+- **LOT B — `00041_holidays_ponts_scoped.sql`** (additif) :
+  - `public_holidays` : PK passée de `holiday_date` à `id` ; +`kind`('ferie'|'pont'), +`pay_effect`
+    ('paid'|'unpaid'|'leave'), +`created_by`. Unicité conservée pour les FÉRIÉS/date (index partiel),
+    libre pour les ponts. Table `public_holiday_technicians` (périmètre ; vide = tout le monde), RLS staff.
+  - **Effet paie via les systèmes EXISTANTS et testés — 0 modif du moteur** : `HolidayPontModal`
+    (bouton « Férié / pont » sur le calendrier) crée le marqueur + selon l'effet : `unpaid` → congé
+    `sans_solde` approuvé (→ autosync 00035 → `salary_item` pending → retenue à valider) ; `leave` →
+    congé `conge` (décompté du solde) ; `paid` → marqueur seul. Affichage 🌉 pont (rose si non payé).
+- **Correctif annexe `00039`** : rendu robuste (garde `to_regclass`) car `lx_prospects`/`activities`
+  n'existent QUE sur la prod → `supabase db reset` local échouait dessus. **Comportement prod identique**
+  (déjà appliquée là-bas ; en prod les tables existent). Ne PAS la rejouer en prod.
+- **Tests réels (stack local, `supabase db reset` 00001→00041 OK)** : non-régression `lot8` 9/9,
+  `lot6bc` 7/7, `lot5` 8/8 ; **neuf `tests/lot-a-b-source-tax-holidays.test.cjs` 8/8** (IS = taux×brut ;
+  13e dans le brut ; IS override préservé ; honnêteté IS ; modèle seedé ; schéma ponts multi/date +
+  unicité férié ; RLS périmètre ; chaîne pont non payé → congé → autosync → retenue). `tsc` 0 · `build` 0.
+- **NON fait / à faire avant prod** : (1) recette navigateur par rôle sur preview ; (2) **validation des
+  taux exacts du modèle** par la secrétaire (seed = lecture d'un bulletin basse résolution, éditable) ;
+  (3) application prod des migrations `00040`/`00041` (via `apply_migration`, après backup) + re-`gen types` ;
+  (4) **LOT C — vider `email_inbox`** (backup → purge → garde-fou n8n pour n'ingérer que le nouveau),
+  prévu dimanche/lundi sur « go » séparé.
+
 ## Prochaine action
 
 - **LOT 8 — `00036` APPLIQUÉE EN PROD (23.09.2026)** via `apply_migration` (projet `yuumzhlvmqcbogqzuonp`).
