@@ -218,6 +218,7 @@ export default function SalaryConfigPage() {
 
                 {isEditing && (
                   <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Étape 1 — Rémunération</p>
                     <div className="flex gap-2">
                       {(['monthly', 'hourly'] as const).map((pt) => (
                         <button
@@ -286,7 +287,16 @@ export default function SalaryConfigPage() {
 
                     {c
                       ? <ComponentsEditor supabase={supabase} config={c} onChange={fetchAll} />
-                      : <p className="text-xs text-gray-400">Enregistrez la rémunération pour ajouter des cotisations / ajouts.</p>}
+                      : (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="text-sm font-semibold text-amber-900">Étape 2 — Déductions de salaire</p>
+                          <p className="mt-1 text-sm text-amber-800">
+                            Cliquez d&apos;abord sur <strong>« Enregistrer »</strong> ci-dessus. Le bloc des cotisations / retenues
+                            et le bouton <strong>« Charger le modèle standard »</strong> (AVS, AC, LPP, LAA…) apparaîtront ici —
+                            vous pourrez y ajouter la retenue véhicule, le 13e, etc. (L&apos;impôt à la source est géré par la case ci-dessus.)
+                          </p>
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
@@ -385,15 +395,20 @@ function ComponentsEditor({ supabase, config, onChange }: {
 
   return (
     <div className="border-t border-gray-100 pt-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-gray-700">Cotisations / retenues / ajouts</p>
+      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+        <p className="text-sm font-semibold text-gray-800">Étape 2 — Déductions (cotisations / retenues / ajouts)</p>
         <button onClick={loadTemplate} disabled={busy}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg disabled:opacity-50">
-          <Plus className="w-3.5 h-3.5" /> Charger le modèle standard
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 shadow-sm">
+          <Plus className="w-4 h-4" /> Charger le modèle standard
         </button>
       </div>
       {config.components.length === 0 ? (
-        <p className="text-xs text-gray-400 mb-3">Aucun composant. « Charger le modèle standard » pré-remplit AVS/AC, LPP, LAA… puis ajoutez IS, 13e, retenue véhicule.</p>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 mb-3">
+          <p className="text-sm text-blue-900">
+            Aucune déduction pour l&apos;instant. Commence par <strong>« Charger le modèle standard »</strong> (AVS/AI/APG, AC, LPP, LAA, maternité, AANP),
+            puis ajuste les taux et ajoute ci-dessous la <strong>retenue véhicule</strong> (montant fixe) ou le <strong>13e</strong> (ajout fixe « dans le brut »).
+          </p>
+        </div>
       ) : (
         <ul className="mb-3 divide-y divide-gray-100">
           {config.components.map((comp) => (

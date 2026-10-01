@@ -1,0 +1,7 @@
+# Ne jamais uploader vers Vercel : données client, artefacts, volumes locaux.
+backups/
+.next/
+.playwright-mcp/
+supabase/.branches/
+node_modules/
+tests/
