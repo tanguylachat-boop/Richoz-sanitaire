@@ -746,9 +746,9 @@ export interface Database {
         Relationships: [{ foreignKeyName: 'payroll_draft_lines_draft_id_fkey'; columns: ['draft_id']; isOneToOne: false; referencedRelation: 'payroll_drafts'; referencedColumns: ['id'] }];
       };
       employee_salary_config: {
-        Row: { id: string; technician_id: string; pay_type: string; monthly_base_chf: number | null; hourly_rate_chf: number; overtime_supplement_pct: number; effective_from: string; is_active: boolean; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; technician_id: string; pay_type: string; monthly_base_chf?: number | null; hourly_rate_chf: number; overtime_supplement_pct?: number; effective_from?: string; is_active?: boolean; created_by?: string | null };
-        Update: { pay_type?: string; monthly_base_chf?: number | null; hourly_rate_chf?: number; overtime_supplement_pct?: number; effective_from?: string; is_active?: boolean };
+        Row: { id: string; technician_id: string; pay_type: string; monthly_base_chf: number | null; hourly_rate_chf: number | null; overtime_supplement_pct: number; is_source_tax: boolean; source_tax_rate: number | null; effective_from: string; is_active: boolean; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; technician_id: string; pay_type: string; monthly_base_chf?: number | null; hourly_rate_chf?: number | null; overtime_supplement_pct?: number; is_source_tax?: boolean; source_tax_rate?: number | null; effective_from?: string; is_active?: boolean; created_by?: string | null };
+        Update: { pay_type?: string; monthly_base_chf?: number | null; hourly_rate_chf?: number | null; overtime_supplement_pct?: number; is_source_tax?: boolean; source_tax_rate?: number | null; effective_from?: string; is_active?: boolean };
         Relationships: [{ foreignKeyName: 'employee_salary_config_technician_id_fkey'; columns: ['technician_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
       };
       employee_salary_config_history: {
@@ -758,10 +758,16 @@ export interface Database {
         Relationships: [{ foreignKeyName: 'employee_salary_config_history_changed_by_fkey'; columns: ['changed_by']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
       };
       salary_config_component: {
-        Row: { id: string; config_id: string; label: string; direction: string; basis: string; pct: number | null; amount_chf: number | null; sort_order: number; created_at: string };
-        Insert: { id?: string; config_id: string; label: string; direction: string; basis: string; pct?: number | null; amount_chf?: number | null; sort_order?: number };
-        Update: { label?: string; direction?: string; basis?: string; pct?: number | null; amount_chf?: number | null; sort_order?: number };
+        Row: { id: string; config_id: string; label: string; direction: string; basis: string; pct: number | null; amount_chf: number | null; included_in_gross: boolean; sort_order: number; created_at: string };
+        Insert: { id?: string; config_id: string; label: string; direction: string; basis: string; pct?: number | null; amount_chf?: number | null; included_in_gross?: boolean; sort_order?: number };
+        Update: { label?: string; direction?: string; basis?: string; pct?: number | null; amount_chf?: number | null; included_in_gross?: boolean; sort_order?: number };
         Relationships: [{ foreignKeyName: 'salary_config_component_config_id_fkey'; columns: ['config_id']; isOneToOne: false; referencedRelation: 'employee_salary_config'; referencedColumns: ['id'] }];
+      };
+      salary_component_template: {
+        Row: { id: string; label: string; direction: string; basis: string; pct: number | null; amount_chf: number | null; included_in_gross: boolean; sort_order: number; is_active: boolean; created_at: string };
+        Insert: { id?: string; label: string; direction: string; basis: string; pct?: number | null; amount_chf?: number | null; included_in_gross?: boolean; sort_order?: number; is_active?: boolean };
+        Update: { label?: string; direction?: string; basis?: string; pct?: number | null; amount_chf?: number | null; included_in_gross?: boolean; sort_order?: number; is_active?: boolean };
+        Relationships: [];
       };
       supplier_orders: {
         Row: { id: string; intervention_id: string; technician_id: string; supplier: string | null; note: string | null; photos: Json; is_processed: boolean; processed_by: string | null; processed_at: string | null; created_at: string; updated_at: string };
@@ -770,10 +776,19 @@ export interface Database {
         Relationships: [{ foreignKeyName: 'supplier_orders_intervention_id_fkey'; columns: ['intervention_id']; isOneToOne: false; referencedRelation: 'interventions'; referencedColumns: ['id'] }];
       };
       public_holidays: {
-        Row: { holiday_date: string; label: string; canton: string; is_paid: boolean; created_at: string };
-        Insert: { holiday_date: string; label: string; canton?: string; is_paid?: boolean };
-        Update: { label?: string; canton?: string; is_paid?: boolean };
+        Row: { id: string; holiday_date: string; label: string; canton: string; is_paid: boolean; kind: string; pay_effect: string; created_by: string | null; created_at: string };
+        Insert: { id?: string; holiday_date: string; label: string; canton?: string; is_paid?: boolean; kind?: string; pay_effect?: string; created_by?: string | null };
+        Update: { holiday_date?: string; label?: string; canton?: string; is_paid?: boolean; kind?: string; pay_effect?: string };
         Relationships: [];
+      };
+      public_holiday_technicians: {
+        Row: { holiday_id: string; technician_id: string };
+        Insert: { holiday_id: string; technician_id: string };
+        Update: { holiday_id?: string; technician_id?: string };
+        Relationships: [
+          { foreignKeyName: 'public_holiday_technicians_holiday_id_fkey'; columns: ['holiday_id']; isOneToOne: false; referencedRelation: 'public_holidays'; referencedColumns: ['id'] },
+          { foreignKeyName: 'public_holiday_technicians_technician_id_fkey'; columns: ['technician_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] },
+        ];
       };
       audit_log: {
         Relationships: [

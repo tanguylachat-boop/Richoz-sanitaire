@@ -3,12 +3,13 @@
 import { buildInterventionDates, calendarDate, isCalendarDate, isClockTime } from '@/lib/intervention-dates';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Calendar, Loader2, Pencil, Trash2, X as XIcon, Droplets } from 'lucide-react';
+import { Plus, Filter, ChevronLeft, ChevronRight, CalendarDays, CalendarRange, Calendar, Loader2, Pencil, Trash2, X as XIcon, Droplets, PartyPopper } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { InterventionForm } from '@/components/interventions/InterventionForm';
 import { InterventionDetailSheet } from '@/components/calendar/InterventionDetailSheet';
 import { CutoffNoticeSheet } from '@/components/calendar/CutoffNoticeSheet';
 import { TimeGridView, TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
+import { HolidayPontModal } from '@/components/calendar/HolidayPontModal';
 import type { LeaveEntry, BirthdayEntry, ReminderEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import { getApprovedLeaves } from '@/lib/leave-utils';
 import { createClient } from '@/lib/supabase/client';
@@ -53,9 +54,10 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
   const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([]);
   const [reminders, setReminders] = useState<ReminderEntry[]>([]);
-  const [holidays, setHolidays] = useState<{ holiday_date: string; label: string }[]>([]);
+  const [holidays, setHolidays] = useState<{ holiday_date: string; label: string; kind: string; pay_effect: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedIntervention, setSelectedIntervention] = useState<Intervention | null>(null);
   const [detailIntervention, setDetailIntervention] = useState<Intervention | null>(null);
@@ -120,10 +122,10 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
     // Jours fériés (payés) dans la fenêtre affichée.
     const { data: holidaysData } = await supabase
       .from('public_holidays')
-      .select('holiday_date, label')
+      .select('holiday_date, label, kind, pay_effect')
       .gte('holiday_date', sd)
       .lte('holiday_date', ed);
-    if (holidaysData) setHolidays(holidaysData as { holiday_date: string; label: string }[]);
+    if (holidaysData) setHolidays(holidaysData as { holiday_date: string; label: string; kind: string; pay_effect: string }[]);
 
     setIsLoading(false);
   }, [view, currentDate]);
@@ -290,6 +292,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
         <div><p className="text-gray-500">Planification et vue d&apos;ensemble des interventions</p></div>
         <div className="flex items-center gap-2">
           <button className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"><Filter className="w-4 h-4" />Filtrer</button>
+          <button onClick={() => setIsHolidayModalOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors"><PartyPopper className="w-4 h-4" />Férié / pont</button>
           <button onClick={() => setIsCreateModalOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"><Plus className="w-4 h-4" />Nouvelle intervention</button>
         </div>
       </div>
@@ -331,7 +334,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
                   const MAX = 2; const overflow = dayIvs.length - MAX;
                   return (<div key={idx} className={`min-h-[100px] p-2 ${dayHoliday ? 'bg-amber-50' : !isCur ? 'bg-gray-50' : 'bg-white'}`}>
                     <div className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${isT ? 'bg-blue-600 text-white' : isCur ? 'text-gray-900' : 'text-gray-400'}`}>{format(day, 'd')}</div>
-                    {dayHoliday && (<div className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-amber-200 text-amber-900 font-semibold mb-0.5 truncate border border-amber-300" title={`${dayHoliday.label} — férié payé`}>🎉 {dayHoliday.label}</div>)}
+                    {dayHoliday && (<div className={`w-full text-left text-xs px-1.5 py-1 rounded-md font-semibold mb-0.5 truncate border ${dayHoliday.pay_effect === 'unpaid' ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-amber-200 text-amber-900 border-amber-300'}`} title={`${dayHoliday.label} — ${dayHoliday.kind === 'pont' ? 'pont' : 'férié'} · ${dayHoliday.pay_effect === 'unpaid' ? 'non payé' : dayHoliday.pay_effect === 'leave' ? 'sur congés' : 'payé'}`}>{dayHoliday.kind === 'pont' ? '🌉' : '🎉'} {dayHoliday.label}</div>)}
                     {dayBirthdays.map((b) => (<div key={`b-${b.user_id}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-violet-200 text-violet-800 font-semibold mb-0.5 truncate border border-violet-300">🎂 {b.first_name}</div>))}
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-emerald-200 text-emerald-800 font-semibold mb-0.5 truncate border border-emerald-400">🌴 {getTechName(l.technician)}</div>))}
                     {dayReminders.map((rem) => (<button type="button" key={`r-${rem.id}`} onClick={() => handleReminderClick(rem)} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-orange-200 text-orange-800 font-semibold mb-0.5 truncate border border-orange-400 hover:bg-orange-300 transition-colors cursor-pointer" title={rem.message}>🔔 {rem.message.length > 15 ? rem.message.slice(0, 15) + '…' : rem.message}</button>))}
@@ -363,6 +366,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /><span className="text-gray-600">🎂 Anniversaire</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-300" /><span className="text-gray-600">🔔 Rappel</span></div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-200 border border-amber-300" /><span className="text-gray-600">🎉 Férié (payé)</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-100 border border-rose-300" /><span className="text-gray-600">🌉 Pont non payé</span></div>
             <div className="flex items-center gap-1.5"><span className="w-8 h-3 rounded bg-gray-100 border border-dashed border-gray-300" /><span className="text-gray-600">🍽️ Pause midi</span></div>
           </div>
         </div>
@@ -372,6 +376,12 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Nouvelle intervention" size="full">
         <CreateInterventionSplitView onSuccess={handleCreateSuccess} onCancel={() => setIsCreateModalOpen(false)} />
       </Modal>
+
+      <HolidayPontModal
+        isOpen={isHolidayModalOpen}
+        onClose={() => setIsHolidayModalOpen(false)}
+        onSuccess={fetchInterventions}
+      />
 
       <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedIntervention(null); }} title="Modifier l'intervention" size="lg">
         {selectedIntervention && <InterventionForm intervention={selectedIntervention} onSuccess={handleEditSuccess} onCancel={() => { setIsEditModalOpen(false); setSelectedIntervention(null); }} onDelete={() => { setIsEditModalOpen(false); setSelectedIntervention(null); }} />}
