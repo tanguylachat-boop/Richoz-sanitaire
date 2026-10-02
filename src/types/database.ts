@@ -746,9 +746,9 @@ export interface Database {
         Relationships: [{ foreignKeyName: 'payroll_draft_lines_draft_id_fkey'; columns: ['draft_id']; isOneToOne: false; referencedRelation: 'payroll_drafts'; referencedColumns: ['id'] }];
       };
       employee_salary_config: {
-        Row: { id: string; technician_id: string; pay_type: string; monthly_base_chf: number | null; hourly_rate_chf: number; overtime_supplement_pct: number; is_source_tax: boolean; source_tax_rate: number | null; effective_from: string; is_active: boolean; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; technician_id: string; pay_type: string; monthly_base_chf?: number | null; hourly_rate_chf: number; overtime_supplement_pct?: number; is_source_tax?: boolean; source_tax_rate?: number | null; effective_from?: string; is_active?: boolean; created_by?: string | null };
-        Update: { pay_type?: string; monthly_base_chf?: number | null; hourly_rate_chf?: number; overtime_supplement_pct?: number; is_source_tax?: boolean; source_tax_rate?: number | null; effective_from?: string; is_active?: boolean };
+        Row: { id: string; technician_id: string; pay_type: string; monthly_base_chf: number | null; hourly_rate_chf: number | null; overtime_supplement_pct: number; is_source_tax: boolean; source_tax_rate: number | null; effective_from: string; is_active: boolean; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; technician_id: string; pay_type: string; monthly_base_chf?: number | null; hourly_rate_chf?: number | null; overtime_supplement_pct?: number; is_source_tax?: boolean; source_tax_rate?: number | null; effective_from?: string; is_active?: boolean; created_by?: string | null };
+        Update: { pay_type?: string; monthly_base_chf?: number | null; hourly_rate_chf?: number | null; overtime_supplement_pct?: number; is_source_tax?: boolean; source_tax_rate?: number | null; effective_from?: string; is_active?: boolean };
         Relationships: [{ foreignKeyName: 'employee_salary_config_technician_id_fkey'; columns: ['technician_id']; isOneToOne: false; referencedRelation: 'users'; referencedColumns: ['id'] }];
       };
       employee_salary_config_history: {

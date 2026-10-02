@@ -26,7 +26,7 @@ interface Config {
   technician_id: string;
   pay_type: string;
   monthly_base_chf: number | null;
-  hourly_rate_chf: number;
+  hourly_rate_chf: number | null;
   overtime_supplement_pct: number;
   is_source_tax: boolean;
   source_tax_rate: number | null;
@@ -109,7 +109,7 @@ export default function SalaryConfigPage() {
       ? {
           pay_type: c.pay_type === 'hourly' ? 'hourly' : 'monthly',
           monthly_base_chf: c.monthly_base_chf != null ? String(c.monthly_base_chf) : '',
-          hourly_rate_chf: String(c.hourly_rate_chf),
+          hourly_rate_chf: c.hourly_rate_chf != null ? String(c.hourly_rate_chf) : '',
           overtime_supplement_pct: String(c.overtime_supplement_pct),
           is_source_tax: !!c.is_source_tax,
           source_tax_rate: c.source_tax_rate != null ? String(c.source_tax_rate) : '',
@@ -119,8 +119,15 @@ export default function SalaryConfigPage() {
   };
 
   const saveConfig = async (techId: string) => {
-    const rate = Number(form.hourly_rate_chf);
-    if (!Number.isFinite(rate) || rate <= 0) { toast.error('Taux horaire requis (> 0), même pour un mensualisé.'); return; }
+    // Taux horaire : requis pour un employé HORAIRE (base = heures × taux) ;
+    // optionnel pour un MENSUALISÉ (sert seulement à valoriser heures sup / retards /
+    // ponts non payés — laissé vide, ces lignes resteront « à configurer »).
+    let rate: number | null = null;
+    if (form.hourly_rate_chf.trim() !== '') {
+      rate = Number(form.hourly_rate_chf);
+      if (!Number.isFinite(rate) || rate <= 0) { toast.error('Taux horaire invalide (doit être > 0).'); return; }
+    }
+    if (form.pay_type === 'hourly' && rate === null) { toast.error('Taux horaire requis pour un employé payé à l’heure.'); return; }
     const monthly = form.pay_type === 'monthly' ? Number(form.monthly_base_chf) : null;
     if (form.pay_type === 'monthly' && (!Number.isFinite(monthly as number) || (monthly as number) < 0)) {
       toast.error('Salaire mensuel requis pour un mensualisé.'); return;
@@ -200,7 +207,7 @@ export default function SalaryConfigPage() {
                     <p className="text-sm text-gray-500 mt-0.5">
                       {c
                         ? (c.pay_type === 'monthly'
-                            ? `Mensualisé · ${Number(c.monthly_base_chf).toFixed(2)} CHF/mois · taux ${Number(c.hourly_rate_chf).toFixed(2)} CHF/h · heures sup +${Number(c.overtime_supplement_pct)}%`
+                            ? `Mensualisé · ${Number(c.monthly_base_chf).toFixed(2)} CHF/mois${c.hourly_rate_chf != null ? ` · taux ${Number(c.hourly_rate_chf).toFixed(2)} CHF/h` : ''} · heures sup +${Number(c.overtime_supplement_pct)}%`
                             : `Horaire · ${Number(c.hourly_rate_chf).toFixed(2)} CHF/h · heures sup +${Number(c.overtime_supplement_pct)}%`)
                           + (c.is_source_tax ? ` · IS ${Number(c.source_tax_rate)}%` : '')
                         : 'Non configuré — la paie restera « à configurer »'}
@@ -240,9 +247,12 @@ export default function SalaryConfigPage() {
                         </label>
                       )}
                       <label className="text-sm">
-                        <span className="text-gray-600">Taux horaire (CHF/h)</span>
+                        <span className="text-gray-600">
+                          Taux horaire (CHF/h) {form.pay_type === 'monthly' ? <span className="text-gray-400">— optionnel</span> : <span className="text-red-500">*</span>}
+                        </span>
                         <input type="number" step="0.01" min="0" value={form.hourly_rate_chf}
                           onChange={(e) => setForm((f) => ({ ...f, hourly_rate_chf: e.target.value }))}
+                          placeholder={form.pay_type === 'monthly' ? 'Laisser vide si non utilisé' : ''}
                           className="mt-1 w-full h-10 px-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       </label>
                       <label className="text-sm">
