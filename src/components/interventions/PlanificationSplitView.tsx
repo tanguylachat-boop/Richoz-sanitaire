@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { getApprovedLeaves } from '@/lib/leave-utils';
 import { parseExtractedData, normalizePhone } from '@/lib/parse-extracted-data';
 import { TimeGridView } from '@/components/calendar/TimeGridView';
+import { PdfAttachmentPicker, usePdfAttachments } from '@/components/documents/PdfAttachmentPicker';
 import type { LeaveEntry, BirthdayEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import {
   format,
@@ -130,6 +131,7 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
   });
 
   const supabase = createClient();
+  const pdfAttachments = usePdfAttachments(email);
 
   // Pré-remplir depuis l'email + extracted_data si présent.
   // Parse description pour extraire keys_info / owner / facturation quand l'IA
@@ -274,6 +276,9 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
       }).select('id');
 
       if (error) throw new Error(error.message);
+
+      // PDFs before notifying: the technician opens an intervention that already has them.
+      if (data?.[0]?.id) await pdfAttachments.attach(data[0].id);
 
       // Insert cutoff reminder (works for chantier ET dépannage)
       if (cutoffEnabled && cutoffDate && data?.[0]?.id && formData.technician_id) {
@@ -617,6 +622,8 @@ export function PlanificationSplitView({ email = null, technicians, regies, onSu
             <label className="block text-sm font-medium text-gray-700 mb-1">🔑 Clés & Accès</label>
             <textarea name="keys_info" rows={2} value={formData.keys_info} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ex: Clés dans la boîte aux lettres, code 1234, gardien au RDC..." />
           </div>
+
+          <PdfAttachmentPicker attachments={pdfAttachments} disabled={isLoading} />
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
             <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Annuler</button>

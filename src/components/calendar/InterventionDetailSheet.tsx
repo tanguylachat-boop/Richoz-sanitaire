@@ -239,7 +239,7 @@ export function InterventionDetailSheet({ intervention, onClose, onEdit }: Inter
           )}
 
           {/* Description */}
-          {intervention.intervention_type === 'chantier' && <ChantierDocuments key={intervention.id} interventionId={intervention.id} />}
+          <ChantierDocuments key={intervention.id} interventionId={intervention.id} />
           {intervention.description && (
             <div className="flex items-start gap-3">
               <FileText className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />

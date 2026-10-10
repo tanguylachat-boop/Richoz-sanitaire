@@ -170,3 +170,23 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 - Stack Supabase : `/private/tmp/richoz-lot5-stage` (`supabase start`, API 127.0.0.1:57321), migrations 00001→00034 appliquées ; clés dans `local-status.json` à côté ; tests via `RICHOZ_LOCAL_STATUS=/private/tmp/richoz-lot5-stage/local-status.json node --test tests/<lot>.test.cjs`.
 - Ancien stack `richoz-validation-correction-replay-2026` arrêté (volumes conservés) ; stack `lots-1-2a` intact (ports 563xx).
 - Interdits inchangés : pas de Supabase distant, pas de déploiement, pas de commit/push, pas de reset destructif.
+
+## Session 10.10.2026 — PDF sur toutes les interventions + nom dans le calendrier
+
+- **PDF multiples à la création** (inbox/mail, calendrier, interventions, chantiers) : composant
+  `PdfAttachmentPicker` ; envoi juste après l'insert, avant la notification au technicien. Depuis un mail,
+  les PDF de l'email sont **pré-cochés** (copie serveur `documents/email-attachments/*` → bucket privé,
+  route `/api/interventions/[id]/documents/from-email`, URL vérifiée comme appartenant à cet email).
+- **Dépannage inclus** : le bucket `chantier-documents` + policies **n'existaient pas en prod** (00024
+  jamais appliquée → PDF chantier cassés en prod). Migration `00043` (idempotente) **appliquée prod
+  10.10** : bucket privé, accès staff = gestion, technicien assigné = lecture, tous types. Test RLS réel
+  rollback sur un dépannage prod : staff insert OK, chemin invalide refusé, technicien assigné lit,
+  technicien insert refusé, autre technicien 0, anon 0, bucket privé. 0 objet résiduel.
+- **Limite Vercel 4,5 Mo** contournée : upload navigateur → Storage direct (RLS), téléchargement par URL
+  signée 60 s (plus de streaming via la fonction).
+- **Vue technicien dépannage** (`/technician/report/[id]`) : bloc PDF ajouté. Détail calendrier : PDF pour tous types.
+- **Notification** : ajout de PDF après coup → 1 notification + push par lot au technicien assigné (`documents_added`).
+- **Calendrier** : libellé « Nom · N° bon » (`src/lib/intervention-label.ts`), vue mois + grille horaire + bandeau chantier.
+- Tests : `tests/lot2a-documents.test.cjs` 8/8, régression hors-ligne 77/77, tsc 0, build 0.
+- **Non testé** : navigateur réel (upload/ouverture PDF sur preview), iPhone technicien, push réel.
+- **Sécurité à traiter (hors lot)** : bucket `documents` **public** → pièces jointes email accessibles à qui a l'URL.

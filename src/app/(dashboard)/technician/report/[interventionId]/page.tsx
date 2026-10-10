@@ -16,6 +16,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { ReportForm } from '@/components/reports/ReportForm';
 import { SupplierOrders } from '@/components/supplier-orders/SupplierOrders';
+import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
 import { format, addMinutes } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { Intervention, Report, Product, Regie } from '@/types/database';
@@ -279,6 +280,11 @@ export default function TechnicianReportPage({ searchParams }: { searchParams?: 
             </div>
           )}
         </div>
+      </div>
+
+      {/* PDF joints par le bureau (plans, bons de régie…) */}
+      <div className="px-4 mb-4">
+        <ChantierDocuments key={intervention.id} interventionId={intervention.id} />
       </div>
 
       {/* Avis de coupure (set by admin/secretary) */}
