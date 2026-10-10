@@ -10,6 +10,8 @@ import { InterventionDetailSheet } from '@/components/calendar/InterventionDetai
 import { CutoffNoticeSheet } from '@/components/calendar/CutoffNoticeSheet';
 import { TimeGridView, TECHNICIAN_COLORS } from '@/components/calendar/TimeGridView';
 import { HolidayPontModal } from '@/components/calendar/HolidayPontModal';
+import { interventionLabel } from '@/lib/intervention-label';
+import { PdfAttachmentPicker, usePdfAttachments } from '@/components/documents/PdfAttachmentPicker';
 import type { LeaveEntry, BirthdayEntry, ReminderEntry, SelectedSlot } from '@/components/calendar/TimeGridView';
 import { getApprovedLeaves } from '@/lib/leave-utils';
 import { createClient } from '@/lib/supabase/client';
@@ -339,7 +341,7 @@ export default function CalendarPage({ searchParams }: { searchParams?: { interv
                     {dayLeaves.map((l, i) => (<div key={`l-${l.technician_id}-${i}`} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-emerald-200 text-emerald-800 font-semibold mb-0.5 truncate border border-emerald-400">🌴 {getTechName(l.technician)}</div>))}
                     {dayReminders.map((rem) => (<button type="button" key={`r-${rem.id}`} onClick={() => handleReminderClick(rem)} className="w-full text-left text-xs px-1.5 py-1 rounded-md bg-orange-200 text-orange-800 font-semibold mb-0.5 truncate border border-orange-400 hover:bg-orange-300 transition-colors cursor-pointer" title={rem.message}>🔔 {rem.message.length > 15 ? rem.message.slice(0, 15) + '…' : rem.message}</button>))}
                     <div className="space-y-1">
-                      {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className="w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer hover:opacity-90" style={{ backgroundColor: getTechColor(iv.technician_id) }} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${iv.work_order_number || iv.title}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{iv.work_order_number || iv.title}</span></div></button>))}
+                      {dayIvs.slice(0, MAX).map((iv) => (<button key={iv.id} onClick={() => handleInterventionClick(iv)} className="w-full text-left text-xs px-1.5 py-1 rounded text-white transition-colors cursor-pointer hover:opacity-90" style={{ backgroundColor: getTechColor(iv.technician_id) }} title={`${iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]'} ${interventionLabel(iv)}`}><div className="flex items-center gap-1"><span className="text-[10px]">{getTypeEmoji(iv)}</span>{iv.technician && <span className="flex-shrink-0 w-4 h-4 rounded-full bg-white/30 flex items-center justify-center text-[9px] font-bold">{getTechInitials(iv.technician)}</span>}<span className="truncate flex-1">{interventionLabel(iv)}</span></div></button>))}
                       {overflow > 0 && (<button onClick={() => switchToDay(day)} className="w-full text-left text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-0.5 hover:bg-blue-50 rounded transition-colors">+ {overflow} autre{overflow > 1 ? 's' : ''}</button>)}
                     </div>
                   </div>);
@@ -492,6 +494,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
   const [cutoffEnabled, setCutoffEnabled] = useState(false);
   const [cutoffDate, setCutoffDate] = useState('');
   const supabase = createClient();
+  const pdfAttachments = usePdfAttachments();
 
   useEffect(() => {
     const fetchRefs = async () => {
@@ -626,6 +629,9 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
       if (error) throw new Error(error.message);
 
       const newInterventionId = insertedData?.[0]?.id || null;
+
+      // PDFs before notifying: the technician opens an intervention that already has them.
+      if (newInterventionId) await pdfAttachments.attach(newInterventionId);
 
       // Insert cutoff reminder (works for chantier ET dépannage)
       if (cutoffEnabled && cutoffDate && newInterventionId && formData.technician_id) {
@@ -812,6 +818,7 @@ function CreateInterventionSplitView({ onSuccess, onCancel }: { onSuccess: () =>
             <input type="tel" name="client_phone" value={formData.client_phone} onChange={handleChange} className={ic} placeholder="📞 Téléphone (optionnel si client existant)" />
           </div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">🔑 Clés & Accès</label><textarea name="keys_info" rows={2} value={formData.keys_info} onChange={handleChange} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ex: Clés dans la boîte aux lettres, code 1234..." /></div>
+          <PdfAttachmentPicker attachments={pdfAttachments} disabled={isLoading} />
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
             <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg">Annuler</button>
             <button type="submit" disabled={isLoading} className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm">{isLoading && <Loader2 className="w-4 h-4 animate-spin" />}{isLoading ? 'Création...' : "Créer l'intervention"}</button>

@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, eachDayOfInterval, isSameDay, isToday, addMinutes, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { interventionLabel } from '@/lib/intervention-label';
 
 const START_HOUR = 7;
 const END_HOUR = 18;
@@ -297,9 +298,9 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                           onClick={() => onInterventionClick(iv)}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-white text-xs font-semibold whitespace-nowrap cursor-pointer hover:opacity-90 transition-opacity"
                           style={{ backgroundColor: getTechColor(iv.technician_id) }}
-                          title={`[Chantier] ${iv.work_order_number || iv.title}`}
+                          title={`[Chantier] ${interventionLabel(iv)}`}
                         >
-                          🏗️ {iv.work_order_number || iv.title}
+                          🏗️ {interventionLabel(iv)}
                         </button>
                       ))}
                     </div>
@@ -428,7 +429,7 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                       const initials = getTechInitials(iv.technician);
                       const typeLabel = iv.maintenance_contract_id ? '🔩' : (iv.intervention_type === 'chantier' ? '🏗️' : '🔧');
                       const kindLabel = iv.maintenance_contract_id ? '[Maintenance]' : (iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]');
-                      const displayLabel = iv.work_order_number || iv.title;
+                      const displayLabel = interventionLabel(iv);
 
                       return (
                         <button

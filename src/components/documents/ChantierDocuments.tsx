@@ -1,6 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { validatePdf } from '@/lib/chantier-documents';
+import { uploadInterventionPdf } from '@/lib/chantier-documents';
+import { createClient } from '@/lib/supabase/client';
+import { sendPush } from '@/lib/send-push';
 
 type Document = { key: string; name: string };
 type Pending = { file: File; token: string; error?: string };
@@ -29,18 +31,26 @@ export function ChantierDocuments({ interventionId }: { interventionId: string }
     for (const item of items) {
       setMessage(`Envoi de ${item.file.name}…`);
       try {
-        await validatePdf(item.file);
-        const body = new FormData(); body.set('file', item.file); body.set('token', item.token);
-        const response = await fetch(endpoint, { method: 'POST', body });
-        const result = await response.json();
-        if (!response.ok || !result.document) throw new Error(result.error || 'Enregistrement non confirmé.');
-        setDocuments(current => [...current.filter(d => d.key !== result.document.key), result.document]);
+        const document = await uploadInterventionPdf(createClient().storage, interventionId, item.file, item.token);
+        setDocuments(current => [...current.filter(d => d.key !== document.key), document]);
         saved++;
       } catch (e) { failed.push({ ...item, error: e instanceof Error ? e.message : 'Envoi impossible.' }); }
     }
     setPending(failed);
-    setMessage(`${saved} PDF enregistré(s) et rattaché(s). ${failed.length ? `${failed.length} envoi(s) à reprendre.` : ''}`);
+    const notice = saved ? await notifyTechnician(saved) : '';
+    setMessage(`${saved} PDF enregistré(s) et rattaché(s). ${failed.length ? `${failed.length} envoi(s) à reprendre. ` : ''}${notice}`);
     lock.current = false; setBusy(false);
+  }
+  // One notification per batch for the assigned technician (in-app + push).
+  async function notifyTechnician(count: number) {
+    try {
+      const response = await fetch(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      if (!result.notified) return '';
+      sendPush({ recipient_id: result.recipient_id, title: result.title, message: result.message, url: result.url });
+      return 'Technicien notifié.';
+    } catch (e) { console.error('Notification PDF', e); return 'Technicien non notifié.'; }
   }
   async function remove(document: Document) {
     if (lock.current) return;
@@ -53,8 +63,8 @@ export function ChantierDocuments({ interventionId }: { interventionId: string }
     } catch { setMessage('Suppression impossible. Le PDF reste dans la liste.'); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <section aria-label="Documents du chantier" className="space-y-3 rounded-xl border bg-white p-4">
-    <h2 className="font-semibold">Documents PDF du chantier</h2>
+  return <section aria-label="Documents PDF" className="space-y-3 rounded-xl border bg-white p-4">
+    <h2 className="font-semibold">Documents PDF</h2>
     <p className="text-sm text-gray-500">PDF privés · 20 Mio maximum par fichier</p>
     <p role="status" className="text-sm">{message}</p>
     <button type="button" disabled={busy} onClick={load} className="text-blue-700 underline">Actualiser les documents</button>
