@@ -1,6 +1,7 @@
 'use client';
 
 import { ChantierDocuments } from '@/components/documents/ChantierDocuments';
+import { PdfAttachmentPicker, usePdfAttachments } from '@/components/documents/PdfAttachmentPicker';
 
 import { buildInterventionDates, interventionDateFields } from '@/lib/intervention-dates';
 
@@ -93,6 +94,8 @@ export function InterventionForm({
   const isChantier = formData.intervention_type === 'chantier';
 
   const supabase = createClient();
+
+  const pdfAttachments = usePdfAttachments();
 
   // Fetch technicians and regies on mount
   useEffect(() => {
@@ -229,6 +232,8 @@ export function InterventionForm({
           throw new Error(error.message);
         }
 
+        if (data?.[0]?.id) await pdfAttachments.attach(data[0].id);
+
         // Cutoff reminder works for both chantier and dépannage
         if (cutoffEnabled && cutoffDate && data?.[0]?.id && formData.technician_id) {
           await createCutoffReminder(data[0].id, formData.technician_id);
@@ -291,7 +296,7 @@ export function InterventionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {intervention?.id && intervention.intervention_type === 'chantier' && <ChantierDocuments key={intervention.id} interventionId={intervention.id} />}
+      {intervention?.id && <ChantierDocuments key={intervention.id} interventionId={intervention.id} />}
       {/* Titre */}
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -589,6 +594,8 @@ export function InterventionForm({
           </div>
         </div>
       )}
+
+      {!isEditMode && <PdfAttachmentPicker attachments={pdfAttachments} disabled={isLoading} />}
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-gray-100">
