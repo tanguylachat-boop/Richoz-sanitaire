@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { compactIdentifier } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { PlanificationSplitView } from '@/components/interventions/PlanificationSplitView';
@@ -185,6 +186,9 @@ export default function InboxPage() {
   const regieNameMap = new Map(regies.map((r) => [r.id, r.name]));
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  // Les PDF Brun/Burger/Baezner impriment "2026 287 038" alors que la colonne stocke "2026287038".
+  // On compare aussi le N° de bon sans séparateurs pour que la saisie telle qu'imprimée fonctionne.
+  const compactQuery = compactIdentifier(normalizedQuery);
   const filteredEmails = enrichedEmails.filter((email) => {
     if (urgentFilterActive && !isEmailUrgent(email)) return false;
     if (regieFilter && email.regie_id !== regieFilter) return false;
@@ -205,7 +209,11 @@ export default function InboxPage() {
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      if (!haystack.includes(normalizedQuery)) return false;
+      const workOrderMatches =
+        compactQuery.length > 0 &&
+        !!email.work_order_number &&
+        compactIdentifier(email.work_order_number).includes(compactQuery);
+      if (!haystack.includes(normalizedQuery) && !workOrderMatches) return false;
     }
     return true;
   });
