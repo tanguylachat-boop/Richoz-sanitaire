@@ -75,6 +75,15 @@ export function formatRelativeTime(date: Date | string): string {
 }
 
 /**
+ * Compacts an identifier (work order number, ticket…) for comparison:
+ * lowercases and strips spaces, dots, dashes and slashes.
+ * "2026 287 038" (as printed on Brun/Burger/Baezner PDFs) === "2026287038" (as stored).
+ */
+export function compactIdentifier(value: string): string {
+  return value.toLowerCase().replace(/[\s.\-/]/g, '');
+}
+
+/**
  * Truncates text with ellipsis
  */
 export function truncate(text: string, maxLength: number): string {
