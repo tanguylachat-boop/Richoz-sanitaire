@@ -198,3 +198,11 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 - **Correctif** : PR #11 (`fix/inbox-search-work-order-spaces`). Helper `compactIdentifier()` dans `src/lib/utils.ts` ; le filtre de `/inbox` compare en plus le N° de bon sans espaces/points/tirets/slashes. Reste inchangé pour sujet/expéditeur/corps.
 - **Preuves** : tsc 0, build 0, eslint 0 erreur, test rejouant le filtre sur les 9 mails Brun réels 3/3.
 - **Non testé** : navigateur sur la preview Vercel ; page Interventions non touchée (même recherche probable).
+
+## Session 20.10.2026 — calendrier : interventions superposées (2 techniciens, même heure)
+
+- **Symptôme** : deux interventions planifiées à la même heure avec deux techniciens différents, une seule visible dans le calendrier (vues Semaine/Jour + calendrier de l'écran de planification).
+- **Cause** : `TimeGridView.tsx` positionne chaque bloc en absolu sur toute la largeur de la colonne du jour, même z-index, aucun calcul de chevauchement → le dernier rendu recouvre les autres. Confirmé en prod : 20.10 14h30 = 3 interventions même créneau (2 techniciens) ; idem 21.10, 26.10, 27.10, 10.11. Révèle aussi des doublons même technicien/même créneau (ex. 30.10 13h30), jusque-là invisibles.
+- **Correctif** : PR #12 (`fix/calendar-overlapping-interventions`). `src/lib/calendar-layout.ts` → `layoutDayBlocks()` (groupes de chevauchement, première colonne libre, largeur partagée). `TimeGridView.tsx` applique left/width calculés, survol au premier plan, initiales dans l'infobulle. Vue Mois non concernée.
+- **Preuves** : tsc 0, build 0, eslint 0, tests layout sur cas réels 7/7.
+- **Non testé** : rendu visuel sur preview Vercel (Calendrier → Semaine → 20.10 14h30). Blocs étroits en vue Semaine quand 3 côte à côte (vue Jour = pleine largeur).

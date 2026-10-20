@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, eachDayOfInterval, isSameDay, isToday, addMinutes, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { interventionLabel } from '@/lib/intervention-label';
+import { layoutDayBlocks } from '@/lib/calendar-layout';
 
 const START_HOUR = 7;
 const END_HOUR = 18;
@@ -171,8 +172,10 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
     return parts.length > 0 ? parts.join(' ') : '';
   };
 
-  const getBlockStyle = (iv: Intervention) => {
-    if (!iv.date_planned) return { top: 0, height: 30 };
+  // Minutes relative to START_HOUR, clamped to the grid — shared by the block
+  // geometry and the overlap layout so both see exactly the same time range.
+  const getBlockMinutes = (iv: Intervention) => {
+    if (!iv.date_planned) return { startMinutes: 0, endMinutes: 30 };
     const d = new Date(iv.date_planned);
     const hours = d.getHours();
     const minutes = d.getMinutes();
@@ -180,7 +183,11 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
     const startMinutes = Math.max((hours - START_HOUR) * 60 + minutes, 0);
     const durationMin = Math.max(iv.estimated_duration_minutes || 30, 20);
     const endMinutes = Math.min(startMinutes + durationMin, TOTAL_HOURS * 60);
+    return { startMinutes, endMinutes };
+  };
 
+  const getBlockStyle = (iv: Intervention) => {
+    const { startMinutes, endMinutes } = getBlockMinutes(iv);
     const top = (startMinutes / 60) * HOUR_HEIGHT;
     const height = Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 20);
 
@@ -337,6 +344,14 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
           >
             {days.map((day, colIdx) => {
               const dayInterventions = getInterventionsForDay(day);
+              // Interventions qui se chevauchent (ex. 2 techniciens à la même heure) :
+              // rangées en colonnes côte à côte au lieu de se recouvrir.
+              const dayLayout = layoutDayBlocks(
+                dayInterventions.map((iv) => {
+                  const { startMinutes, endMinutes } = getBlockMinutes(iv);
+                  return { id: iv.id, start: startMinutes, end: endMinutes };
+                })
+              );
               const today = isToday(day);
 
               return (
@@ -430,14 +445,18 @@ export function TimeGridView({ mode, currentDate, interventions, leaves = [], bi
                       const typeLabel = iv.maintenance_contract_id ? '🔩' : (iv.intervention_type === 'chantier' ? '🏗️' : '🔧');
                       const kindLabel = iv.maintenance_contract_id ? '[Maintenance]' : (iv.intervention_type === 'chantier' ? '[Chantier]' : '[Dépannage]');
                       const displayLabel = interventionLabel(iv);
+                      const slot = dayLayout.get(iv.id) ?? { column: 0, columns: 1 };
+                      const columnWidth = 100 / slot.columns;
+                      const left = `calc(${slot.column * columnWidth}% + 2px)`;
+                      const width = `calc(${columnWidth}% - 4px)`;
 
                       return (
                         <button
                           key={iv.id}
                           onClick={() => onInterventionClick(iv)}
-                          className="absolute left-1 right-1 rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5]"
-                          style={{ top, height: Math.max(height, 24), backgroundColor: bgColor, borderLeftColor: bgColor }}
-                          title={`${kindLabel} ${displayLabel}`}
+                          className="absolute rounded-lg border-l-[3px] text-left text-white text-xs cursor-pointer transition-opacity hover:opacity-90 overflow-hidden z-[5] hover:z-10"
+                          style={{ top, height: Math.max(height, 24), left, width, backgroundColor: bgColor, borderLeftColor: bgColor }}
+                          title={`${kindLabel} ${displayLabel}${initials ? ` — ${initials}` : ''}`}
                         >
                           <div className="px-2 py-1 h-full flex flex-col">
                             <div className="flex items-center gap-1">
