@@ -191,6 +191,14 @@ Mis à jour : 18 septembre 2026 (fin de session). Reprise après Codex selon `RI
 - **Non testé** : navigateur réel (upload/ouverture PDF sur preview), iPhone technicien, push réel.
 - **Sécurité à traiter (hors lot)** : bucket `documents` **public** → pièces jointes email accessibles à qui a l'URL.
 
+## Session 16.10.2026 — recherche boîte de réception : N° de bon Brun avec espaces
+
+- **Symptôme** : taper un N° de bon Régie Brun tel qu'imprimé sur le PDF (`2026 287 038`) dans la barre de recherche de `/inbox` ne renvoie rien ; les autres régies fonctionnent.
+- **Cause (vérifiée sur les données prod)** : `email_inbox.work_order_number` stocke `2026287038` ; le mail Brun ne répète jamais le numéro (corps = « ci-joint un bon relatif à PONT-BUTIN 70 ») ; le filtre comparait la chaîne brute. Burger et Baezner (même logiciel, même impression `BON POUR TRAVAUX NO. 2026 289 009`) avaient le même défaut, non remarqué car peu de bons. Seymaz s'en sortait parce que son corps de mail contient « bon 2026 288 005 ».
+- **Correctif** : PR #11 (`fix/inbox-search-work-order-spaces`). Helper `compactIdentifier()` dans `src/lib/utils.ts` ; le filtre de `/inbox` compare en plus le N° de bon sans espaces/points/tirets/slashes. Reste inchangé pour sujet/expéditeur/corps.
+- **Preuves** : tsc 0, build 0, eslint 0 erreur, test rejouant le filtre sur les 9 mails Brun réels 3/3.
+- **Non testé** : navigateur sur la preview Vercel ; page Interventions non touchée (même recherche probable).
+
 ## Session 20.10.2026 — calendrier : interventions superposées (2 techniciens, même heure)
 
 - **Symptôme** : deux interventions planifiées à la même heure avec deux techniciens différents, une seule visible dans le calendrier (vues Semaine/Jour + calendrier de l'écran de planification).
