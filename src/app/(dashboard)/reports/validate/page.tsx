@@ -1,6 +1,7 @@
 'use client';
 
 import { technicianReportLink } from '@/lib/report-feedback';
+import { matchesReportSearch } from '@/lib/report-search';
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -28,6 +29,7 @@ import {
   Loader2,
   X,
   AlertTriangle,
+  Search,
 } from 'lucide-react';
 
 type InterventionTypeFilter = 'all' | 'depannage' | 'chantier';
@@ -51,6 +53,9 @@ interface ReportRow {
     date_planned: string;
     status: string;
     intervention_type: string | null;
+    work_order_number: string | null;
+    client_info: { name?: string; phone?: string } | null;
+    client: { id: string; first_name: string | null; last_name: string | null; company_name: string | null } | null;
     regie?: { id: string; name: string } | null;
   } | null;
 }
@@ -68,6 +73,7 @@ export default function ValidateReportsPage() {
   const [chantierExtras, setChantierExtras] = useState<Map<string, ChantierExtra>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<InterventionTypeFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [rejectModalReport, setRejectModalReport] = useState<ReportRow | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
@@ -137,7 +143,7 @@ export default function ValidateReportsPage() {
           id, status, text_content, vocal_transcription, work_duration_minutes,
           photos, materials_used, is_billable, created_at, updated_at,
           technician:users!reports_technician_id_fkey(id, first_name, last_name),
-          intervention:interventions(id, title, address, date_planned, status, intervention_type, regie:regies(id, name))
+          intervention:interventions(id, title, address, date_planned, status, intervention_type, work_order_number, client_info, client:clients(id, first_name, last_name, company_name), regie:regies(id, name))
         `)
         .in('status', ['submitted', 'draft', 'rejected'])
         .order('updated_at', { ascending: false });
@@ -217,8 +223,12 @@ export default function ValidateReportsPage() {
     fetchData();
   }, []);
 
+  // Search first (N° de bon, client, technicien), then the type tabs on top of it.
+  const trimmedQuery = searchQuery.trim();
+  const searchedReports = reports.filter(r => matchesReportSearch(r, trimmedQuery));
+
   // Filter reports by intervention type
-  const filteredReports = reports.filter(r => {
+  const filteredReports = searchedReports.filter(r => {
     if (typeFilter === 'all') return true;
     const type = r.intervention?.intervention_type;
     if (typeFilter === 'depannage') return type !== 'chantier';
@@ -226,8 +236,8 @@ export default function ValidateReportsPage() {
   });
 
   // Stats
-  const depannageReports = reports.filter(r => r.intervention?.intervention_type !== 'chantier');
-  const chantierReports = reports.filter(r => r.intervention?.intervention_type === 'chantier');
+  const depannageReports = searchedReports.filter(r => r.intervention?.intervention_type !== 'chantier');
+  const chantierReports = searchedReports.filter(r => r.intervention?.intervention_type === 'chantier');
   const submittedCount = filteredReports.filter(r => r.status === 'submitted').length;
   const draftCount = filteredReports.filter(r => r.status === 'draft').length;
 
@@ -285,12 +295,12 @@ export default function ValidateReportsPage() {
         >
           <FileText className="w-4 h-4" />
           Tous
-          {reports.length > 0 && (
+          {searchedReports.length > 0 && (
             <span className={cn(
               'px-1.5 py-0.5 text-[10px] font-semibold rounded-full',
               typeFilter === 'all' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600'
             )}>
-              {reports.length}
+              {searchedReports.length}
             </span>
           )}
         </button>
@@ -338,15 +348,38 @@ export default function ValidateReportsPage() {
 
       {/* Reports List */}
       <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Rapports à valider</h2>
-          <p className="text-sm text-gray-500">
-            {typeFilter === 'all'
-              ? 'Tous les rapports des techniciens'
-              : typeFilter === 'depannage'
-                ? 'Rapports de dépannage des techniciens'
-                : 'Rapports de chantier des techniciens'}
-          </p>
+        <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-gray-900">Rapports à valider</h2>
+            <p className="text-sm text-gray-500">
+              {typeFilter === 'all'
+                ? 'Tous les rapports des techniciens'
+                : typeFilter === 'depannage'
+                  ? 'Rapports de dépannage des techniciens'
+                  : 'Rapports de chantier des techniciens'}
+            </p>
+          </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher : N° bon, client, technicien…"
+              aria-label="Rechercher un rapport"
+              className="w-full h-10 pl-9 pr-9 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                title="Effacer la recherche"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {isLoading ? (
@@ -360,10 +393,12 @@ export default function ValidateReportsPage() {
               <ClipboardCheck className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Aucun rapport en attente
+              {trimmedQuery ? `Aucun résultat pour « ${trimmedQuery} »` : 'Aucun rapport en attente'}
             </h3>
             <p className="text-gray-500 max-w-sm mx-auto">
-              Les rapports soumis par les techniciens apparaîtront ici pour validation.
+              {trimmedQuery
+                ? 'Essayez un autre N° de bon, nom de client ou technicien.'
+                : 'Les rapports soumis par les techniciens apparaîtront ici pour validation.'}
             </p>
           </div>
         ) : (
@@ -394,9 +429,16 @@ export default function ValidateReportsPage() {
                       {/* Header */}
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div>
-                          <h3 className="font-semibold text-gray-900">
-                            {intervention?.title || 'Intervention'}
-                          </h3>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold text-gray-900">
+                              {intervention?.title || 'Intervention'}
+                            </h3>
+                            {intervention?.work_order_number && (
+                              <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                Bon N° {intervention.work_order_number}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-500">
                             {technician && (
                               <div className="flex items-center gap-1.5">

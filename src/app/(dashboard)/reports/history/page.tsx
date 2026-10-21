@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { formatDate, cn } from '@/lib/utils';
+import { matchesReportSearch } from '@/lib/report-search';
 import {
   Eye,
   User,
@@ -12,6 +13,8 @@ import {
   CheckCircle,
   Archive,
   Loader2,
+  Search,
+  X,
 } from 'lucide-react';
 
 // Status configuration for history
@@ -42,7 +45,9 @@ type ReportWithRelations = {
     title: string;
     address: string;
     date_planned: string;
+    work_order_number: string | null;
     client_info?: { name?: string; phone?: string } | null;
+    client: { id: string; first_name: string | null; last_name: string | null; company_name: string | null } | null;
     regie?: { id: string; name: string } | null;
   } | null;
 };
@@ -52,6 +57,7 @@ export default function ReportsHistoryPage() {
   const supabase = createClient();
   const [reports, setReports] = useState<ReportWithRelations[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -69,7 +75,9 @@ export default function ReportsHistoryPage() {
             title,
             address,
             date_planned,
+            work_order_number,
             client_info,
+            client:clients(id, first_name, last_name, company_name),
             regie:regies(id, name)
           )
         `)
@@ -86,6 +94,10 @@ export default function ReportsHistoryPage() {
 
     fetchReports();
   }, [supabase]);
+
+  // Search on N° de bon, client, technicien (client-side, the whole history is already loaded).
+  const trimmedQuery = searchQuery.trim();
+  const visibleReports = (reports ?? []).filter((r) => matchesReportSearch(r, trimmedQuery));
 
   const handleRowClick = (reportId: string) => {
     router.push(`/reports/validate/${reportId}`);
@@ -105,23 +117,48 @@ export default function ReportsHistoryPage() {
     <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
       {/* Table header */}
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-sm text-gray-600">
-            {reports?.length || 0} rapport{(reports?.length || 0) > 1 ? 's' : ''} dans l&apos;historique
+            {trimmedQuery
+              ? `${visibleReports.length} résultat${visibleReports.length > 1 ? 's' : ''} sur ${reports?.length || 0}`
+              : `${reports?.length || 0} rapport${(reports?.length || 0) > 1 ? 's' : ''} dans l'historique`}
           </p>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher : N° bon, client, technicien…"
+              aria-label="Rechercher un rapport"
+              className="w-full h-10 pl-9 pr-9 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                title="Effacer la recherche"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {!reports || reports.length === 0 ? (
+      {visibleReports.length === 0 ? (
         <div className="p-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <Archive className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Aucun rapport dans l&apos;historique
+            {trimmedQuery ? `Aucun résultat pour « ${trimmedQuery} »` : "Aucun rapport dans l'historique"}
           </h3>
           <p className="text-gray-500 max-w-sm mx-auto">
-            Les rapports validés apparaîtront ici une fois traités.
+            {trimmedQuery
+              ? 'Essayez un autre N° de bon, nom de client ou technicien.'
+              : 'Les rapports validés apparaîtront ici une fois traités.'}
           </p>
         </div>
       ) : (
@@ -153,7 +190,7 @@ export default function ReportsHistoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {reports.map((report) => {
+              {visibleReports.map((report) => {
                 const statusInfo = HISTORY_STATUS[report.status] || HISTORY_STATUS.validated;
                 const StatusIcon = statusInfo.icon;
                 const intervention = report.intervention;
@@ -221,6 +258,11 @@ export default function ReportsHistoryPage() {
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {intervention?.title || 'Sans titre'}
                         </p>
+                        {intervention?.work_order_number && (
+                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            Bon N° {intervention.work_order_number}
+                          </span>
+                        )}
                         {intervention?.address && (
                           <p className="text-xs text-gray-500 truncate">
                             {intervention.address}
