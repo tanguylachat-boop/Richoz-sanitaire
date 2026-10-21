@@ -1,30 +1,16 @@
-import {
-  Document,
-  Paragraph,
-  TextRun,
-  Table,
-  TableRow,
-  WidthType,
-  AlignmentType,
-  Footer,
-  PageNumber,
-  Packer,
-  ImageRun,
-} from 'docx';
+import { Document, Paragraph, TextRun, Table, AlignmentType, Packer } from 'docx';
 import {
   RED,
-  BLUE,
   GRAY,
   brandHeader,
-  blueBanner,
-  bodyText,
-  placeholder,
-  infoRow,
-  imageParagraph,
-  downloadImage,
-  PAGE_WIDTH_DXA,
-  COL_LABEL_DXA,
-  COL_VALUE_DXA,
+  blankLine,
+  bodyParagraphs,
+  documentStylesXml,
+  pageSetup,
+  photoTable,
+  section,
+  infoLine,
+  signatureBlock,
 } from './shared';
 
 export interface PiquetReportData {
@@ -48,123 +34,57 @@ export interface PiquetReportData {
 async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [];
 
-  children.push(...brandHeader());
+  children.push(...brandHeader('Rapport de piquet', { color: RED }));
   children.push(
     new Paragraph({
       children: [
-        new TextRun({ text: 'Rapport de piquet', bold: true, size: 28, color: RED, font: 'Calibri' }),
+        new TextRun({ text: 'Urgence nocturne', italics: true, size: 22, color: GRAY, font: 'Calibri' }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 80 },
-    })
-  );
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'Urgence nocturne', italics: true, size: 18, color: GRAY, font: 'Calibri' }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
+      spacing: { after: 120 },
     })
   );
 
-  children.push(blueBanner(`N° ${data.id.slice(0, 8).toUpperCase()} — Émis le ${data.createdAt}`));
+  children.push(...section(`N° ${data.id.slice(0, 8).toUpperCase()} — Émis le ${data.createdAt}`));
 
-  children.push(blueBanner('Intervention'));
-  const ir: TableRow[] = [];
-  ir.push(infoRow('Technicien', data.technicianName + (data.technicianPhone ? ` — ${data.technicianPhone}` : '')));
-  ir.push(infoRow('Adresse', data.address));
+  children.push(...section('Intervention'));
+  children.push(infoLine('Technicien', data.technicianName + (data.technicianPhone ? ` — ${data.technicianPhone}` : '')));
+  children.push(infoLine('Adresse', data.address));
   if (data.clientName) {
-    ir.push(infoRow('Client', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
+    children.push(infoLine('Client', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
   }
-  children.push(new Table({ rows: ir, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
 
-  children.push(blueBanner('Horaires'));
-  const hr: TableRow[] = [];
-  hr.push(infoRow('Appel reçu', data.callReceivedAt));
-  if (data.interventionStartedAt) hr.push(infoRow('Début intervention', data.interventionStartedAt));
-  if (data.interventionEndedAt) hr.push(infoRow('Fin intervention', data.interventionEndedAt));
-  children.push(new Table({ rows: hr, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
+  children.push(...section('Horaires'));
+  children.push(infoLine('Appel reçu', data.callReceivedAt));
+  if (data.interventionStartedAt) children.push(infoLine('Début intervention', data.interventionStartedAt));
+  if (data.interventionEndedAt) children.push(infoLine('Fin intervention', data.interventionEndedAt));
 
   if (data.problemDescription) {
-    children.push(blueBanner("Constat à l'arrivée"));
-    for (const line of data.problemDescription.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section("Constat à l'arrivée"), blankLine());
+    children.push(...bodyParagraphs(data.problemDescription));
   }
 
   if (data.actionsTaken) {
-    children.push(blueBanner('Actions réalisées'));
-    for (const line of data.actionsTaken.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section('Actions réalisées'), blankLine());
+    children.push(...bodyParagraphs(data.actionsTaken));
   }
 
   if (data.suppliesUsed) {
-    children.push(blueBanner('Matériel utilisé'));
-    for (const line of data.suppliesUsed.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section('Matériel utilisé'), blankLine());
+    children.push(...bodyParagraphs(data.suppliesUsed));
   }
 
   if (data.photos && data.photos.length > 0) {
-    children.push(blueBanner('Photos'));
-    for (const url of data.photos.slice(0, 30)) {
-      const paras = await imageParagraph(url);
-      children.push(...paras);
-    }
+    children.push(...section('Photos'), blankLine());
+    children.push(...(await photoTable(data.photos.slice(0, 30).map((url) => ({ url })))));
   }
 
-  children.push(blueBanner('Signature du client'));
-  if (data.clientSignature) {
-    const sig = await downloadImage(data.clientSignature);
-    if (sig) {
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [
-            new ImageRun({ data: sig, transformation: { width: 280, height: 100 }, type: 'png' }),
-          ],
-          spacing: { after: 100 },
-        })
-      );
-    } else {
-      children.push(placeholder('Signature non disponible'));
-    }
-  } else {
-    children.push(placeholder('Non signé'));
-  }
+  children.push(...section('Signature du client'), blankLine());
+  children.push(...(await signatureBlock(data.clientSignature)));
 
   return new Document({
-    sections: [
-      {
-        properties: { page: { margin: { top: 800, right: 900, bottom: 800, left: 900 } } },
-        children,
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({
-                    text: 'RICHOZ SANITAIRE — 50 Route de Chancy, 1213 Petit-Lancy — info@richoz-sanitaire.ch — 022 792 10 63 — Page ',
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-      },
-    ],
+    externalStyles: documentStylesXml(),
+    sections: [{ ...pageSetup(), children }],
   });
 }
 
