@@ -2,9 +2,6 @@ import {
   Document,
   Paragraph,
   TextRun,
-  Table,
-  TableRow,
-  WidthType,
   AlignmentType,
   Footer,
   PageNumber,
@@ -14,15 +11,13 @@ import {
   BLUE,
   GRAY,
   brandHeader,
-  blueBanner,
+  bannerParagraphStyle,
+  section,
   redTitle,
   bodyText,
   placeholder,
-  infoRow,
+  infoLine,
   imageParagraph,
-  PAGE_WIDTH_DXA,
-  COL_LABEL_DXA,
-  COL_VALUE_DXA,
 } from './shared';
 
 export interface ChantierReportData {
@@ -53,7 +48,7 @@ export interface ChantierReportData {
 }
 
 async function buildChantierDocument(data: ChantierReportData): Promise<Document> {
-  const children: (Paragraph | Table)[] = [];
+  const children: Paragraph[] = [];
 
   children.push(...brandHeader());
   children.push(
@@ -67,32 +62,26 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   );
 
   if (data.workOrderNumber) {
-    children.push(blueBanner(`Bon de travail N° ${data.workOrderNumber}`));
+    children.push(...section(`Bon de travail N° ${data.workOrderNumber}`));
   }
 
-  children.push(blueBanner('Chantier'));
-  const ch: TableRow[] = [];
-  if (data.title) ch.push(infoRow('Titre', data.title));
-  if (data.address) ch.push(infoRow('Adresse', data.address));
-  if (data.regieName) ch.push(infoRow('Régie', data.regieName));
-  if (data.ownerName) ch.push(infoRow('Propriétaire', data.ownerName));
-  if (data.clientName) ch.push(infoRow('Contact', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
-  if (ch.length > 0) {
-    children.push(new Table({ rows: ch, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
-  }
+  children.push(...section('Chantier'));
+  if (data.title) children.push(infoLine('Titre', data.title));
+  if (data.address) children.push(infoLine('Adresse', data.address));
+  if (data.regieName) children.push(infoLine('Régie', data.regieName));
+  if (data.ownerName) children.push(infoLine('Propriétaire', data.ownerName));
+  if (data.clientName) children.push(infoLine('Contact', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
 
-  children.push(blueBanner('Suivi'));
-  const su: TableRow[] = [];
-  su.push(infoRow('Technicien', data.technicianName + (data.technicianPhone ? ` — ${data.technicianPhone}` : '')));
-  if (data.dateStart) su.push(infoRow('Début de chantier', data.dateStart));
-  if (data.datePlanned) su.push(infoRow('Dernière intervention', data.datePlanned));
-  su.push(infoRow('Rapport généré le', data.createdAt));
+  children.push(...section('Suivi'));
+  children.push(infoLine('Technicien', data.technicianName + (data.technicianPhone ? ` — ${data.technicianPhone}` : '')));
+  if (data.dateStart) children.push(infoLine('Début de chantier', data.dateStart));
+  if (data.datePlanned) children.push(infoLine('Dernière intervention', data.datePlanned));
+  children.push(infoLine('Rapport généré le', data.createdAt));
   if (typeof data.progressPercent === 'number') {
-    su.push(infoRow('Avancement', `${data.progressPercent} %`));
+    children.push(infoLine('Avancement', `${data.progressPercent} %`));
   }
-  children.push(new Table({ rows: su, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
 
-  children.push(blueBanner('Description des travaux'));
+  children.push(...section('Description des travaux'));
   if (data.textContent && data.textContent.trim()) {
     for (const line of data.textContent.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
@@ -102,14 +91,14 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   }
 
   if (data.suppliesText && data.suppliesText.trim()) {
-    children.push(blueBanner('Fournitures et matériel'));
+    children.push(...section('Fournitures et matériel'));
     for (const line of data.suppliesText.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
     }
   }
 
   if (data.cutoffs && data.cutoffs.length > 0) {
-    children.push(blueBanner('Coupures et avis'));
+    children.push(...section('Coupures et avis'));
     for (const c of data.cutoffs) {
       children.push(redTitle(`${c.type} — ${c.start_date}${c.end_date ? ` → ${c.end_date}` : ''}`));
       if (c.floors) children.push(bodyText(`Étages concernés : ${c.floors}`));
@@ -118,7 +107,7 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   }
 
   if (data.journal && data.journal.length > 0) {
-    children.push(blueBanner('Journal de chantier'));
+    children.push(...section('Journal de chantier'));
     for (const j of data.journal) {
       children.push(
         new Paragraph({
@@ -136,7 +125,7 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   }
 
   if (data.photos && data.photos.length > 0) {
-    children.push(blueBanner('Photos du chantier'));
+    children.push(...section('Photos du chantier'));
     for (const p of data.photos.slice(0, 30)) {
       const paras = await imageParagraph(p.url, p.caption);
       children.push(...paras);
@@ -144,6 +133,7 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   }
 
   return new Document({
+    styles: { paragraphStyles: [bannerParagraphStyle()] },
     sections: [
       {
         properties: { page: { margin: { top: 800, right: 900, bottom: 800, left: 900 } } },

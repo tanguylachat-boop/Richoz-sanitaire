@@ -1,20 +1,16 @@
 import {
   Paragraph,
   TextRun,
-  TableRow,
-  TableCell,
-  WidthType,
   BorderStyle,
   ShadingType,
   AlignmentType,
   ImageRun,
+  type IParagraphStyleOptions,
 } from 'docx';
 
 // Page width in DXA (twentieths of a point) for A4 minus our margins.
 // A4 = 11907 dxa wide. Margins 900 dxa each side. Usable ≈ 10100.
 export const PAGE_WIDTH_DXA = 9600;
-export const COL_LABEL_DXA = 2880; // ~30%
-export const COL_VALUE_DXA = 6720; // ~70%
 
 export const RED = 'C0392B';
 export const BLUE = '1F4E9C';
@@ -22,14 +18,49 @@ export const GREEN = '6FB23A';
 export const GRAY = '666666';
 export const WHITE = 'FFFFFF';
 
+/**
+ * Word paragraph style of the blue ribbons, shared by the three reports.
+ * The blue background and the white bold text live in the STYLE, not as
+ * direct formatting, and `next` is Normal: pressing Enter at the end of a
+ * ribbon in Word gives a plain editable paragraph instead of a second blue
+ * ribbon (reported by the Richoz secretary, 21.10.2026).
+ */
+export const BANNER_STYLE_ID = 'RichozBanner';
+
+export function bannerParagraphStyle(): IParagraphStyleOptions {
+  return {
+    id: BANNER_STYLE_ID,
+    name: 'Bandeau Richoz',
+    basedOn: 'Normal',
+    next: 'Normal',
+    quickFormat: true,
+    run: { bold: true, color: WHITE, font: 'Calibri', size: 22 },
+    paragraph: {
+      shading: { type: ShadingType.SOLID, color: BLUE },
+      spacing: { before: 100, after: 150 },
+    },
+  };
+}
+
+/**
+ * Empty Normal paragraph placed before every ribbon. Even if the secretary
+ * deletes a whole sentence (paragraph mark included), an editable line
+ * remains between two ribbons.
+ */
+export function sectionSpacer(): Paragraph {
+  return new Paragraph({ spacing: { before: 0, after: 0 } });
+}
+
 export function blueBanner(text: string): Paragraph {
   return new Paragraph({
-    children: [
-      new TextRun({ text: `  ${text}`, bold: true, size: 22, color: WHITE, font: 'Calibri' }),
-    ],
-    shading: { type: ShadingType.SOLID, color: BLUE },
-    spacing: { before: 300, after: 150 },
+    style: BANNER_STYLE_ID,
+    children: [new TextRun({ text: `  ${text}` })],
   });
+}
+
+/** Spacer + ribbon, to spread into the document children. */
+export function section(text: string): Paragraph[] {
+  return [sectionSpacer(), blueBanner(text)];
 }
 
 export function redTitle(text: string): Paragraph {
@@ -65,29 +96,20 @@ export const NO_BORDERS = {
   right: noneBorder,
 };
 
-export function infoRow(label: string, value: string): TableRow {
-  return new TableRow({
+/**
+ * "Label : value" on one line, the value right after the colon.
+ * Replaces the former two-column invisible table whose fixed label column
+ * left a large gap between "Régie :" and the name.
+ */
+export function infoLine(label: string, value: string): Paragraph {
+  const trimmed = label.trim();
+  const labelText = trimmed.endsWith(':') ? trimmed : `${trimmed} :`;
+  return new Paragraph({
     children: [
-      new TableCell({
-        children: [
-          new Paragraph({
-            children: [new TextRun({ text: label, bold: true, size: 18, font: 'Calibri', color: GRAY })],
-          }),
-        ],
-        width: { size: COL_LABEL_DXA, type: WidthType.DXA },
-        borders: NO_BORDERS,
-        shading: { type: ShadingType.SOLID, color: 'F8F8F8' },
-      }),
-      new TableCell({
-        children: [
-          new Paragraph({
-            children: [new TextRun({ text: value, size: 20, font: 'Calibri' })],
-          }),
-        ],
-        width: { size: COL_VALUE_DXA, type: WidthType.DXA },
-        borders: NO_BORDERS,
-      }),
+      new TextRun({ text: `${labelText} `, bold: true, size: 20, font: 'Calibri', color: GRAY }),
+      new TextRun({ text: value, size: 20, font: 'Calibri' }),
     ],
+    spacing: { after: 40 },
   });
 }
 

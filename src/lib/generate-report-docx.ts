@@ -2,20 +2,15 @@ import {
   Document,
   Paragraph,
   TextRun,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
   AlignmentType,
-  BorderStyle,
   Header,
   Footer,
   PageNumber,
   Packer,
-  ShadingType,
   ImageRun,
 } from 'docx';
 import { buildWatermarkParagraph } from './docx/watermark';
+import { BANNER_STYLE_ID, bannerParagraphStyle, sectionSpacer } from './docx/shared';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -63,10 +58,6 @@ const GREEN = '6FB23A';        // SANITAIRE (vivid leaf green)
 const GRAY = '666666';
 const WHITE = 'FFFFFF';
 
-// A4 layout in twips (twentieths of a point).
-const PAGE_WIDTH_DXA = 9600;
-const COL_LABEL_DXA = 3200;
-const COL_VALUE_DXA = 6400;
 
 // Footer text reused on every page
 const COMPANY_FOOTER =
@@ -77,23 +68,28 @@ const COMPANY_FOOTER =
 /**
  * Centered blue section banner (white text on blue), matching the Richoz
  * PDF section headers like "Bon de travail numéro : 1 823 591".
+ * Colors come from the shared `RichozBanner` Word style (next = Normal), so
+ * Enter after a ribbon gives a normal paragraph. Only size/alignment are direct.
  */
 function blueBanner(text: string, valueSuffix?: string): Paragraph {
-  const children = [
-    new TextRun({ text, bold: true, size: 24, color: WHITE, font: 'Calibri' }),
-  ];
+  const children = [new TextRun({ text, size: 24 })];
   if (valueSuffix) {
     children.push(
-      new TextRun({ text: '   ', size: 24, color: WHITE, font: 'Calibri' }),
-      new TextRun({ text: valueSuffix, size: 22, color: WHITE, font: 'Calibri' })
+      new TextRun({ text: '   ', size: 24 }),
+      new TextRun({ text: valueSuffix, size: 22, bold: false })
     );
   }
   return new Paragraph({
+    style: BANNER_STYLE_ID,
     children,
-    shading: { type: ShadingType.SOLID, color: BLUE },
     alignment: AlignmentType.CENTER,
-    spacing: { before: 280, after: 140 },
+    spacing: { before: 100, after: 140 },
   });
+}
+
+/** Spacer + banner: an editable Normal line always exists before each ribbon. */
+function section(text: string, valueSuffix?: string): Paragraph[] {
+  return [sectionSpacer(), blueBanner(text, valueSuffix)];
 }
 
 /** Blue sub-section header with optional emoji icon, like "🏠 Propriétaire & Régie" */
@@ -123,34 +119,17 @@ function placeholder(text: string): Paragraph {
   });
 }
 
-function noBorders() {
-  const none = { style: BorderStyle.NONE, size: 0, color: WHITE };
-  return { top: none, bottom: none, left: none, right: none };
-}
-
-/** Label/value row used inside the info tables under each section */
-function labelValueRow(label: string, value: string): TableRow {
-  return new TableRow({
+/**
+ * "Label : value" on one line, value right after the colon (the former
+ * two-column table left a wide gap between "Régie :" and the name).
+ */
+function labelValue(label: string, value: string): Paragraph {
+  return new Paragraph({
     children: [
-      new TableCell({
-        children: [
-          new Paragraph({
-            children: [new TextRun({ text: label, size: 20, font: 'Calibri', color: GRAY })],
-          }),
-        ],
-        width: { size: COL_LABEL_DXA, type: WidthType.DXA },
-        borders: noBorders(),
-      }),
-      new TableCell({
-        children: [
-          new Paragraph({
-            children: [new TextRun({ text: value, size: 20, font: 'Calibri' })],
-          }),
-        ],
-        width: { size: COL_VALUE_DXA, type: WidthType.DXA },
-        borders: noBorders(),
-      }),
+      new TextRun({ text: `${label} `, size: 20, font: 'Calibri', color: GRAY }),
+      new TextRun({ text: value, size: 20, font: 'Calibri' }),
     ],
+    spacing: { after: 40 },
   });
 }
 
@@ -167,8 +146,8 @@ async function downloadImage(url: string): Promise<ArrayBuffer | null> {
 async function buildPhotoSection(
   photos: { url: string; caption?: string }[],
   emptyText: string,
-): Promise<(Paragraph | Table)[]> {
-  const result: (Paragraph | Table)[] = [];
+): Promise<Paragraph[]> {
+  const result: Paragraph[] = [];
   if (!photos || photos.length === 0) {
     result.push(placeholder(emptyText));
     return result;
@@ -218,7 +197,7 @@ async function buildPhotoSection(
 // ─── Document assembly ───────────────────────────────────────────────────────
 
 async function buildReportDocument(data: ReportData): Promise<Document> {
-  const children: (Paragraph | Table)[] = [];
+  const children: Paragraph[] = [];
 
   // ═══ 1. TITRE PRINCIPAL — RICHOZ (bleu) + SANITAIRE (vert) ═══
   children.push(
@@ -246,42 +225,30 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   );
 
   // ═══ 3. BANDEAU "Bon de travail numéro" — TOUT EN HAUT ═══
-  children.push(blueBanner('Bon de travail numéro :', data.workOrderNumber || '—'));
+  children.push(...section('Bon de travail numéro :', data.workOrderNumber || '—'));
 
   // ═══ 4. PROPRIÉTAIRE & RÉGIE ═══
   children.push(sectionLabel('🏠', 'Propriétaire & Régie'));
   children.push(
-    new Table({
-      rows: [
-        labelValueRow('Propriétaire :', data.ownerName || ''),
-        labelValueRow('Régie :', data.regieName || ''),
-        labelValueRow('Téléphone de contact :', data.ownerPhone || data.regiePhone || ''),
-        labelValueRow('Email de contact :', data.regieEmail || ''),
-      ],
-      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
-      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
-    })
+    labelValue('Propriétaire :', data.ownerName || ''),
+    labelValue('Régie :', data.regieName || ''),
+    labelValue('Téléphone de contact :', data.ownerPhone || data.regiePhone || ''),
+    labelValue('Email de contact :', data.regieEmail || '')
   );
 
   // ═══ 5. BANDEAU "Locataire" ═══
-  children.push(blueBanner('Locataire'));
+  children.push(...section('Locataire'));
   children.push(sectionLabel('🏢', "Adresse de l'immeuble"));
   children.push(
-    new Table({
-      rows: [
-        labelValueRow("Dans l'immeuble :", data.address || ''),
-        labelValueRow('Chez :', data.clientName ? `Madame / Monsieur ${data.clientName}` : ''),
-        labelValueRow('Téléphone :', data.clientPhone || ''),
-        labelValueRow('Email :', data.clientEmail || ''),
-        labelValueRow('Clés :', data.keysInfo || ''),
-      ],
-      width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA },
-      columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA],
-    })
+    labelValue("Dans l'immeuble :", data.address || ''),
+    labelValue('Chez :', data.clientName ? `Madame / Monsieur ${data.clientName}` : ''),
+    labelValue('Téléphone :', data.clientPhone || ''),
+    labelValue('Email :', data.clientEmail || ''),
+    labelValue('Clés :', data.keysInfo || '')
   );
 
   // ═══ 6. DESCRIPTION DE L'INTERVENTION ═══
-  children.push(blueBanner("Description de l'intervention"));
+  children.push(...section("Description de l'intervention"));
   if (data.textContent && data.textContent.trim()) {
     for (const line of data.textContent.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
@@ -293,14 +260,14 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
 
   // ═══ 6b. FOURNITURES (optionnel) ═══
   if (data.suppliesText && data.suppliesText.trim()) {
-    children.push(blueBanner('Fournitures utilisées'));
+    children.push(...section('Fournitures utilisées'));
     for (const line of data.suppliesText.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
     }
   }
 
   // ═══ 7. DATE DE L'INTERVENTION ═══
-  children.push(blueBanner("Date de l'intervention"));
+  children.push(...section("Date de l'intervention"));
   children.push(
     new Paragraph({
       children: [
@@ -340,17 +307,17 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   }
 
   // ═══ 8. PHOTOS AVANT ═══
-  children.push(blueBanner('Photos Avant'));
+  children.push(...section('Photos Avant'));
   const before = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant');
   children.push(...before);
 
   // ═══ 9. PHOTOS APRÈS ═══
-  children.push(blueBanner('Photos Après'));
+  children.push(...section('Photos Après'));
   const after = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après');
   children.push(...after);
 
   // ═══ 10. SIGNATURE CLIENT ═══
-  children.push(blueBanner('Signature Client'));
+  children.push(...section('Signature Client'));
   if (data.clientSignature) {
     const sigData = await downloadImage(data.clientSignature);
     if (sigData) {
@@ -401,6 +368,7 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   });
 
   return new Document({
+    styles: { paragraphStyles: [bannerParagraphStyle()] },
     sections: [
       {
         properties: {

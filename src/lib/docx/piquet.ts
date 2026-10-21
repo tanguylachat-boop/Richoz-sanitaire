@@ -2,9 +2,6 @@ import {
   Document,
   Paragraph,
   TextRun,
-  Table,
-  TableRow,
-  WidthType,
   AlignmentType,
   Footer,
   PageNumber,
@@ -16,15 +13,13 @@ import {
   BLUE,
   GRAY,
   brandHeader,
-  blueBanner,
+  bannerParagraphStyle,
+  section,
   bodyText,
   placeholder,
-  infoRow,
+  infoLine,
   imageParagraph,
   downloadImage,
-  PAGE_WIDTH_DXA,
-  COL_LABEL_DXA,
-  COL_VALUE_DXA,
 } from './shared';
 
 export interface PiquetReportData {
@@ -46,7 +41,7 @@ export interface PiquetReportData {
 }
 
 async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
-  const children: (Paragraph | Table)[] = [];
+  const children: Paragraph[] = [];
 
   children.push(...brandHeader());
   children.push(
@@ -68,54 +63,50 @@ async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
     })
   );
 
-  children.push(blueBanner(`N° ${data.id.slice(0, 8).toUpperCase()} — Émis le ${data.createdAt}`));
+  children.push(...section(`N° ${data.id.slice(0, 8).toUpperCase()} — Émis le ${data.createdAt}`));
 
-  children.push(blueBanner('Intervention'));
-  const ir: TableRow[] = [];
-  ir.push(infoRow('Technicien', data.technicianName + (data.technicianPhone ? ` — ${data.technicianPhone}` : '')));
-  ir.push(infoRow('Adresse', data.address));
+  children.push(...section('Intervention'));
+  children.push(infoLine('Technicien', data.technicianName + (data.technicianPhone ? ` — ${data.technicianPhone}` : '')));
+  children.push(infoLine('Adresse', data.address));
   if (data.clientName) {
-    ir.push(infoRow('Client', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
+    children.push(infoLine('Client', data.clientName + (data.clientPhone ? ` · ${data.clientPhone}` : '')));
   }
-  children.push(new Table({ rows: ir, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
 
-  children.push(blueBanner('Horaires'));
-  const hr: TableRow[] = [];
-  hr.push(infoRow('Appel reçu', data.callReceivedAt));
-  if (data.interventionStartedAt) hr.push(infoRow('Début intervention', data.interventionStartedAt));
-  if (data.interventionEndedAt) hr.push(infoRow('Fin intervention', data.interventionEndedAt));
-  children.push(new Table({ rows: hr, width: { size: PAGE_WIDTH_DXA, type: WidthType.DXA }, columnWidths: [COL_LABEL_DXA, COL_VALUE_DXA] }));
+  children.push(...section('Horaires'));
+  children.push(infoLine('Appel reçu', data.callReceivedAt));
+  if (data.interventionStartedAt) children.push(infoLine('Début intervention', data.interventionStartedAt));
+  if (data.interventionEndedAt) children.push(infoLine('Fin intervention', data.interventionEndedAt));
 
   if (data.problemDescription) {
-    children.push(blueBanner("Constat à l'arrivée"));
+    children.push(...section("Constat à l'arrivée"));
     for (const line of data.problemDescription.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
     }
   }
 
   if (data.actionsTaken) {
-    children.push(blueBanner('Actions réalisées'));
+    children.push(...section('Actions réalisées'));
     for (const line of data.actionsTaken.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
     }
   }
 
   if (data.suppliesUsed) {
-    children.push(blueBanner('Matériel utilisé'));
+    children.push(...section('Matériel utilisé'));
     for (const line of data.suppliesUsed.split('\n')) {
       if (line.trim()) children.push(bodyText(line));
     }
   }
 
   if (data.photos && data.photos.length > 0) {
-    children.push(blueBanner('Photos'));
+    children.push(...section('Photos'));
     for (const url of data.photos.slice(0, 30)) {
       const paras = await imageParagraph(url);
       children.push(...paras);
     }
   }
 
-  children.push(blueBanner('Signature du client'));
+  children.push(...section('Signature du client'));
   if (data.clientSignature) {
     const sig = await downloadImage(data.clientSignature);
     if (sig) {
@@ -136,6 +127,7 @@ async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
   }
 
   return new Document({
+    styles: { paragraphStyles: [bannerParagraphStyle()] },
     sections: [
       {
         properties: { page: { margin: { top: 800, right: 900, bottom: 800, left: 900 } } },
