@@ -1,25 +1,18 @@
+import { Document, Paragraph, TextRun, Table, Packer } from 'docx';
 import {
-  Document,
-  Paragraph,
-  TextRun,
-  Table,
-  AlignmentType,
-  Footer,
-  PageNumber,
-  Packer,
-} from 'docx';
-import {
-  BLUE,
   GRAY,
+  TEXT_BLUE,
   brandHeader,
-  documentStyles,
-  PAGE_MARGINS,
+  blankLine,
+  bodyParagraphs,
+  documentStylesXml,
+  pageSetup,
+  photoTable,
   section,
   redTitle,
   bodyText,
   placeholder,
   infoLine,
-  imageParagraph,
 } from './shared';
 
 export interface ChantierReportData {
@@ -52,16 +45,7 @@ export interface ChantierReportData {
 async function buildChantierDocument(data: ChantierReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [];
 
-  children.push(...brandHeader());
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'Rapport de chantier', bold: true, size: 28, color: BLUE, font: 'Calibri' }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-    })
-  );
+  children.push(...brandHeader('Rapport de chantier'));
 
   if (data.workOrderNumber) {
     children.push(...section(`Bon de travail N° ${data.workOrderNumber}`));
@@ -83,20 +67,16 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
     children.push(infoLine('Avancement', `${data.progressPercent} %`));
   }
 
-  children.push(...section('Description des travaux'));
+  children.push(...section('Description des travaux'), blankLine());
   if (data.textContent && data.textContent.trim()) {
-    for (const line of data.textContent.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...bodyParagraphs(data.textContent));
   } else {
     children.push(placeholder('(à compléter)'));
   }
 
   if (data.suppliesText && data.suppliesText.trim()) {
-    children.push(...section('Fournitures et matériel'));
-    for (const line of data.suppliesText.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section('Fournitures et matériel'), blankLine());
+    children.push(...bodyParagraphs(data.suppliesText));
   }
 
   if (data.cutoffs && data.cutoffs.length > 0) {
@@ -114,10 +94,10 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
       children.push(
         new Paragraph({
           children: [
-            new TextRun({ text: `${j.created_at} — `, bold: true, size: 18, font: 'Calibri', color: GRAY }),
-            new TextRun({ text: j.author, bold: true, size: 18, font: 'Calibri' }),
+            new TextRun({ text: `${j.created_at} — `, bold: true, size: 22, font: 'Calibri', color: GRAY }),
+            new TextRun({ text: j.author, bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
           ],
-          spacing: { before: 100, after: 30 },
+          spacing: { before: 100, after: 40 },
         })
       );
       for (const line of (j.message || '').split('\n')) {
@@ -127,44 +107,13 @@ async function buildChantierDocument(data: ChantierReportData): Promise<Document
   }
 
   if (data.photos && data.photos.length > 0) {
-    children.push(...section('Photos du chantier'));
-    for (const p of data.photos.slice(0, 30)) {
-      const paras = await imageParagraph(p.url, p.caption);
-      children.push(...paras);
-    }
+    children.push(...section('Photos du chantier'), blankLine());
+    children.push(...(await photoTable(data.photos.slice(0, 30))));
   }
 
   return new Document({
-    styles: documentStyles(),
-    sections: [
-      {
-        properties: { page: { margin: PAGE_MARGINS } },
-        children,
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({
-                    text: 'RICHOZ SANITAIRE — 50 Route de Chancy, 1213 Petit-Lancy — info@richoz-sanitaire.ch — 022 792 10 63 — Page ',
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-      },
-    ],
+    externalStyles: documentStylesXml(),
+    sections: [{ ...pageSetup(), children }],
   });
 }
 

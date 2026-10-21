@@ -3,7 +3,6 @@ import {
   Paragraph,
   AlignmentType,
   HorizontalPositionAlign,
-  VerticalPositionAlign,
   HorizontalPositionRelativeFrom,
   VerticalPositionRelativeFrom,
   TextWrappingType,
@@ -21,7 +20,9 @@ function getWatermarkBuffer(): Buffer {
 
 /**
  * Build a paragraph containing the Richoz water-drop watermark, floating
- * behind the document content and centered on the A4 page.
+ * behind the document content. Size and position measured on the reference
+ * PDF: the drop spans the text width (16 x 20.7 cm) and starts 5 cm from
+ * the top of the page.
  *
  * Place this paragraph inside a Header so it repeats on every page.
  */
@@ -31,7 +32,7 @@ export function buildWatermarkParagraph(): Paragraph {
       new ImageRun({
         data: getWatermarkBuffer(),
         type: 'png',
-        transformation: { width: 420, height: 496 },
+        transformation: { width: 604, height: 781 },
         floating: {
           horizontalPosition: {
             relative: HorizontalPositionRelativeFrom.PAGE,
@@ -39,7 +40,7 @@ export function buildWatermarkParagraph(): Paragraph {
           },
           verticalPosition: {
             relative: VerticalPositionRelativeFrom.PAGE,
-            align: VerticalPositionAlign.CENTER,
+            offset: 1_800_000, // EMU ≈ 5 cm
           },
           wrap: { type: TextWrappingType.NONE, side: TextWrappingSide.BOTH_SIDES },
           behindDocument: true,

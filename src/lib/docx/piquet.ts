@@ -1,27 +1,16 @@
-import {
-  Document,
-  Paragraph,
-  TextRun,
-  Table,
-  AlignmentType,
-  Footer,
-  PageNumber,
-  Packer,
-  ImageRun,
-} from 'docx';
+import { Document, Paragraph, TextRun, Table, AlignmentType, Packer } from 'docx';
 import {
   RED,
-  BLUE,
   GRAY,
   brandHeader,
-  documentStyles,
-  PAGE_MARGINS,
+  blankLine,
+  bodyParagraphs,
+  documentStylesXml,
+  pageSetup,
+  photoTable,
   section,
-  bodyText,
-  placeholder,
   infoLine,
-  imageParagraph,
-  downloadImage,
+  signatureBlock,
 } from './shared';
 
 export interface PiquetReportData {
@@ -45,23 +34,14 @@ export interface PiquetReportData {
 async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [];
 
-  children.push(...brandHeader());
+  children.push(...brandHeader('Rapport de piquet', { color: RED }));
   children.push(
     new Paragraph({
       children: [
-        new TextRun({ text: 'Rapport de piquet', bold: true, size: 28, color: RED, font: 'Calibri' }),
+        new TextRun({ text: 'Urgence nocturne', italics: true, size: 22, color: GRAY, font: 'Calibri' }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 80 },
-    })
-  );
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'Urgence nocturne', italics: true, size: 18, color: GRAY, font: 'Calibri' }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
+      spacing: { after: 120 },
     })
   );
 
@@ -80,85 +60,31 @@ async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
   if (data.interventionEndedAt) children.push(infoLine('Fin intervention', data.interventionEndedAt));
 
   if (data.problemDescription) {
-    children.push(...section("Constat à l'arrivée"));
-    for (const line of data.problemDescription.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section("Constat à l'arrivée"), blankLine());
+    children.push(...bodyParagraphs(data.problemDescription));
   }
 
   if (data.actionsTaken) {
-    children.push(...section('Actions réalisées'));
-    for (const line of data.actionsTaken.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section('Actions réalisées'), blankLine());
+    children.push(...bodyParagraphs(data.actionsTaken));
   }
 
   if (data.suppliesUsed) {
-    children.push(...section('Matériel utilisé'));
-    for (const line of data.suppliesUsed.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section('Matériel utilisé'), blankLine());
+    children.push(...bodyParagraphs(data.suppliesUsed));
   }
 
   if (data.photos && data.photos.length > 0) {
-    children.push(...section('Photos'));
-    for (const url of data.photos.slice(0, 30)) {
-      const paras = await imageParagraph(url);
-      children.push(...paras);
-    }
+    children.push(...section('Photos'), blankLine());
+    children.push(...(await photoTable(data.photos.slice(0, 30).map((url) => ({ url })))));
   }
 
-  children.push(...section('Signature du client'));
-  if (data.clientSignature) {
-    const sig = await downloadImage(data.clientSignature);
-    if (sig) {
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [
-            new ImageRun({ data: sig, transformation: { width: 280, height: 100 }, type: 'png' }),
-          ],
-          spacing: { after: 100 },
-        })
-      );
-    } else {
-      children.push(placeholder('Signature non disponible'));
-    }
-  } else {
-    children.push(placeholder('Non signé'));
-  }
+  children.push(...section('Signature du client'), blankLine());
+  children.push(...(await signatureBlock(data.clientSignature)));
 
   return new Document({
-    styles: documentStyles(),
-    sections: [
-      {
-        properties: { page: { margin: PAGE_MARGINS } },
-        children,
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({
-                    text: 'RICHOZ SANITAIRE — 50 Route de Chancy, 1213 Petit-Lancy — info@richoz-sanitaire.ch — 022 792 10 63 — Page ',
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    size: 14,
-                    font: 'Calibri',
-                    color: GRAY,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-      },
-    ],
+    externalStyles: documentStylesXml(),
+    sections: [{ ...pageSetup(), children }],
   });
 }
 

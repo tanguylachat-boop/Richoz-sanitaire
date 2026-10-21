@@ -1,17 +1,17 @@
+import { Document, Paragraph, Table, Packer } from 'docx';
 import {
-  Document,
-  Paragraph,
-  TextRun,
-  Table,
-  AlignmentType,
-  Header,
-  Footer,
-  PageNumber,
-  Packer,
-  ImageRun,
-} from 'docx';
-import { buildWatermarkParagraph } from './docx/watermark';
-import { bannerTable, bannerRun, documentStyles, sectionSpacer, PAGE_MARGINS, BLUE, GREEN, TEXT_BLUE, GRAY } from './docx/shared';
+  brandHeader,
+  blankLine,
+  bodyParagraphs,
+  documentStylesXml,
+  infoLine,
+  pageSetup,
+  photoTable,
+  placeholder,
+  section,
+  sectionLabel,
+  signatureBlock,
+} from './docx/shared';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,317 +51,93 @@ export interface ReportData {
   clientSignature?: string | null;
 }
 
-// Colors and margins: shared with the chantier/piquet reports, measured on the
-// Richoz reference PDF (bon 2026 252 113).
-
-
-// Footer text reused on every page
-const COMPANY_FOOTER =
-  'RICHOZ SANITAIRE   50 Route de Chancy   1213 Petit-Lancy   info@richoz-sanitaire.ch   +41 22 313 00 27';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Centered blue section banner (white text on blue), matching the Richoz
- * PDF section headers like "Bon de travail numéro : 2026 252 113".
- * One-cell table shared with the other reports (see docx/shared.ts).
- */
-function blueBanner(text: string, valueSuffix?: string): Table {
-  const runs = [bannerRun(text)];
-  if (valueSuffix) runs.push(bannerRun('  '), bannerRun(valueSuffix, 24));
-  return bannerTable(runs);
-}
-
-/** Spacer + banner: an editable Normal line always exists before each ribbon. */
-function section(text: string, valueSuffix?: string): (Paragraph | Table)[] {
-  return [sectionSpacer(), blueBanner(text, valueSuffix)];
-}
-
-/** Blue sub-section header with optional emoji icon, like "🏠 Propriétaire & Régie" */
-function sectionLabel(icon: string, text: string): Paragraph {
-  return new Paragraph({
-    children: [
-      new TextRun({ text: `${icon} `, size: 22, font: 'Segoe UI Emoji' }),
-      new TextRun({ text, bold: true, size: 22, color: TEXT_BLUE, font: 'Calibri' }),
-    ],
-    spacing: { before: 120, after: 60 },
-  });
-}
-
-/** Normal body text */
-function bodyText(text: string): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text, size: 22, font: 'Calibri', color: TEXT_BLUE })],
-    spacing: { after: 120 },
-  });
-}
-
-/** Gray italic placeholder */
-function placeholder(text: string): Paragraph {
-  return new Paragraph({
-    children: [new TextRun({ text, size: 20, font: 'Calibri', italics: true, color: '999999' })],
-    spacing: { after: 60 },
-  });
-}
-
-/**
- * "Label : value" on one line, value right after the colon (the former
- * two-column table left a wide gap between "Régie :" and the name).
- */
-function labelValue(label: string, value: string): Paragraph {
-  return new Paragraph({
-    children: [
-      new TextRun({ text: `${label} `, size: 22, font: 'Calibri', color: TEXT_BLUE }),
-      new TextRun({ text: value, size: 22, font: 'Calibri', color: TEXT_BLUE }),
-    ],
-    spacing: { after: 60 },
-  });
-}
-
-async function downloadImage(url: string): Promise<ArrayBuffer | null> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    return await response.arrayBuffer();
-  } catch {
-    return null;
-  }
-}
-
-async function buildPhotoSection(
-  photos: { url: string; caption?: string }[],
-  emptyText: string,
-): Promise<Paragraph[]> {
-  const result: Paragraph[] = [];
-  if (!photos || photos.length === 0) {
-    result.push(placeholder(emptyText));
-    return result;
-  }
-  const total = photos.length;
-  for (let i = 0; i < photos.length; i++) {
-    const photo = photos[i];
-    const imageData = await downloadImage(photo.url);
-    if (imageData) {
-      result.push(
-        new Paragraph({
-          children: [
-            new ImageRun({
-              data: imageData,
-              transformation: { width: 450, height: 340 },
-              type: 'jpg',
-            }),
-          ],
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 80, after: 40 },
-        })
-      );
-      result.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `Photo ${i + 1} / ${total}${photo.caption ? ' — ' + photo.caption : ''}`,
-              size: 16,
-              font: 'Calibri',
-              italics: true,
-              color: GRAY,
-            }),
-          ],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 120 },
-        })
-      );
-    } else {
-      result.push(
-        placeholder(`[Image non disponible: ${photo.url.split('/').pop() || 'photo'}]`)
-      );
-    }
-  }
-  return result;
-}
+// Layout, colors, sizes and page setup: src/lib/docx/shared.ts, measured on
+// the Richoz reference PDF (bon 2026 252 113).
 
 // ─── Document assembly ───────────────────────────────────────────────────────
 
 async function buildReportDocument(data: ReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [];
 
-  // ═══ 1. TITRE PRINCIPAL — RICHOZ (bleu) + SANITAIRE (vert) ═══
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'RICHOZ ', bold: true, size: 56, color: BLUE, font: 'Calibri' }),
-        new TextRun({ text: 'SANITAIRE', bold: true, size: 56, color: GREEN, font: 'Calibri' }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 0, after: 100 },
-    })
-  );
+  // ═══ 1. TITRE — RICHOZ SANITAIRE + 🚨 Rapport d'intervention 🚨 ═══
+  children.push(...brandHeader("Rapport d'intervention", { sirens: true }));
 
-  // ═══ 2. SOUS-TITRE avec emojis sirène ═══
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: '🚨  ', size: 28, font: 'Segoe UI Emoji' }),
-        new TextRun({ text: "Rapport d'intervention", bold: true, size: 28, color: BLUE, font: 'Calibri' }),
-        new TextRun({ text: '  🚨', size: 28, font: 'Segoe UI Emoji' }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 240 },
-    })
-  );
-
-  // ═══ 3. BANDEAU "Bon de travail numéro" — TOUT EN HAUT ═══
+  // ═══ 2. BANDEAU "Bon de travail numéro" ═══
   children.push(...section('Bon de travail numéro :', data.workOrderNumber || '—'));
 
-  // ═══ 4. PROPRIÉTAIRE & RÉGIE ═══
+  // ═══ 3. PROPRIÉTAIRE & RÉGIE ═══
   children.push(sectionLabel('🏠', 'Propriétaire & Régie'));
   children.push(
-    labelValue('Propriétaire :', data.ownerName || ''),
-    labelValue('Régie :', data.regieName || ''),
-    labelValue('Téléphone de contact :', data.ownerPhone || data.regiePhone || ''),
-    labelValue('Email de contact :', data.regieEmail || '')
+    infoLine('Propriétaire', data.ownerName || ''),
+    infoLine('Régie', data.regieName || ''),
+    infoLine('Téléphone de contact', data.ownerPhone || data.regiePhone || ''),
+    infoLine('Email de contact', data.regieEmail || '')
   );
 
-  // ═══ 5. BANDEAU "Locataire" ═══
+  // ═══ 4. LOCATAIRE ═══
   children.push(...section('Locataire'));
   children.push(sectionLabel('🏢', "Adresse de l'immeuble"));
   children.push(
-    labelValue("Dans l'immeuble :", data.address || ''),
-    labelValue('Chez :', data.clientName ? `Madame / Monsieur ${data.clientName}` : ''),
-    labelValue('Téléphone :', data.clientPhone || ''),
-    labelValue('Email :', data.clientEmail || ''),
-    labelValue('Clés :', data.keysInfo || '')
+    infoLine("Dans l'immeuble", data.address || ''),
+    infoLine('Chez', data.clientName ? `Madame / Monsieur ${data.clientName}` : ''),
+    infoLine('Téléphone', data.clientPhone || ''),
+    infoLine('Email', data.clientEmail || ''),
+    infoLine('Clés', data.keysInfo || '')
   );
 
-  // ═══ 6. DESCRIPTION DE L'INTERVENTION ═══
-  children.push(...section("Description de l'intervention"));
+  // ═══ 5. DESCRIPTION DE L'INTERVENTION ═══
+  children.push(...section("Description de l'intervention"), blankLine());
   if (data.textContent && data.textContent.trim()) {
-    for (const line of data.textContent.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-      else children.push(new Paragraph({ spacing: { after: 60 } }));
-    }
+    children.push(...bodyParagraphs(data.textContent));
   } else {
     children.push(placeholder('(à compléter)'));
   }
 
-  // ═══ 6b. FOURNITURES (optionnel) ═══
+  // ═══ 5b. FOURNITURES (optionnel) ═══
   if (data.suppliesText && data.suppliesText.trim()) {
-    children.push(...section('Fournitures utilisées'));
-    for (const line of data.suppliesText.split('\n')) {
-      if (line.trim()) children.push(bodyText(line));
-    }
+    children.push(...section('Fournitures utilisées'), blankLine());
+    children.push(...bodyParagraphs(data.suppliesText));
   }
 
-  // ═══ 7. DATE DE L'INTERVENTION ═══
-  children.push(...section("Date de l'intervention"));
+  // ═══ 6. DATE DE L'INTERVENTION ═══
+  children.push(...section("Date de l'intervention"), blankLine());
+  children.push(infoLine('Le', data.datePlanned || data.createdAt, { boldLabel: true }));
   children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'Le : ', bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
-        new TextRun({ text: data.datePlanned || data.createdAt, size: 22, font: 'Calibri', color: TEXT_BLUE }),
-      ],
-      spacing: { before: 80, after: 40 },
-    })
-  );
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: 'Terminée : ', bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
-        new TextRun({
-          text: data.isCompleted ? 'Oui' : `Non${data.billableReason ? ` — ${data.billableReason}` : ''}`,
-          size: 22,
-          font: 'Calibri',
-        }),
-      ],
-      spacing: { after: 40 },
-    })
+    infoLine(
+      'Terminée',
+      data.isCompleted ? 'Oui' : `Non${data.billableReason ? ` — ${data.billableReason}` : ''}`,
+      { boldLabel: true },
+    )
   );
   if (data.workDurationMinutes) {
     children.push(
-      new Paragraph({
-        children: [
-          new TextRun({ text: 'Durée : ', bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
-          new TextRun({
-            text: `${data.workDurationMinutes} min (${(data.workDurationMinutes / 60).toFixed(1)} h)`,
-            size: 22,
-            font: 'Calibri',
-          }),
-        ],
-        spacing: { after: 100 },
-      })
+      infoLine('Durée', `${data.workDurationMinutes} min (${(data.workDurationMinutes / 60).toFixed(1)} h)`, { boldLabel: true })
     );
   }
 
-  // ═══ 8. PHOTOS AVANT ═══
-  children.push(...section('Photos Avant'));
-  const before = await buildPhotoSection(data.photosBefore || [], 'Aucune photo avant');
-  children.push(...before);
-
-  // ═══ 9. PHOTOS APRÈS ═══
-  children.push(...section('Photos Après'));
-  const after = await buildPhotoSection(data.photosAfter || [], 'Aucune photo après');
-  children.push(...after);
-
-  // ═══ 10. SIGNATURE CLIENT ═══
-  children.push(...section('Signature Client'));
-  if (data.clientSignature) {
-    const sigData = await downloadImage(data.clientSignature);
-    if (sigData) {
-      children.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [
-            new ImageRun({
-              data: sigData,
-              transformation: { width: 320, height: 120 },
-              type: 'png',
-            }),
-          ],
-          spacing: { before: 120, after: 100 },
-        })
-      );
-    } else {
-      children.push(placeholder('Signature non disponible'));
-    }
+  // ═══ 7. PHOTOS AVANT ═══
+  children.push(...section('Photos Avant'), blankLine());
+  if (data.photosBefore && data.photosBefore.length > 0) {
+    children.push(...(await photoTable(data.photosBefore)));
   } else {
-    children.push(placeholder('Non signé'));
+    children.push(placeholder('Aucune photo avant'));
   }
 
-  // ═══ HEADER (watermark + bandeau adresse) ═══
-  const headerChildren: Paragraph[] = [
-    buildWatermarkParagraph(),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({ text: COMPANY_FOOTER, size: 14, font: 'Calibri', color: BLUE }),
-      ],
-    }),
-  ];
+  // ═══ 8. PHOTOS APRÈS ═══
+  children.push(...section('Photos Après'), blankLine());
+  if (data.photosAfter && data.photosAfter.length > 0) {
+    children.push(...(await photoTable(data.photosAfter)));
+  } else {
+    children.push(placeholder('Aucune photo après'));
+  }
 
-  // ═══ FOOTER (Page X sur Y) ═══
-  const footer = new Footer({
-    children: [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [
-          new TextRun({ text: 'Page ', size: 14, font: 'Calibri', color: GRAY }),
-          new TextRun({ children: [PageNumber.CURRENT], size: 14, font: 'Calibri', color: GRAY }),
-          new TextRun({ text: ' sur ', size: 14, font: 'Calibri', color: GRAY }),
-          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 14, font: 'Calibri', color: GRAY }),
-        ],
-      }),
-    ],
-  });
+  // ═══ 9. SIGNATURE CLIENT ═══
+  children.push(...section('Signature Client'), blankLine());
+  children.push(...(await signatureBlock(data.clientSignature)));
 
   return new Document({
-    styles: documentStyles(),
-    sections: [
-      {
-        properties: { page: { margin: PAGE_MARGINS } },
-        children,
-        headers: { default: new Header({ children: headerChildren }) },
-        footers: { default: footer },
-      },
-    ],
+    externalStyles: documentStylesXml(),
+    sections: [{ ...pageSetup(), children }],
   });
 }
 
