@@ -2,6 +2,7 @@ import {
   Document,
   Paragraph,
   TextRun,
+  Table,
   AlignmentType,
   Footer,
   PageNumber,
@@ -13,7 +14,8 @@ import {
   BLUE,
   GRAY,
   brandHeader,
-  bannerParagraphStyle,
+  documentStyles,
+  PAGE_MARGINS,
   section,
   bodyText,
   placeholder,
@@ -41,7 +43,7 @@ export interface PiquetReportData {
 }
 
 async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
-  const children: Paragraph[] = [];
+  const children: (Paragraph | Table)[] = [];
 
   children.push(...brandHeader());
   children.push(
@@ -127,10 +129,10 @@ async function buildPiquetDocument(data: PiquetReportData): Promise<Document> {
   }
 
   return new Document({
-    styles: { paragraphStyles: [bannerParagraphStyle()] },
+    styles: documentStyles(),
     sections: [
       {
-        properties: { page: { margin: { top: 800, right: 900, bottom: 800, left: 900 } } },
+        properties: { page: { margin: PAGE_MARGINS } },
         children,
         footers: {
           default: new Footer({

@@ -2,6 +2,7 @@ import {
   Document,
   Paragraph,
   TextRun,
+  Table,
   AlignmentType,
   Header,
   Footer,
@@ -10,7 +11,7 @@ import {
   ImageRun,
 } from 'docx';
 import { buildWatermarkParagraph } from './docx/watermark';
-import { BANNER_STYLE_ID, bannerParagraphStyle, sectionSpacer } from './docx/shared';
+import { bannerTable, bannerRun, documentStyles, sectionSpacer, PAGE_MARGINS, BLUE, GREEN, TEXT_BLUE, GRAY } from './docx/shared';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -50,13 +51,8 @@ export interface ReportData {
   clientSignature?: string | null;
 }
 
-// ─── Colors ──────────────────────────────────────────────────────────────────
-// Matched against the Richoz reference PDF (1 823 591.pdf)
-
-const BLUE = '1F4E9C';        // RICHOZ + section ribbons (royal blue)
-const GREEN = '6FB23A';        // SANITAIRE (vivid leaf green)
-const GRAY = '666666';
-const WHITE = 'FFFFFF';
+// Colors and margins: shared with the chantier/piquet reports, measured on the
+// Richoz reference PDF (bon 2026 252 113).
 
 
 // Footer text reused on every page
@@ -67,28 +63,17 @@ const COMPANY_FOOTER =
 
 /**
  * Centered blue section banner (white text on blue), matching the Richoz
- * PDF section headers like "Bon de travail numéro : 1 823 591".
- * Colors come from the shared `RichozBanner` Word style (next = Normal), so
- * Enter after a ribbon gives a normal paragraph. Only size/alignment are direct.
+ * PDF section headers like "Bon de travail numéro : 2026 252 113".
+ * One-cell table shared with the other reports (see docx/shared.ts).
  */
-function blueBanner(text: string, valueSuffix?: string): Paragraph {
-  const children = [new TextRun({ text, size: 24 })];
-  if (valueSuffix) {
-    children.push(
-      new TextRun({ text: '   ', size: 24 }),
-      new TextRun({ text: valueSuffix, size: 22, bold: false })
-    );
-  }
-  return new Paragraph({
-    style: BANNER_STYLE_ID,
-    children,
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 100, after: 140 },
-  });
+function blueBanner(text: string, valueSuffix?: string): Table {
+  const runs = [bannerRun(text)];
+  if (valueSuffix) runs.push(bannerRun('  '), bannerRun(valueSuffix, 24));
+  return bannerTable(runs);
 }
 
 /** Spacer + banner: an editable Normal line always exists before each ribbon. */
-function section(text: string, valueSuffix?: string): Paragraph[] {
+function section(text: string, valueSuffix?: string): (Paragraph | Table)[] {
   return [sectionSpacer(), blueBanner(text, valueSuffix)];
 }
 
@@ -97,7 +82,7 @@ function sectionLabel(icon: string, text: string): Paragraph {
   return new Paragraph({
     children: [
       new TextRun({ text: `${icon} `, size: 22, font: 'Segoe UI Emoji' }),
-      new TextRun({ text, bold: true, size: 22, color: BLUE, font: 'Calibri' }),
+      new TextRun({ text, bold: true, size: 22, color: TEXT_BLUE, font: 'Calibri' }),
     ],
     spacing: { before: 120, after: 60 },
   });
@@ -106,8 +91,8 @@ function sectionLabel(icon: string, text: string): Paragraph {
 /** Normal body text */
 function bodyText(text: string): Paragraph {
   return new Paragraph({
-    children: [new TextRun({ text, size: 20, font: 'Calibri' })],
-    spacing: { after: 60 },
+    children: [new TextRun({ text, size: 22, font: 'Calibri', color: TEXT_BLUE })],
+    spacing: { after: 120 },
   });
 }
 
@@ -126,10 +111,10 @@ function placeholder(text: string): Paragraph {
 function labelValue(label: string, value: string): Paragraph {
   return new Paragraph({
     children: [
-      new TextRun({ text: `${label} `, size: 20, font: 'Calibri', color: GRAY }),
-      new TextRun({ text: value, size: 20, font: 'Calibri' }),
+      new TextRun({ text: `${label} `, size: 22, font: 'Calibri', color: TEXT_BLUE }),
+      new TextRun({ text: value, size: 22, font: 'Calibri', color: TEXT_BLUE }),
     ],
-    spacing: { after: 40 },
+    spacing: { after: 60 },
   });
 }
 
@@ -197,7 +182,7 @@ async function buildPhotoSection(
 // ─── Document assembly ───────────────────────────────────────────────────────
 
 async function buildReportDocument(data: ReportData): Promise<Document> {
-  const children: Paragraph[] = [];
+  const children: (Paragraph | Table)[] = [];
 
   // ═══ 1. TITRE PRINCIPAL — RICHOZ (bleu) + SANITAIRE (vert) ═══
   children.push(
@@ -271,8 +256,8 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   children.push(
     new Paragraph({
       children: [
-        new TextRun({ text: 'Le : ', bold: true, size: 22, font: 'Calibri', color: BLUE }),
-        new TextRun({ text: data.datePlanned || data.createdAt, size: 22, font: 'Calibri' }),
+        new TextRun({ text: 'Le : ', bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
+        new TextRun({ text: data.datePlanned || data.createdAt, size: 22, font: 'Calibri', color: TEXT_BLUE }),
       ],
       spacing: { before: 80, after: 40 },
     })
@@ -280,7 +265,7 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   children.push(
     new Paragraph({
       children: [
-        new TextRun({ text: 'Terminée : ', bold: true, size: 22, font: 'Calibri', color: BLUE }),
+        new TextRun({ text: 'Terminée : ', bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
         new TextRun({
           text: data.isCompleted ? 'Oui' : `Non${data.billableReason ? ` — ${data.billableReason}` : ''}`,
           size: 22,
@@ -294,7 +279,7 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
     children.push(
       new Paragraph({
         children: [
-          new TextRun({ text: 'Durée : ', bold: true, size: 22, font: 'Calibri', color: BLUE }),
+          new TextRun({ text: 'Durée : ', bold: true, size: 22, font: 'Calibri', color: TEXT_BLUE }),
           new TextRun({
             text: `${data.workDurationMinutes} min (${(data.workDurationMinutes / 60).toFixed(1)} h)`,
             size: 22,
@@ -368,12 +353,10 @@ async function buildReportDocument(data: ReportData): Promise<Document> {
   });
 
   return new Document({
-    styles: { paragraphStyles: [bannerParagraphStyle()] },
+    styles: documentStyles(),
     sections: [
       {
-        properties: {
-          page: { margin: { top: 1200, right: 900, bottom: 800, left: 900 } },
-        },
+        properties: { page: { margin: PAGE_MARGINS } },
         children,
         headers: { default: new Header({ children: headerChildren }) },
         footers: { default: footer },
